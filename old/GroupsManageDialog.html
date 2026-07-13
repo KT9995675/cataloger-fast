@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 16px; }
+      label { display: block; margin-top: 12px; font-weight: bold; }
+      input[type="text"], select {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 4px;
+        padding: 8px;
+      }
+      .summary {
+        background: #e8f0fe;
+        border: 1px solid #c6dafc;
+        border-radius: 6px;
+        padding: 10px 12px;
+        color: #174ea6;
+        white-space: pre-wrap;
+      }
+      .summary.error {
+        background: #fce8e6;
+        border-color: #f5c6c2;
+        color: #c5221f;
+      }
+      .table-wrap {
+        margin-top: 14px;
+        border: 1px solid #dadce0;
+        border-radius: 6px;
+        max-height: 360px;
+        overflow: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      thead th {
+        position: sticky;
+        top: 0;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dadce0;
+        padding: 8px 6px;
+        text-align: left;
+        font-weight: bold;
+        z-index: 1;
+      }
+      tbody td {
+        border-bottom: 1px solid #eee;
+        padding: 8px 6px;
+        vertical-align: middle;
+      }
+      tbody tr:nth-child(even) { background: #fafafa; }
+      .member-col { width: 56px; text-align: center; }
+      .hint { color: #666; font-size: 12px; margin-top: 8px; }
+      .actions { margin-top: 16px; }
+      #status { margin-top: 12px; color: #444; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div id="summaryBox" class="summary">Загрузка…</div>
+
+    <label for="groupSelect">Группа</label>
+    <select id="groupSelect" onchange="onGroupSelectChange()">
+      <option value="__new__">+ Новая группа</option>
+    </select>
+
+    <label for="groupName">Название группы</label>
+    <input id="groupName" type="text" placeholder="Например: Команда проекта">
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="member-col">В группе</th>
+            <th>Пользователь</th>
+          </tr>
+        </thead>
+        <tbody id="usersBody"></tbody>
+      </table>
+    </div>
+
+    <div class="hint">
+      Изменение состава группы обновляет доступ на Drive для всех файлов, где назначена эта группа.
+      Удаление группы заменяет её в правах списком участников.
+    </div>
+
+    <div class="actions">
+      <button id="saveBtn" onclick="saveGroup()">Сохранить</button>
+      <button id="deleteBtn" onclick="deleteGroup()" style="display:none;">Удалить группу</button>
+      <button onclick="google.script.host.close()">Отмена</button>
+    </div>
+    <div id="status"></div>
+
+    <script>
+      var contextResult = <?!= initialContext ?>;
+      var users = [];
+      var groups = [];
+      var currentGroupId = '';
+
+      init();
+
+      function init() {
+        if (!contextResult || !contextResult.ok) {
+          showFatal(contextResult ? (contextResult.message || contextResult.error) : 'Ошибка загрузки.');
+          document.getElementById('saveBtn').disabled = true;
+          return;
+        }
+        users = contextResult.data.users || [];
+        groups = contextResult.data.groups || [];
+        document.getElementById('summaryBox').textContent =
+          'Групп: ' + groups.length + ', активных пользователей: ' + users.length;
+        renderGroupSelect();
+        renderUsersTable({});
+        onGroupSelectChange();
+      }
+
+      function showFatal(message) {
+        var box = document.getElementById('summaryBox');
+        box.textContent = message;
+        box.className = 'summary error';
+      }
+
+      function formatGroupDisplayName(name) {
+        name = String(name || '').trim();
+        if (!name) {
+          return '#';
+        }
+        return name.charAt(0) === '#' ? name : '#' + name;
+      }
+
+      function renderGroupSelect() {
+        var select = document.getElementById('groupSelect');
+        select.innerHTML = '<option value="__new__">+ Новая группа</option>';
+        for (var i = 0; i < groups.length; i++) {
+          var option = document.createElement('option');
+          option.value = groups[i].group_id;
+          option.textContent = formatGroupDisplayName(groups[i].group_name);
+          select.appendChild(option);
+        }
+      }
+
+      function renderUsersTable(memberMap) {
+        var body = document.getElementById('usersBody');
+        body.innerHTML = '';
+        for (var i = 0; i < users.length; i++) {
+          var user = users[i];
+          var tr = document.createElement('tr');
+          var checked = memberMap[user.email] ? 'checked' : '';
+          tr.innerHTML =
+            '<td class="member-col"><input type="checkbox" data-email="' + escapeAttr(user.email) + '" ' + checked + '></td>' +
+            '<td><div>' + escapeHtml(user.name) + '</div><div class="hint">' + escapeHtml(user.email) + '</div></td>';
+          body.appendChild(tr);
+        }
+      }
+
+      function findGroupById(groupId) {
+        for (var i = 0; i < groups.length; i++) {
+          if (groups[i].group_id === groupId) {
+            return groups[i];
+          }
+        }
+        return null;
+      }
+
+      function onGroupSelectChange() {
+        var value = document.getElementById('groupSelect').value;
+        document.getElementById('status').textContent = '';
+        if (value === '__new__') {
+          currentGroupId = '';
+          document.getElementById('groupName').value = '';
+          document.getElementById('deleteBtn').style.display = 'none';
+          renderUsersTable({});
+          return;
+        }
+        currentGroupId = value;
+        document.getElementById('deleteBtn').style.display = 'inline-block';
+        var group = findGroupById(value);
+        if (!group) {
+          document.getElementById('status').textContent = 'Группа не найдена.';
+          return;
+        }
+        document.getElementById('groupName').value = group.group_name || '';
+        var memberMap = {};
+        var members = group.member_emails || [];
+        for (var i = 0; i < members.length; i++) {
+          memberMap[members[i]] = true;
+        }
+        renderUsersTable(memberMap);
+      }
+
+      function collectMemberEmails() {
+        var checkboxes = document.querySelectorAll('#usersBody input[type="checkbox"]');
+        var emails = [];
+        for (var i = 0; i < checkboxes.length; i++) {
+          if (checkboxes[i].checked) {
+            emails.push(checkboxes[i].getAttribute('data-email'));
+          }
+        }
+        return emails;
+      }
+
+      function setBusy(busy) {
+        document.getElementById('saveBtn').disabled = busy;
+        document.getElementById('deleteBtn').disabled = busy;
+        document.getElementById('groupSelect').disabled = busy;
+      }
+
+      function saveGroup() {
+        var groupName = document.getElementById('groupName').value.trim();
+        if (!groupName) {
+          document.getElementById('status').textContent = 'Введите название группы.';
+          return;
+        }
+        var payload = {
+          group_id: currentGroupId || '',
+          group_name: groupName,
+          member_emails: collectMemberEmails(),
+          delete: false
+        };
+        setBusy(true);
+        document.getElementById('status').textContent = 'Сохраняем…';
+        google.script.run
+          .withSuccessHandler(function (result) {
+            if (!result || !result.ok) {
+              document.getElementById('status').textContent =
+                (result && (result.message || result.error)) || 'Ошибка сохранения.';
+              setBusy(false);
+              return;
+            }
+            document.getElementById('status').textContent = result.message || 'Готово.';
+            if (result.data && result.data.group_id) {
+              var savedGroup = findGroupById(result.data.group_id);
+              if (savedGroup) {
+                savedGroup.group_name = result.data.group_name;
+                savedGroup.member_emails = result.data.member_emails || collectMemberEmails();
+              } else {
+                groups.push({
+                  group_id: result.data.group_id,
+                  group_name: result.data.group_name,
+                  member_emails: result.data.member_emails || []
+                });
+                groups.sort(function (a, b) {
+                  return a.group_name.localeCompare(b.group_name, 'ru');
+                });
+                renderGroupSelect();
+                document.getElementById('groupSelect').value = result.data.group_id;
+                currentGroupId = result.data.group_id;
+                document.getElementById('deleteBtn').style.display = 'inline-block';
+              }
+            }
+            setBusy(false);
+            setTimeout(function () { google.script.host.close(); }, 700);
+          })
+          .withFailureHandler(function (err) {
+            document.getElementById('status').textContent = String(err);
+            setBusy(false);
+          })
+          .saveCatalogGroup(JSON.stringify(payload));
+      }
+
+      function deleteGroup() {
+        if (!currentGroupId) {
+          return;
+        }
+        if (!confirm('Удалить группу? В правах она будет заменена списком участников.')) {
+          return;
+        }
+        var payload = {
+          group_id: currentGroupId,
+          delete: true
+        };
+        setBusy(true);
+        document.getElementById('status').textContent = 'Удаляем…';
+        google.script.run
+          .withSuccessHandler(function (result) {
+            if (!result || !result.ok) {
+              document.getElementById('status').textContent =
+                (result && (result.message || result.error)) || 'Ошибка удаления.';
+              setBusy(false);
+              return;
+            }
+            document.getElementById('status').textContent = result.message || 'Готово.';
+            setTimeout(function () { google.script.host.close(); }, 900);
+          })
+          .withFailureHandler(function (err) {
+            document.getElementById('status').textContent = String(err);
+            setBusy(false);
+          })
+          .saveCatalogGroup(JSON.stringify(payload));
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function escapeAttr(text) {
+        return escapeHtml(text);
+      }
+    </script>
+  </body>
+</html>

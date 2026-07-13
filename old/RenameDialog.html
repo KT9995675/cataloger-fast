@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 16px; }
+      label { display: block; margin-top: 12px; font-weight: bold; }
+      input { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px; }
+      .hint { color: #666; font-size: 12px; margin-top: 4px; }
+      .info {
+        background: #e8f0fe;
+        border: 1px solid #c6dafc;
+        border-radius: 6px;
+        padding: 10px 12px;
+        color: #174ea6;
+        white-space: pre-wrap;
+      }
+      .actions { margin-top: 20px; }
+      #status { margin-top: 12px; color: #444; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div id="itemInfo" class="info">Загрузка…</div>
+    <label for="newName">Новое имя (без префикса)</label>
+    <input id="newName" type="text" placeholder="Новое имя">
+    <div class="hint" id="prefixHint"></div>
+    <div class="actions">
+      <button id="renameBtn" onclick="renameItem()">Переименовать</button>
+      <button onclick="google.script.host.close()">Отмена</button>
+    </div>
+    <div id="status"></div>
+    <script>
+      var context = null;
+
+      google.script.run
+        .withSuccessHandler(function (result) {
+          if (!result.ok) {
+            showError(result.message || result.error);
+            document.getElementById('renameBtn').disabled = true;
+            document.getElementById('itemInfo').textContent = 'Не удалось загрузить элемент.';
+            document.getElementById('itemInfo').style.background = '#fce8e6';
+            document.getElementById('itemInfo').style.borderColor = '#f5c6c2';
+            document.getElementById('itemInfo').style.color = '#c5221f';
+            return;
+          }
+          context = result.data;
+          document.getElementById('itemInfo').textContent = context.rename_message;
+          document.getElementById('newName').value = context.current_label;
+          document.getElementById('newName').focus();
+          document.getElementById('newName').select();
+        })
+        .withFailureHandler(function (err) {
+          showError(err);
+          document.getElementById('renameBtn').disabled = true;
+        })
+        .getRenameContext();
+
+      function renameItem() {
+        if (!context) {
+          showError('Контекст не загружен.');
+          return;
+        }
+        var name = document.getElementById('newName').value.trim();
+        if (!name) {
+          showError('Введите новое имя.');
+          return;
+        }
+        document.getElementById('renameBtn').disabled = true;
+        document.getElementById('status').textContent = 'Переименовываем…';
+        google.script.run
+          .withSuccessHandler(function (result) {
+            if (!result.ok) {
+              showError(result.message || result.error);
+              document.getElementById('renameBtn').disabled = false;
+              return;
+            }
+            document.getElementById('status').textContent = result.message || 'Готово.';
+            setTimeout(function () { google.script.host.close(); }, 1000);
+          })
+          .withFailureHandler(function (err) {
+            showError(err);
+            document.getElementById('renameBtn').disabled = false;
+          })
+          .renameCatalogItem(context.item_id, name);
+      }
+
+      function showError(err) {
+        document.getElementById('status').textContent = String(err);
+      }
+    </script>
+  </body>
+</html>

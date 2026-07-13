@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 16px; }
+      label { display: block; margin-top: 12px; font-weight: bold; }
+      select, input[type="radio"], input[type="text"] { margin-top: 4px; }
+      select, input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+      }
+      select { height: 160px; }
+      .summary {
+        background: #e8f0fe;
+        border: 1px solid #c6dafc;
+        border-radius: 6px;
+        padding: 10px 12px;
+        color: #174ea6;
+        white-space: pre-wrap;
+      }
+      .summary.error {
+        background: #fce8e6;
+        border-color: #f5c6c2;
+        color: #c5221f;
+      }
+      .preview {
+        margin-top: 8px;
+        color: #444;
+        font-size: 12px;
+        white-space: pre-wrap;
+        max-height: 120px;
+        overflow: auto;
+      }
+      .mode { margin-top: 12px; }
+      .mode label { display: inline; font-weight: normal; margin-right: 16px; }
+      .hint { color: #666; font-size: 12px; margin-top: 4px; }
+      .actions { margin-top: 20px; }
+      #status { margin-top: 12px; color: #444; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div id="summaryBox" class="summary"></div>
+    <div id="preview" class="preview"></div>
+
+    <div class="mode">
+      <label>Операция:</label><br>
+      <label><input type="radio" name="mode" value="move" checked> Переместить</label>
+      <label><input type="radio" name="mode" value="copy"> Копировать</label>
+    </div>
+
+    <label for="folderFilter">Поиск целевой папки</label>
+    <input id="folderFilter" type="text" placeholder="Имя или код, например: 10 или Проекты">
+    <div class="hint">Фильтр по названию и коду папки.</div>
+
+    <label for="targetFolder">Целевая папка</label>
+    <select id="targetFolder" size="8"></select>
+
+    <div class="actions">
+      <button id="applyBtn" onclick="applyMoveCopy()">Выполнить</button>
+      <button onclick="google.script.host.close()">Отмена</button>
+    </div>
+    <div id="status"></div>
+
+    <script>
+      var contextResult = <?!= initialContext ?>;
+      var allFolders = [];
+
+      if (!contextResult.ok) {
+        document.getElementById('applyBtn').disabled = true;
+        document.getElementById('summaryBox').textContent =
+          contextResult.message || contextResult.error || 'Ошибка';
+        document.getElementById('summaryBox').className = 'summary error';
+      } else {
+        var data = contextResult.data;
+        document.getElementById('summaryBox').textContent = data.summary_message;
+        if (data.preview && data.preview.length) {
+          document.getElementById('preview').textContent = data.preview.join('\n');
+        }
+
+        allFolders = data.target_folders || [];
+        if (!allFolders.length) {
+          document.getElementById('applyBtn').disabled = true;
+          showError('Нет доступных целевых папок.');
+        } else {
+          renderFolderOptions('');
+          document.getElementById('folderFilter').addEventListener('input', function () {
+            renderFolderOptions(this.value);
+          });
+        }
+      }
+
+      function matchesFolderFilter(folder, query) {
+        var haystack = (
+          (folder.label || '') + ' ' +
+          (folder.name || '') + ' ' +
+          (folder.folder_code || '')
+        ).toLowerCase();
+        return haystack.indexOf(query) !== -1;
+      }
+
+      function renderFolderOptions(filterText) {
+        var select = document.getElementById('targetFolder');
+        var query = String(filterText || '').trim().toLowerCase();
+        select.innerHTML = '';
+        var matched = 0;
+
+        for (var i = 0; i < allFolders.length; i++) {
+          var folder = allFolders[i];
+          if (query && !matchesFolderFilter(folder, query)) {
+            continue;
+          }
+          var option = document.createElement('option');
+          option.value = folder.id;
+          option.textContent = folder.label;
+          select.appendChild(option);
+          matched++;
+        }
+
+        if (!matched) {
+          var empty = document.createElement('option');
+          empty.value = '';
+          empty.textContent = 'Ничего не найдено';
+          select.appendChild(empty);
+        } else if (select.options.length) {
+          select.selectedIndex = 0;
+        }
+      }
+
+      function applyMoveCopy() {
+        if (!contextResult.ok) {
+          return;
+        }
+        var targetParentId = document.getElementById('targetFolder').value;
+        if (!targetParentId) {
+          showError('Выберите целевую папку.');
+          return;
+        }
+        var modeInput = document.querySelector('input[name="mode"]:checked');
+        var mode = modeInput ? modeInput.value : 'move';
+
+        document.getElementById('applyBtn').disabled = true;
+        document.getElementById('status').textContent = 'Выполняем операцию…';
+        google.script.run
+          .withSuccessHandler(function (result) {
+            if (!result.ok) {
+              showError(result.message || result.error);
+              document.getElementById('applyBtn').disabled = false;
+              return;
+            }
+            google.script.host.close();
+          })
+          .withFailureHandler(function (err) {
+            showError(err);
+            document.getElementById('applyBtn').disabled = false;
+          })
+          .moveCopyCatalogItems(mode, targetParentId);
+      }
+
+      function showError(err) {
+        document.getElementById('status').textContent = String(err);
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 16px; }
+      label { display: block; margin-top: 12px; font-weight: bold; }
+      input[type="file"], textarea, input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 4px;
+      }
+      textarea { min-height: 80px; font-family: inherit; }
+      .location {
+        background: #e8f0fe;
+        border: 1px solid #c6dafc;
+        border-radius: 6px;
+        padding: 10px 12px;
+        color: #174ea6;
+        font-weight: bold;
+        white-space: pre-wrap;
+      }
+      .location.warn { background: #fef7e0; border-color: #f9e79f; color: #7f6000; }
+      .location.error { background: #fce8e6; border-color: #f5c6c2; color: #c5221f; }
+      .mode label { display: inline; font-weight: normal; margin-right: 16px; }
+      .hint { color: #666; font-size: 12px; margin-top: 4px; }
+      .preview {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #444;
+        white-space: pre-wrap;
+        max-height: 80px;
+        overflow: auto;
+      }
+      .searchRow { display: flex; gap: 8px; margin-top: 4px; }
+      .searchRow input { flex: 1; margin-top: 0; }
+      .searchRow button { margin-top: 0; white-space: nowrap; }
+      .searchResults {
+        margin-top: 8px;
+        max-height: 120px;
+        overflow: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 6px;
+        font-size: 12px;
+      }
+      .searchItem { margin: 4px 0; }
+      .searchItem label { display: inline; font-weight: normal; }
+      .movePanel {
+        margin-top: 12px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        background: #fafafa;
+        display: none;
+      }
+      .movePanel h4 { margin: 0 0 8px 0; font-size: 13px; }
+      .moveTable { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .moveTable td { padding: 4px 6px; vertical-align: top; border-bottom: 1px solid #eee; }
+      .moveTable .name { word-break: break-word; }
+      .moveActions { margin-top: 8px; }
+      .moveActions button { margin-right: 6px; margin-top: 4px; }
+      .actions { margin-top: 16px; }
+      #status { margin-top: 12px; color: #444; white-space: pre-wrap; }
+      #progressWrap { display: none; margin-top: 12px; }
+      #importProgress { width: 100%; height: 18px; }
+      #progressLabel { color: #666; font-size: 12px; margin-top: 4px; }
+    </style>
+  </head>
+  <body>
+    <div id="parentInfo" class="location">Загрузка…</div>
+    <div id="driveAccessWarn" class="location warn" style="display:none;"></div>
+
+    <div class="mode">
+      <label>Источник:</label><br>
+      <label><input type="radio" name="source" value="local" checked> Локальный диск</label>
+      <label><input type="radio" name="source" value="drive"> Мой Google Drive</label>
+    </div>
+
+    <div id="localPanel">
+      <label for="localFilesInput">Файлы</label>
+      <input id="localFilesInput" type="file" multiple>
+      <div class="hint">Можно выбрать один или несколько файлов (Cmd/Ctrl + клик).</div>
+
+      <label for="localFolderInput" style="margin-top:14px;">Или папка целиком</label>
+      <input id="localFolderInput" type="file" webkitdirectory>
+      <div class="hint">Вложенная структура папки сохранится в каталоге.</div>
+    </div>
+
+    <div id="drivePanel" style="display:none;">
+      <label for="driveLinks">Ссылки или ID</label>
+      <textarea id="driveLinks" placeholder="https://drive.google.com/file/d/…&#10;https://drive.google.com/drive/folders/…"></textarea>
+
+      <label for="driveSearch">Или найти по имени</label>
+      <div class="searchRow">
+        <input id="driveSearch" type="text" placeholder="Часть имени файла или папки">
+        <button type="button" id="searchBtn" onclick="searchDrive()">Найти</button>
+      </div>
+      <div id="searchResults" class="searchResults" style="display:none;"></div>
+
+      <div class="hint" id="driveHint">
+        Ссылки, поиск или оба варианта. Папки импортируются целиком. Если вы владелец файла — можно перенести без копии.
+      </div>
+
+      <div id="movePanel" class="movePanel">
+        <h4>Копировать или перенести?</h4>
+        <div class="hint">Перенос сохраняет тот же файл (ID, ссылки, IMPORTRANGE). Копия — новый файл.</div>
+        <div id="moveSummary" class="hint"></div>
+        <div class="moveActions">
+          <button type="button" onclick="setAllImportModes('move')">Перенести все</button>
+          <button type="button" onclick="setAllImportModes('copy')">Копировать все</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="preview" class="preview"></div>
+
+    <div class="actions">
+      <button id="importBtn" onclick="startImport()">Импортировать</button>
+      <button onclick="google.script.host.close()">Отмена</button>
+    </div>
+    <div id="progressWrap">
+      <progress id="importProgress" max="100" value="0"></progress>
+      <div id="progressLabel"></div>
+    </div>
+    <div id="resultPanel" style="display:none; margin-top: 12px;">
+      <label for="resultReport">Отчёт</label>
+      <textarea id="resultReport" readonly rows="10" style="width:100%; box-sizing:border-box; font-family: monospace; font-size: 12px;"></textarea>
+      <div class="actions" style="margin-top: 8px;">
+        <button type="button" onclick="google.script.host.close()">Закрыть</button>
+      </div>
+    </div>
+    <div id="status"></div>
+
+    <script>
+      var contextResult = <?!= initialContext ?>;
+      var context = null;
+      var localQueue = [];
+      var driveEntries = [];
+      var searchHits = [];
+      var selectedSearchIds = {};
+      var maxUploadBytes = 50 * 1024 * 1024;
+      var importBatchChunkSize = 50;
+      var driveImportBatchImported = 0;
+      var driveImportBatchFailures = [];
+
+      initContext(contextResult);
+      bindHandlers();
+
+      function initContext(result) {
+        if (!result.ok) {
+          showError(result.message || result.error);
+          document.getElementById('importBtn').disabled = true;
+          document.getElementById('parentInfo').textContent = 'Не удалось определить место импорта.';
+          document.getElementById('parentInfo').className = 'location error';
+          return;
+        }
+        context = result.data;
+        document.getElementById('parentInfo').textContent =
+          context.location_message || ('Родительская папка: ' + context.parent_label);
+        if (context.max_upload_mb) {
+          maxUploadBytes = context.max_upload_mb * 1024 * 1024;
+        }
+        if (context.import_batch_chunk_size) {
+          importBatchChunkSize = context.import_batch_chunk_size;
+        }
+        if (context.catalog_drive_access === false) {
+          var warn = document.getElementById('driveAccessWarn');
+          warn.style.display = 'block';
+          warn.textContent = context.catalog_drive_access_message ||
+            'Нет доступа к папке каталога на Google Drive.';
+        }
+        if (context.import_webapp_configured === false) {
+          var webWarn = document.getElementById('driveAccessWarn');
+          webWarn.style.display = 'block';
+          webWarn.textContent = (webWarn.textContent ? webWarn.textContent + '\n\n' : '') +
+            (context.import_webapp_message || 'Веб-импорт не настроен.');
+        }
+      }
+
+      function bindHandlers() {
+        var radios = document.getElementsByName('source');
+        for (var i = 0; i < radios.length; i++) {
+          radios[i].addEventListener('change', updateSourcePanel);
+        }
+        document.getElementById('localFilesInput').addEventListener('change', onLocalFilesSelected);
+        document.getElementById('localFolderInput').addEventListener('change', onLocalFolderSelected);
+        document.getElementById('driveLinks').addEventListener('input', resetDriveState);
+        document.getElementById('driveSearch').addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            searchDrive();
+          }
+        });
+      }
+
+      function resetDriveState() {
+        driveEntries = [];
+        document.getElementById('preview').textContent = '';
+        hideMovePanel();
+      }
+
+      function hideMovePanel() {
+        document.getElementById('movePanel').style.display = 'none';
+        document.getElementById('moveSummary').textContent = '';
+        document.getElementById('importBtn').style.display = 'inline-block';
+      }
+
+      function getSource() {
+        var radios = document.getElementsByName('source');
+        for (var i = 0; i < radios.length; i++) {
+          if (radios[i].checked) {
+            return radios[i].value;
+          }
+        }
+        return 'local';
+      }
+
+      function updateSourcePanel() {
+        var source = getSource();
+        document.getElementById('localPanel').style.display = source === 'local' ? 'block' : 'none';
+        document.getElementById('drivePanel').style.display = source === 'drive' ? 'block' : 'none';
+        document.getElementById('importBtn').style.display = source === 'local' ? 'inline-block' : 'inline-block';
+        document.getElementById('preview').textContent = '';
+        document.getElementById('status').textContent = '';
+        hideMovePanel();
+      }
+
+      function onLocalFilesSelected() {
+        document.getElementById('localFolderInput').value = '';
+        var input = document.getElementById('localFilesInput');
+        localQueue = buildLocalQueue(input.files || []);
+        driveEntries = [];
+        document.getElementById('preview').textContent = localQueue.length
+          ? ('Файлов к импорту: ' + localQueue.length)
+          : '';
+      }
+
+      function onLocalFolderSelected() {
+        document.getElementById('localFilesInput').value = '';
+        var input = document.getElementById('localFolderInput');
+        localQueue = buildLocalQueue(input.files || []);
+        driveEntries = [];
+        document.getElementById('preview').textContent = localQueue.length
+          ? ('Файлов к импорту: ' + localQueue.length + ' (из папки)')
+          : '';
+      }
+
+      function buildLocalQueue(fileList) {
+        var queue = [];
+        for (var i = 0; i < fileList.length; i++) {
+          var file = fileList[i];
+          if (!file || !file.name) {
+            continue;
+          }
+          var rel = file.webkitRelativePath || file.name;
+          var parts = rel.split('/');
+          var fileName = parts.pop();
+          if (!fileName) {
+            continue;
+          }
+          queue.push({
+            pathSegments: parts,
+            fileName: fileName,
+            file: file
+          });
+        }
+        return queue;
+      }
+
+      function getSelectedSearchIds() {
+        return Object.keys(selectedSearchIds).filter(function (id) {
+          return selectedSearchIds[id];
+        });
+      }
+
+      function searchDrive() {
+        var query = document.getElementById('driveSearch').value || '';
+        if (query.trim().length < 2) {
+          showError('Введите не менее 2 символов для поиска.');
+          return;
+        }
+        document.getElementById('searchBtn').disabled = true;
+        document.getElementById('status').textContent = 'Поиск…';
+        google.script.run
+          .withSuccessHandler(function (result) {
+            document.getElementById('searchBtn').disabled = false;
+            if (!result.ok) {
+              showError(result.message || result.error);
+              return;
+            }
+            searchHits = result.data.results || [];
+            renderSearchResults();
+            document.getElementById('status').textContent = result.message || '';
+          })
+          .withFailureHandler(function (err) {
+            document.getElementById('searchBtn').disabled = false;
+            showError(err);
+          })
+          .searchDriveFilesForImport(query);
+      }
+
+      function renderSearchResults() {
+        var box = document.getElementById('searchResults');
+        if (!searchHits.length) {
+          box.style.display = 'none';
+          box.innerHTML = '';
+          return;
+        }
+        box.style.display = 'block';
+        box.innerHTML = '';
+        for (var i = 0; i < searchHits.length; i++) {
+          var hit = searchHits[i];
+          var div = document.createElement('div');
+          div.className = 'searchItem';
+          var kind = hit.is_folder ? 'папка' : 'файл';
+          var checked = selectedSearchIds[hit.id] ? ' checked' : '';
+          div.innerHTML =
+            '<label><input type="checkbox" data-id="' + escapeAttr(hit.id) + '"' + checked + '> ' +
+            escapeHtml(hit.name) + ' <span class="hint">(' + kind + ')</span></label>';
+          box.appendChild(div);
+        }
+        var checkboxes = box.querySelectorAll('input[type="checkbox"]');
+        for (var j = 0; j < checkboxes.length; j++) {
+          checkboxes[j].addEventListener('change', onSearchSelectionChange);
+        }
+      }
+
+      function onSearchSelectionChange(e) {
+        var id = e.target.getAttribute('data-id');
+        if (e.target.checked) {
+          selectedSearchIds[id] = true;
+        } else {
+          delete selectedSearchIds[id];
+        }
+        resetDriveState();
+      }
+
+      function startImport() {
+        if (!context) {
+          showError('Контекст не загружен.');
+          return;
+        }
+        if (getSource() === 'local') {
+          if (!localQueue.length) {
+            showError('Выберите файлы или папку на локальном диске.');
+            return;
+          }
+          importLocalQueue(0);
+          return;
+        }
+
+        var links = document.getElementById('driveLinks').value || '';
+        var extraIds = getSelectedSearchIds();
+        if (!links.trim() && !extraIds.length) {
+          showError('Укажите ссылки или выберите файлы из поиска.');
+          return;
+        }
+
+        document.getElementById('importBtn').disabled = true;
+        document.getElementById('status').textContent = 'Подготовка…';
+        google.script.run
+          .withSuccessHandler(onDrivePrepared)
+          .withFailureHandler(function (err) {
+            document.getElementById('importBtn').disabled = false;
+            showError(err);
+          })
+          .prepareDriveImportFromSources(links, JSON.stringify(extraIds));
+      }
+
+      function onDrivePrepared(result) {
+        document.getElementById('importBtn').disabled = false;
+        if (!result.ok) {
+          showError(result.message || result.error);
+          return;
+        }
+        driveEntries = result.data.entries || [];
+        localQueue = [];
+        document.getElementById('preview').textContent = result.message || '';
+        if (!driveEntries.length) {
+          showError('Нет файлов для импорта.');
+          return;
+        }
+
+        var movableCount = result.data.movable_count || 0;
+        if (movableCount > 0) {
+          showMovePanel(movableCount);
+          document.getElementById('importBtn').style.display = 'none';
+          document.getElementById('status').textContent =
+            'Выберите: перенести или копировать все файлы.';
+          return;
+        }
+        runDriveImport();
+      }
+
+      function showMovePanel(movableCount) {
+        var copyOnlyCount = driveEntries.length - movableCount;
+        var summary = 'Файлов: ' + driveEntries.length + '.';
+        if (movableCount) {
+          summary += ' Можно перенести без копии: ' + movableCount + '.';
+        }
+        if (copyOnlyCount) {
+          summary += ' Только копия: ' + copyOnlyCount + '.';
+        }
+        document.getElementById('moveSummary').textContent = summary;
+        document.getElementById('movePanel').style.display = 'block';
+      }
+
+      function setAllImportModes(mode) {
+        for (var i = 0; i < driveEntries.length; i++) {
+          if (mode === 'move' && !driveEntries[i].can_move) {
+            driveEntries[i].import_mode = 'copy';
+            continue;
+          }
+          driveEntries[i].import_mode = mode;
+        }
+        confirmDriveImport();
+      }
+
+      function applyMoveChoicesFromUi() {
+        for (var i = 0; i < driveEntries.length; i++) {
+          var entry = driveEntries[i];
+          if (!entry.import_mode) {
+            entry.import_mode = entry.can_move ? 'copy' : 'copy';
+          }
+        }
+      }
+
+      function confirmDriveImport() {
+        applyMoveChoicesFromUi();
+        runDriveImport();
+      }
+
+      function runDriveImport() {
+        document.getElementById('importBtn').disabled = true;
+        document.getElementById('resultPanel').style.display = 'none';
+        hideMovePanel();
+
+        if (context.is_catalog_owner) {
+          runDriveImportOwner();
+          return;
+        }
+
+        document.getElementById('status').textContent = 'Подготовка…';
+        google.script.run
+          .withSuccessHandler(function (prep) {
+            if (!prep.ok) {
+              document.getElementById('importBtn').disabled = false;
+              showError(prep.message || prep.error);
+              return;
+            }
+            importDriveQueue(0);
+          })
+          .withFailureHandler(function (err) {
+            document.getElementById('importBtn').disabled = false;
+            showError(err);
+          })
+          .prepareDriveImportExecution(JSON.stringify(driveEntries));
+      }
+
+      function runDriveImportOwner() {
+        var total = driveEntries.length;
+        showImportProgress(total);
+        document.getElementById('status').textContent =
+          total === 1 ? 'Сканирование и запись в каталог…' : 'Импорт ' + total + ' файл(ов)…';
+        google.script.run
+          .withSuccessHandler(showImportResultPanel)
+          .withFailureHandler(function (err) {
+            document.getElementById('importBtn').disabled = false;
+            hideImportProgress();
+            showError(err);
+          })
+          .startCatalogDriveImport(context.parent_id, JSON.stringify(driveEntries));
+      }
+
+      function showImportResultPanel(result) {
+        document.getElementById('importBtn').disabled = false;
+        var total = driveEntries.length;
+        document.getElementById('importProgress').value = result.data && result.data.background ? 0 : 100;
+        document.getElementById('progressLabel').textContent =
+          result.data && result.data.background
+            ? '0 / ' + (result.data.background_jobs || total)
+            : total + ' / ' + total;
+        document.getElementById('actions').style.display = 'none';
+        document.getElementById('resultPanel').style.display = 'block';
+        var text = result.message || (result.ok ? 'Готово.' : (result.error || 'Ошибка'));
+        document.getElementById('resultReport').value = text;
+        document.getElementById('status').textContent = result.ok
+          ? (result.data && result.data.background
+            ? 'Записано в каталог. Копирование на Drive — в фоне.'
+            : 'Импорт завершён. Скопируйте отчёт при необходимости.')
+          : 'Импорт завершён с ошибкой.';
+      }
+
+      function updateImportProgressUi(progress, fallbackTotal) {
+        if (!progress) {
+          return;
+        }
+        var total = progress.total || fallbackTotal || 0;
+        var done = progress.done || 0;
+        var pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+        document.getElementById('importProgress').value = pct;
+        document.getElementById('progressLabel').textContent = done + ' / ' + total;
+      }
+
+      function showImportProgress(total) {
+        document.getElementById('progressWrap').style.display = 'block';
+        document.getElementById('importProgress').value = 0;
+        document.getElementById('progressLabel').textContent = '0 / ' + total;
+      }
+
+      function hideImportProgress() {
+        document.getElementById('progressWrap').style.display = 'none';
+      }
+
+      function runDriveImportSingleDebug() {
+        runDriveImportOwner();
+      }
+
+      function runDriveImportBatch() {
+        driveImportBatchImported = 0;
+        driveImportBatchFailures = [];
+        var total = driveEntries.length;
+        showImportProgress(total);
+        document.getElementById('status').textContent = 'Импорт ' + total + ' файл(ов)…';
+        runDriveImportBatchSlice(0, total);
+      }
+
+      function runDriveImportBatchSlice(startIndex, total) {
+        var endIndex = Math.min(startIndex + importBatchChunkSize, total);
+        var chunk = driveEntries.slice(startIndex, endIndex);
+        var isFirst = startIndex === 0;
+        var isLast = endIndex >= total;
+
+        updateImportProgressUi({ done: startIndex, total: total }, total);
+        document.getElementById('status').textContent =
+          'Импорт ' + startIndex + '–' + endIndex + ' / ' + total + '…';
+
+        google.script.run
+          .withSuccessHandler(function (result) {
+            if (result.data) {
+              if (result.data.imported) {
+                driveImportBatchImported += result.data.imported.length;
+              }
+              if (result.data.failed && result.data.failed.length) {
+                driveImportBatchFailures = driveImportBatchFailures.concat(result.data.failed);
+              }
+              if (result.data.progress) {
+                updateImportProgressUi(result.data.progress, total);
+              }
+            }
+            if (!isLast) {
+              runDriveImportBatchSlice(endIndex, total);
+              return;
+            }
+            document.getElementById('importBtn').disabled = false;
+            document.getElementById('importProgress').value = 100;
+            document.getElementById('actions').style.display = 'none';
+            document.getElementById('resultPanel').style.display = 'block';
+            var importedCount = driveImportBatchImported;
+            var message = 'Импортировано файлов: ' + importedCount + '.';
+            if (driveImportBatchFailures.length) {
+              message += '\nОшибок: ' + driveImportBatchFailures.length + '.';
+            }
+            if (result.message) {
+              message += '\n\n' + result.message;
+            }
+            document.getElementById('resultReport').value = message;
+            document.getElementById('status').textContent = importedCount > 0
+              ? 'Импорт завершён. Скопируйте отчёт при необходимости.'
+              : 'Импорт завершён с ошибками.';
+          })
+          .withFailureHandler(function (err) {
+            document.getElementById('importBtn').disabled = false;
+            hideImportProgress();
+            showError(err);
+          })
+          .importCatalogDriveBatch(
+            context.parent_id,
+            JSON.stringify(chunk),
+            JSON.stringify({
+              is_first: isFirst,
+              is_last: isLast,
+              total_count: total,
+              done_offset: startIndex
+            })
+          );
+      }
+
+      function importLocalQueue(index) {
+        if (index >= localQueue.length) {
+          return;
+        }
+        var item = localQueue[index];
+        if (item.file.size > maxUploadBytes) {
+          showError('Файл «' + item.fileName + '» больше лимита.');
+          document.getElementById('importBtn').disabled = false;
+          return;
+        }
+        document.getElementById('importBtn').disabled = true;
+        document.getElementById('status').textContent =
+          'Импорт ' + (index + 1) + ' / ' + localQueue.length + ': ' + item.fileName;
+
+        var reader = new FileReader();
+        reader.onload = function (event) {
+          var dataUrl = String(event.target.result || '');
+          var comma = dataUrl.indexOf(',');
+          var base64 = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
+          var isLast = index === localQueue.length - 1;
+          google.script.run
+            .withSuccessHandler(function (result) {
+              if (!result.ok) {
+                showError(result.message || result.error);
+                document.getElementById('importBtn').disabled = false;
+                return;
+              }
+              if (isLast) {
+                document.getElementById('status').textContent = result.message || 'Готово.';
+                setTimeout(function () { google.script.host.close(); }, 1000);
+                return;
+              }
+              importLocalQueue(index + 1);
+            })
+            .withFailureHandler(function (err) {
+              showError(err);
+              document.getElementById('importBtn').disabled = false;
+            })
+            .importCatalogLocalFile(
+              context.parent_id,
+              JSON.stringify(item.pathSegments),
+              item.fileName,
+              base64,
+              item.file.type || '',
+              isLast,
+              index === 0
+            );
+        };
+        reader.onerror = function () {
+          showError('Не удалось прочитать файл «' + item.fileName + '».');
+          document.getElementById('importBtn').disabled = false;
+        };
+        reader.readAsDataURL(item.file);
+      }
+
+      function importDriveQueue(index) {
+        if (index >= driveEntries.length) {
+          return;
+        }
+        var entry = driveEntries[index];
+        var isLast = index === driveEntries.length - 1;
+        var modeLabel = entry.import_mode === 'move' ? 'Перенос' : 'Копирование';
+        document.getElementById('status').textContent =
+          modeLabel + ' ' + (index + 1) + ' / ' + driveEntries.length + ': ' + entry.file_name;
+
+        google.script.run
+          .withSuccessHandler(function (result) {
+            if (!result.ok) {
+              showError(result.message || result.error);
+              document.getElementById('importBtn').disabled = false;
+              return;
+            }
+            if (isLast) {
+              document.getElementById('status').textContent = result.message || 'Готово.';
+              setTimeout(function () { google.script.host.close(); }, 1200);
+              return;
+            }
+            importDriveQueue(index + 1);
+          })
+          .withFailureHandler(function (err) {
+            showError(err);
+            document.getElementById('importBtn').disabled = false;
+          })
+          .importCatalogDriveEntry(context.parent_id, JSON.stringify(entry), isLast);
+      }
+
+      function showError(message) {
+        document.getElementById('status').textContent = String(message);
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      function escapeAttr(text) {
+        return String(text).replace(/"/g, '&quot;');
+      }
+
+      updateSourcePanel();
+    </script>
+  </body>
+</html>
