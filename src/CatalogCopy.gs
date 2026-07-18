@@ -42,6 +42,15 @@ function copyCatalogItems(input) {
   var normalizedItems = normalizeMoveItems_(items);
   assertCopyPermissions_(engine, userEmail, loginRole, targetFolderId, normalizedItems, virtualRootFolderId);
 
+  normalizedItems.forEach(function (item) {
+    if (item.kind === 'folder' && isFolderInside_(engine, item.id, targetFolderId)) {
+      throw catalogError_(
+        'INVALID_COPY',
+        'Cannot copy a folder into itself or its subfolder.'
+      );
+    }
+  });
+
   var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
   var copied = [];
 

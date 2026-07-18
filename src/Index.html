@@ -183,15 +183,35 @@
       .panel-table tr:hover {
         background: rgba(255, 255, 255, 0.04);
       }
+      /* OLD: selected = синий фон + белый текст; focused = оранжевая рамка на любой панели */
       .panel-table tr.selected {
-        background: var(--accent);
-        color: #fff;
+        color: #3ddc84;
       }
       .panel-table tr.selected:hover {
-        background: var(--accent-hover);
+        color: #5ee9a0;
+      }
+      .panel-table tr.focused {
+        outline: 2px solid #7ec8e8;
+        outline-offset: -2px;
       }
       .panel-table tr.row-folder td.col-name {
         font-weight: 700;
+      }
+      .opening-splash {
+        position: fixed;
+        left: 50%;
+        top: 40%;
+        transform: translate(-50%, -50%);
+        z-index: 10000;
+        background: rgba(30, 30, 30, 0.95);
+        color: #fff;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 18px 28px;
+        font-size: 16px;
+        font-weight: 600;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+        pointer-events: none;
       }
       .col-name-cell {
         display: flex;
@@ -272,6 +292,16 @@
       .command-buttons .cmd-btn:disabled {
         opacity: 0.45;
         cursor: default;
+      }
+      .command-buttons .cmd-btn-icon {
+        padding: 3px 7px;
+        line-height: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .command-buttons .cmd-btn-icon svg {
+        display: block;
       }
       .hotkey-hints {
         display: flex;
@@ -647,15 +677,42 @@
         <footer class="app-footer">
           <div class="command-bar">
             <div class="command-buttons">
-              <button type="button" id="btn-users" class="cmd-btn hidden">Пользователи</button>
-              <button type="button" id="btn-import" class="cmd-btn hidden">Импорт</button>
               <button type="button" id="btn-copy" class="cmd-btn hidden">F5 Копир.</button>
               <button type="button" id="btn-move" class="cmd-btn hidden">F6 Перем.</button>
               <button type="button" id="btn-create" class="cmd-btn">F7 Создать</button>
               <button type="button" id="btn-delete" class="cmd-btn hidden">F8 Удал.</button>
+              <button type="button" id="btn-approve" class="cmd-btn" title="Утвердить выделенные файлы">Подписать</button>
+              <button type="button" id="btn-users" class="cmd-btn hidden">Доступ</button>
+              <button type="button" id="btn-import" class="cmd-btn hidden">Импорт</button>
+              <button
+                type="button"
+                id="btn-empty-trash"
+                class="cmd-btn cmd-btn-icon hidden"
+                title="Очистить корзину"
+                aria-label="Очистить корзину"
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M5.2 2.2h5.6l.4 1.1H14v1.2H2V3.3h2.8l.4-1.1zm.6 3.2h1.1v6.2H5.8V5.4zm3.2 0h1.1v6.2H9V5.4zm-4.9 8.1c0 .7.5 1.2 1.2 1.2h4.4c.7 0 1.2-.5 1.2-1.2V5.2H4.1v8.3z"
+                  />
+                  <line
+                    x1="2.2"
+                    y1="13.8"
+                    x2="13.8"
+                    y2="2.2"
+                    stroke="#c62828"
+                    stroke-width="1.9"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
             </div>
             <div class="hotkey-hints">
               <span>Shift+F6 Имя</span>
+              <span>Space / ПКМ Toggle</span>
+              <span>Ctrl+A / Ctrl+I</span>
+              <span>Ctrl+←/→ Панель</span>
               <span>Enter Открыть</span>
               <span>Tab Панель</span>
               <span>Backspace Вверх</span>
@@ -671,11 +728,12 @@
 
     <div id="import-modal" class="modal-backdrop hidden">
       <div class="modal-card">
-        <h2>Импорт с Google Drive</h2>
+        <h2>Импорт</h2>
         <p class="sub">Цель: текущая папка <strong id="import-target-name">…</strong> активной панели.</p>
         <div class="mode-row" style="margin-bottom:12px;">
-          <label><input type="radio" name="import-scenario" value="files" checked /> Файлы</label>
-          <label><input type="radio" name="import-scenario" value="folder" /> Папка</label>
+          <label><input type="radio" name="import-scenario" value="files" checked /> Drive: файлы</label>
+          <label><input type="radio" name="import-scenario" value="folder" /> Drive: папка</label>
+          <label><input type="radio" name="import-scenario" value="local" /> С компьютера</label>
         </div>
         <div id="import-files-block">
           <label for="import-drive-urls">Ссылки на файлы (по одной на строку, до 30)</label>
@@ -693,7 +751,18 @@
           />
           <p class="sub" style="margin-top:-8px;">Структура подпапок сохранится в каталоге. Не больше 30 файлов внутри.</p>
         </div>
-        <div class="mode-row">
+        <div id="import-local-block" class="hidden">
+          <p class="sub" style="margin-top:0;">Выберите файлы и/или папку. Структура папок сохранится в каталоге.</p>
+          <div class="mode-row" style="margin-bottom:10px;">
+            <button type="button" class="secondary" id="import-local-files-btn">Файлы…</button>
+            <button type="button" class="secondary" id="import-local-folder-btn">Папка…</button>
+            <button type="button" class="secondary" id="import-local-clear-btn">Очистить</button>
+          </div>
+          <input type="file" id="import-local-files" class="hidden" multiple />
+          <input type="file" id="import-local-folder" class="hidden" webkitdirectory multiple />
+          <p class="sub" id="import-local-summary">Ничего не выбрано.</p>
+        </div>
+        <div id="import-drive-mode-row" class="mode-row">
           <label><input type="radio" name="import-mode" value="copy" checked /> Копировать</label>
           <label><input type="radio" name="import-mode" value="move" /> Переместить (чужие — скопировать)</label>
         </div>
@@ -735,6 +804,19 @@
       </div>
     </div>
 
+    <div id="confirm-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <h2>Подтверждение</h2>
+        <p class="sub" id="confirm-message" style="white-space:pre-wrap;"></p>
+        <div class="modal-actions">
+          <button type="button" id="confirm-ok">OK</button>
+          <button type="button" class="secondary" id="confirm-cancel">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="opening-splash" class="opening-splash hidden">Открываю…</div>
+
     <div id="rename-modal" class="modal-backdrop hidden">
       <div class="modal-card">
         <h2>Переименование</h2>
@@ -752,8 +834,8 @@
 
     <div id="people-modal" class="modal-backdrop hidden">
       <div class="modal-card wide">
-        <h2>Пользователи и группы</h2>
-        <p class="sub" id="people-modal-sub">Управление списком каталога.</p>
+        <h2>Доступ</h2>
+        <p class="sub" id="people-modal-sub">Пользователи и группы каталога.</p>
         <div class="people-tabs">
           <button type="button" class="people-tab active" data-people-tab="users" id="people-tab-users">Люди</button>
           <button type="button" class="people-tab" data-people-tab="groups" id="people-tab-groups">Группы</button>
@@ -881,8 +963,24 @@
         var virtualRootFolderId = null;
         var activePanelIndex = 0;
         var panels = [
-          { folderId: null, parentFolderId: null, folderName: '', items: [], selectedIndex: -1, loading: false },
-          { folderId: null, parentFolderId: null, folderName: '', items: [], selectedIndex: -1, loading: false }
+          {
+            folderId: null,
+            parentFolderId: null,
+            folderName: '',
+            items: [],
+            selectedIndex: -1,
+            selectedMap: {},
+            loading: false
+          },
+          {
+            folderId: null,
+            parentFolderId: null,
+            folderName: '',
+            items: [],
+            selectedIndex: -1,
+            selectedMap: {},
+            loading: false
+          }
         ];
         var panelEls = [
           {
@@ -909,6 +1007,9 @@
           return (n / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
         }
 
+        /** Порог предупреждения «займёт время» (байт). */
+        var HEAVY_OP_WARN_BYTES_ = 10 * 1024 * 1024;
+
         function formatDate(iso) {
           if (!iso) return '—';
           var d = new Date(iso);
@@ -928,10 +1029,16 @@
         }
 
         function setActivePanel(index) {
+          var prev = activePanelIndex;
           activePanelIndex = index;
           panelEls.forEach(function (el, i) {
             el.root.classList.toggle('panel-active', i === index);
           });
+          if (prev !== index) {
+            renderPanel(0);
+            renderPanel(1);
+          }
+          updateEmptyTrashButton_();
           panelEls[index].root.focus();
         }
 
@@ -970,6 +1077,9 @@
               selectRow(index, -1);
               setActivePanel(index);
             });
+            if (state.selectedIndex === -1 && index === activePanelIndex) {
+              upRow.classList.add('focused');
+            }
             tbody.appendChild(upRow);
           }
 
@@ -988,14 +1098,17 @@
             if (item.kind === 'folder') {
               tr.classList.add('row-folder');
             }
-            if (rowIndex === state.selectedIndex) {
+            if (isRowSelected_(state, rowIndex)) {
               tr.classList.add('selected');
+            }
+            if (rowIndex === state.selectedIndex && index === activePanelIndex) {
+              tr.classList.add('focused');
             }
 
             var approvedCell =
               item.kind === 'file'
                 ? item.approved
-                  ? '✓'
+                  ? escapeHtml(item.approvedByName || item.approvedBy || '✓')
                   : ''
                 : '';
 
@@ -1043,8 +1156,22 @@
 
             tr.addEventListener('click', function (e) {
               e.stopPropagation();
-              selectRow(index, rowIndex);
               setActivePanel(index);
+              if (e.shiftKey) {
+                toggleRowsFromFocusTo_(index, rowIndex);
+              } else {
+                selectRow(index, rowIndex, { mode: 'focus' });
+              }
+            });
+            tr.addEventListener('contextmenu', function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              setActivePanel(index);
+              if (e.shiftKey) {
+                toggleRowsFromFocusTo_(index, rowIndex);
+              } else {
+                selectRow(index, rowIndex, { mode: 'toggle' });
+              }
             });
             tr.addEventListener('dblclick', function () {
               if (item.kind === 'folder') {
@@ -1076,25 +1203,350 @@
           return escapeHtml(s).replace(/'/g, '&#39;');
         }
 
-        function selectRow(panelIndex, rowIndex) {
-          panels[panelIndex].selectedIndex = rowIndex;
-          renderPanel(panelIndex);
+        function clearPanelSelection_(panelIndex) {
+          var state = panels[panelIndex];
+          state.selectedMap = {};
         }
 
-        function runCopyItems(targetFolderId, items, sourceFolderId) {
-          setStatus('Копирование…');
-          google.script.run
-            .withSuccessHandler(function () {
-              reloadCatalogSnapshot_([sourceFolderId, targetFolderId]);
+        function isRowSelected_(state, rowIndex) {
+          return Object.prototype.hasOwnProperty.call(state.selectedMap || {}, String(rowIndex));
+        }
+
+        function setRowSelected_(state, rowIndex, on) {
+          if (!state.selectedMap) {
+            state.selectedMap = {};
+          }
+          var key = String(rowIndex);
+          if (on) {
+            state.selectedMap[key] = true;
+          } else {
+            delete state.selectedMap[key];
+          }
+        }
+
+        function toggleRowAt_(panelIndex, rowIndex) {
+          var state = panels[panelIndex];
+          if (rowIndex < 0 || rowIndex >= state.items.length) {
+            return;
+          }
+          setRowSelected_(state, rowIndex, !isRowSelected_(state, rowIndex));
+        }
+
+        /** Shift+клик: toggle каждой строки от фокуса до клика (включительно). */
+        function toggleRowsFromFocusTo_(panelIndex, toRowIndex) {
+          var state = panels[panelIndex];
+          if (toRowIndex < 0 || toRowIndex >= state.items.length) {
+            return;
+          }
+          var from =
+            state.selectedIndex >= 0 && state.selectedIndex < state.items.length
+              ? state.selectedIndex
+              : toRowIndex;
+          var a = Math.min(from, toRowIndex);
+          var b = Math.max(from, toRowIndex);
+          for (var i = a; i <= b; i++) {
+            toggleRowAt_(panelIndex, i);
+          }
+          state.selectedIndex = toRowIndex;
+          renderPanel(panelIndex);
+          if (panelIndex === activePanelIndex) {
+            updateSelectionStatus_(panelIndex);
+          }
+        }
+
+        function selectAllInPanel_(panelIndex) {
+          var state = panels[panelIndex];
+          state.selectedMap = {};
+          for (var i = 0; i < state.items.length; i++) {
+            setRowSelected_(state, i, true);
+          }
+          if (state.items.length) {
+            state.selectedIndex = state.items.length - 1;
+          }
+          renderPanel(panelIndex);
+          updateSelectionStatus_(panelIndex);
+        }
+
+        function invertSelectionInPanel_(panelIndex) {
+          var state = panels[panelIndex];
+          for (var i = 0; i < state.items.length; i++) {
+            toggleRowAt_(panelIndex, i);
+          }
+          renderPanel(panelIndex);
+          updateSelectionStatus_(panelIndex);
+        }
+
+        /**
+         * Стрелка: при Shift — toggle текущей (если это файл/папка), затем фокус на соседа
+         * (в т.ч. [..] при selectedIndex = -1).
+         */
+        function moveFocusByArrow_(panelIndex, newIndex, withShift) {
+          var state = panels[panelIndex];
+          if (withShift && state.selectedIndex >= 0 && state.selectedIndex !== newIndex) {
+            toggleRowAt_(panelIndex, state.selectedIndex);
+            if (panelIndex === activePanelIndex) {
+              updateSelectionStatus_(panelIndex);
+            }
+          }
+          selectRow(panelIndex, newIndex, { mode: 'focus' });
+        }
+
+        function getExplicitSelectedItems_(panelIndex) {
+          var state = panels[panelIndex];
+          var idxs = Object.keys(state.selectedMap || {})
+            .map(function (k) {
+              return Number(k);
             })
-            .withFailureHandler(function (err) {
-              setStatus((err && err.message) || String(err));
-              alert((err && err.message) || String(err));
+            .filter(function (i) {
+              return isRowSelected_(state, i) && i >= 0 && i < state.items.length;
             })
-            .copyCatalogItems({
-              targetFolderId: targetFolderId,
-              items: items
+            .sort(function (a, b) {
+              return a - b;
             });
+          return idxs.map(function (i) {
+            return state.items[i];
+          });
+        }
+
+        function updateSelectionStatus_(panelIndex) {
+          var items = getExplicitSelectedItems_(panelIndex);
+          if (!items.length) {
+            setStatus('Выделено: 0');
+            return;
+          }
+          var weight = estimateItemsWeight_(items);
+          var files = 0;
+          var folders = 0;
+          items.forEach(function (it) {
+            if (it.kind === 'folder') {
+              folders += 1;
+            } else {
+              files += 1;
+            }
+          });
+          var parts = [];
+          if (files) {
+            parts.push(files + ' файл.');
+          }
+          if (folders) {
+            parts.push(folders + ' пап.');
+          }
+          setStatus('Выделено: ' + parts.join(', ') + ', ' + formatBytes(weight.bytes));
+        }
+
+        function selectRow(panelIndex, rowIndex, options) {
+          options = options || {};
+          var mode = options.mode || 'focus';
+          var state = panels[panelIndex];
+          if (!state.selectedMap) {
+            state.selectedMap = {};
+          }
+
+          if (rowIndex < 0) {
+            state.selectedIndex = -1;
+            renderPanel(panelIndex);
+            return;
+          }
+
+          var selectionChanged = false;
+
+          if (mode === 'toggle') {
+            toggleRowAt_(panelIndex, rowIndex);
+            state.selectedIndex = rowIndex;
+            selectionChanged = true;
+          } else {
+            state.selectedIndex = rowIndex;
+          }
+
+          renderPanel(panelIndex);
+          if (selectionChanged && panelIndex === activePanelIndex) {
+            updateSelectionStatus_(panelIndex);
+          }
+        }
+
+        function getSelectedPanelItems_(panelIndex) {
+          var items = getExplicitSelectedItems_(panelIndex);
+          if (items.length) {
+            return items;
+          }
+          var state = panels[panelIndex];
+          if (state.selectedIndex >= 0 && state.selectedIndex < state.items.length) {
+            return [state.items[state.selectedIndex]];
+          }
+          return [];
+        }
+
+        function syncPanelFolder_(sourceIndex, targetIndex) {
+          var source = panels[sourceIndex];
+          if (!source || !source.folderId || source.loading) {
+            return;
+          }
+          var target = panels[targetIndex];
+          if (target && target.folderId === source.folderId && !target.loading) {
+            setActivePanel(targetIndex);
+            return;
+          }
+          navigatePanel(targetIndex, source.folderId);
+          setActivePanel(targetIndex);
+        }
+
+        function formatSelectedNames_(items) {
+          if (!items.length) {
+            return '';
+          }
+          if (items.length === 1) {
+            return '«' + items[0].name + '»';
+          }
+          var weight = estimateItemsWeight_(items);
+          var folders = 0;
+          var files = 0;
+          items.forEach(function (it) {
+            if (it.kind === 'folder') {
+              folders += 1;
+            } else {
+              files += 1;
+            }
+          });
+          var parts = [];
+          if (folders) {
+            parts.push(folders + ' пап.');
+          }
+          if (files) {
+            parts.push(files + ' файл.');
+          }
+          return parts.join(', ') + ', ' + formatBytes(weight.bytes);
+        }
+
+        function estimateItemsWeight_(items) {
+          var fileCount = 0;
+          var bytes = 0;
+          (items || []).forEach(function (item) {
+            var w = estimateSelectionWeight_(item);
+            fileCount += w.fileCount;
+            bytes += w.bytes;
+          });
+          return { fileCount: fileCount, bytes: bytes };
+        }
+
+        var confirmDialogResolver_ = null;
+
+        function showAppConfirm_(message) {
+          return new Promise(function (resolve) {
+            var modal = document.getElementById('confirm-modal');
+            var msgEl = document.getElementById('confirm-message');
+            var okBtn = document.getElementById('confirm-ok');
+            var cancelBtn = document.getElementById('confirm-cancel');
+            if (confirmDialogResolver_) {
+              confirmDialogResolver_(false);
+              confirmDialogResolver_ = null;
+            }
+            msgEl.textContent = message;
+            modal.classList.remove('hidden');
+            confirmDialogResolver_ = resolve;
+            okBtn.focus();
+          });
+        }
+
+        function finishAppConfirm_(result) {
+          var modal = document.getElementById('confirm-modal');
+          modal.classList.add('hidden');
+          if (confirmDialogResolver_) {
+            var resolve = confirmDialogResolver_;
+            confirmDialogResolver_ = null;
+            resolve(!!result);
+          }
+          restorePanelKeyboardFocus_();
+        }
+
+        function restorePanelKeyboardFocus_() {
+          var el = panelEls[activePanelIndex];
+          if (el && el.root) {
+            el.root.focus();
+          }
+        }
+
+        function confirmCatalogAction_(message) {
+          return showAppConfirm_(message);
+        }
+
+        function confirmHeavyOperation_(fileCount, totalBytes) {
+          var parts = [];
+          if (fileCount > 30) {
+            parts.push('файлов больше 30 (' + fileCount + ')');
+          }
+          if (totalBytes >= HEAVY_OP_WARN_BYTES_) {
+            parts.push('объём ' + formatBytes(totalBytes));
+          }
+          if (!parts.length) {
+            return Promise.resolve(true);
+          }
+          return showAppConfirm_(
+            'Внимание: ' +
+              parts.join(', ') +
+              '.\nОперация может занять время.\nПродолжить?'
+          );
+        }
+
+        function showOpeningSplash_() {
+          var el = document.getElementById('opening-splash');
+          el.classList.remove('hidden');
+          if (showOpeningSplash_._timer) {
+            clearTimeout(showOpeningSplash_._timer);
+          }
+          showOpeningSplash_._timer = setTimeout(function () {
+            el.classList.add('hidden');
+            showOpeningSplash_._timer = null;
+          }, 2000);
+        }
+
+        function isFolderEqualOrAncestorOf_(ancestorFolderId, folderId) {
+          if (!ancestorFolderId || !folderId || !catalogSnapshot) {
+            return false;
+          }
+          var ancestor = String(ancestorFolderId);
+          var current = String(folderId);
+          var guard = 0;
+          while (current && guard < 10000) {
+            guard += 1;
+            if (current === ancestor) {
+              return true;
+            }
+            var folder = catalogSnapshot.foldersById[current];
+            if (!folder) {
+              return false;
+            }
+            current = folder.parentFolderId ? String(folder.parentFolderId) : '';
+          }
+          return false;
+        }
+
+        function findSelfNestingFolder_(items, targetFolderId) {
+          if (!items || !targetFolderId) {
+            return null;
+          }
+          for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (item.kind === 'folder' && isFolderEqualOrAncestorOf_(item.id, targetFolderId)) {
+              return item;
+            }
+          }
+          return null;
+        }
+
+        function assertNoSelfNesting_(items, targetFolderId, actionLabel) {
+          var bad = findSelfNestingFolder_(items, targetFolderId);
+          if (!bad) {
+            return Promise.resolve(true);
+          }
+          return showAppConfirm_(
+            'Нельзя ' +
+              actionLabel +
+              ' папку «' +
+              bad.name +
+              '» в саму себя или во вложенную папку.'
+          ).then(function () {
+            return false;
+          });
         }
 
         function copySelectedToInactivePanel() {
@@ -1102,15 +1554,343 @@
           var targetIndex = sourceIndex === 0 ? 1 : 0;
           var source = panels[sourceIndex];
           var target = panels[targetIndex];
-          var item = source.items[source.selectedIndex];
-          if (!item || source.loading || target.loading || !target.folderId) {
+          var items = getSelectedPanelItems_(sourceIndex);
+          if (!items.length || source.loading || target.loading || !target.folderId) {
             return;
           }
-          runCopyItems(
-            target.folderId,
-            [{ kind: item.kind, id: item.id }],
-            source.folderId
-          );
+          assertNoSelfNesting_(items, target.folderId, 'копировать').then(function (okNest) {
+            if (!okNest) {
+              return;
+            }
+            return confirmCatalogAction_(
+              'Копировать ' +
+                formatSelectedNames_(items) +
+                ' в «' +
+                (target.folderName || 'папку') +
+                '»?'
+            ).then(function (ok) {
+              if (!ok) {
+                return;
+              }
+              var weight = estimateItemsWeight_(items);
+              return confirmHeavyOperation_(weight.fileCount, weight.bytes).then(function (okHeavy) {
+                if (!okHeavy) {
+                  return;
+                }
+                runCopyItems(
+                  target.folderId,
+                  items.map(function (it) {
+                    return { kind: it.kind, id: it.id };
+                  }),
+                  source.folderId
+                );
+              });
+            });
+          });
+        }
+
+        function moveSelectedToInactivePanel() {
+          var sourceIndex = activePanelIndex;
+          var targetIndex = sourceIndex === 0 ? 1 : 0;
+          var source = panels[sourceIndex];
+          var target = panels[targetIndex];
+          var items = getSelectedPanelItems_(sourceIndex);
+          if (!items.length || source.loading || target.loading || !target.folderId) {
+            return;
+          }
+          assertNoSelfNesting_(items, target.folderId, 'переместить').then(function (okNest) {
+            if (!okNest) {
+              return;
+            }
+            return confirmCatalogAction_(
+              'Переместить ' +
+                formatSelectedNames_(items) +
+                ' в «' +
+                (target.folderName || 'папку') +
+                '»?'
+            ).then(function (ok) {
+              if (!ok) {
+                return;
+              }
+              var weight = estimateItemsWeight_(items);
+              return confirmHeavyOperation_(weight.fileCount, weight.bytes).then(function (okHeavy) {
+                if (!okHeavy) {
+                  return;
+                }
+                runMoveItems(
+                  target.folderId,
+                  items.map(function (it) {
+                    return { kind: it.kind, id: it.id };
+                  }),
+                  source.folderId
+                );
+              });
+            });
+          });
+        }
+
+        function moveSelectedToTrash() {
+          var sourceIndex = activePanelIndex;
+          var source = panels[sourceIndex];
+          var items = getSelectedPanelItems_(sourceIndex);
+          if (!items.length || source.loading) {
+            return;
+          }
+          confirmCatalogAction_(
+            'Удалить ' + formatSelectedNames_(items) + ' в корзину?'
+          ).then(function (ok) {
+            if (!ok) {
+              return;
+            }
+            var weight = estimateItemsWeight_(items);
+            return confirmHeavyOperation_(weight.fileCount, weight.bytes).then(function (okHeavy) {
+              if (!okHeavy) {
+                return;
+              }
+              runMoveItems(
+                '__TRASH__',
+                items.map(function (it) {
+                  return { kind: it.kind, id: it.id };
+                }),
+                source.folderId
+              );
+            });
+          });
+        }
+
+        function approveSelectedFiles() {
+          var sourceIndex = activePanelIndex;
+          var source = panels[sourceIndex];
+          var items = getSelectedPanelItems_(sourceIndex);
+          if (source.loading) {
+            return;
+          }
+          var fileIds = [];
+          (items || []).forEach(function (it) {
+            if (it.kind === 'file' && !it.approved) {
+              fileIds.push(it.id);
+            }
+          });
+          if (!fileIds.length) {
+            showAppConfirm_('Нет файлов для подписания.');
+            return;
+          }
+          var label =
+            fileIds.length === 1
+              ? 'Подписать 1 файл?'
+              : 'Подписать ' + fileIds.length + ' файл.?';
+          confirmCatalogAction_(label).then(function (ok) {
+            if (!ok) {
+              return;
+            }
+            setStatus('Подписание…');
+            google.script.run
+              .withSuccessHandler(function (result) {
+                var n = (result && result.approved && result.approved.length) || 0;
+                reloadCatalogSnapshot_(
+                  source.folderId ? [source.folderId] : null,
+                  function () {
+                    if (!n) {
+                      setStatus('Нет файлов для подписания');
+                      showAppConfirm_(
+                        'Нет файлов для подписания (нет прав или уже подписаны).'
+                      );
+                      return;
+                    }
+                    var skipped =
+                      ((result && result.skippedNoPermission) || 0) +
+                      ((result && result.skippedAlready) || 0);
+                    setStatus(
+                      skipped
+                        ? 'Подписано: ' + n + ' (пропущено: ' + skipped + ')'
+                        : 'Готово'
+                    );
+                  }
+                );
+              })
+              .withFailureHandler(function (err) {
+                var msg = (err && err.message) || String(err);
+                setStatus(msg);
+                showAppConfirm_(msg);
+              })
+              .approveCatalogFiles({ fileIds: fileIds });
+          });
+        }
+
+        function getTrashStatsFromSnapshot_() {
+          if (!catalogSnapshot || !catalogSnapshot.foldersById) {
+            return { fileCount: 0, folderCount: 0 };
+          }
+          var trashIds = { __TRASH__: true };
+          var queue = ['__TRASH__'];
+          while (queue.length) {
+            var currentId = queue.shift();
+            Object.keys(catalogSnapshot.foldersById).forEach(function (childId) {
+              var child = catalogSnapshot.foldersById[childId];
+              if (String(child.parentFolderId || '') === currentId && !trashIds[childId]) {
+                trashIds[childId] = true;
+                queue.push(childId);
+              }
+            });
+          }
+          var folderCount = 0;
+          Object.keys(trashIds).forEach(function (id) {
+            if (id !== '__TRASH__') {
+              folderCount += 1;
+            }
+          });
+          var fileCount = 0;
+          Object.keys(catalogSnapshot.filesById || {}).forEach(function (fileId) {
+            var file = catalogSnapshot.filesById[fileId];
+            if (trashIds[String(file.folderId || '')]) {
+              fileCount += 1;
+            }
+          });
+          return { fileCount: fileCount, folderCount: folderCount };
+        }
+
+        function isFolderInTrashSubtree_(folderId) {
+          if (!folderId) {
+            return false;
+          }
+          if (String(folderId) === '__TRASH__') {
+            return true;
+          }
+          if (!catalogSnapshot || !catalogSnapshot.foldersById) {
+            return false;
+          }
+          var current = String(folderId);
+          var guard = 0;
+          while (current && guard < 64) {
+            guard += 1;
+            if (current === '__TRASH__') {
+              return true;
+            }
+            var folder = catalogSnapshot.foldersById[current];
+            if (!folder || !folder.parentFolderId) {
+              return false;
+            }
+            current = String(folder.parentFolderId);
+          }
+          return false;
+        }
+
+        function updateEmptyTrashButton_() {
+          var btn = document.getElementById('btn-empty-trash');
+          if (!btn) {
+            return;
+          }
+          var active = panels[activePanelIndex];
+          var show =
+            canEmptyTrash &&
+            active &&
+            !active.loading &&
+            isFolderInTrashSubtree_(active.folderId);
+          btn.classList.toggle('hidden', !show);
+          btn.disabled = !show;
+        }
+
+        function emptyTrashAction_() {
+          if (!canEmptyTrash) {
+            return;
+          }
+          var active = panels[activePanelIndex];
+          if (!active || active.loading || !isFolderInTrashSubtree_(active.folderId)) {
+            return;
+          }
+          var stats = getTrashStatsFromSnapshot_();
+          if (!stats.fileCount && !stats.folderCount) {
+            showAppConfirm_('Корзина уже пуста.');
+            return;
+          }
+          var label =
+            'Очистить корзину: ' +
+            stats.fileCount +
+            ' файл., ' +
+            stats.folderCount +
+            ' пап.?\nФайлы будут перемещены в корзину Google Drive (~30 дней).';
+          confirmCatalogAction_(label).then(function (ok) {
+            if (!ok) {
+              return;
+            }
+            setStatus('Очистка корзины…');
+            google.script.run
+              .withSuccessHandler(function (result) {
+                setStatus('Обновление каталога…');
+                google.script.run
+                  .withSuccessHandler(function (data) {
+                    ingestCatalogSnapshot_(data);
+                    panels.forEach(function (panel, panelIndex) {
+                      var folderId = panel.folderId;
+                      if (
+                        !folderId ||
+                        !catalogSnapshot.foldersById[folderId]
+                      ) {
+                        folderId = '__TRASH__';
+                      }
+                      applyPanelFromSnapshot_(panelIndex, folderId);
+                    });
+                    updateEmptyTrashButton_();
+                    var files = (result && result.deletedFiles) || 0;
+                    var folders = (result && result.deletedFolders) || 0;
+                    var driveErrors = (result && result.driveErrors) || 0;
+                    setStatus(
+                      driveErrors
+                        ? 'Корзина очищена: файлов ' +
+                            files +
+                            ', папок ' +
+                            folders +
+                            ' (ошибки Drive: ' +
+                            driveErrors +
+                            ')'
+                        : 'Готово'
+                    );
+                  })
+                  .withFailureHandler(function (err) {
+                    var msg = (err && err.message) || String(err);
+                    setStatus(msg);
+                    showAppConfirm_(msg);
+                  })
+                  .getCatalogSnapshot();
+              })
+              .withFailureHandler(function (err) {
+                var msg = (err && err.message) || String(err);
+                setStatus(msg);
+                showAppConfirm_(msg);
+              })
+              .emptyCatalogTrash();
+          });
+        }
+
+        function formatCatalogOpError_(err) {
+          var raw = (err && err.message) || String(err || '');
+          if (
+            raw.indexOf('INVALID_MOVE') !== -1 ||
+            raw.indexOf('INVALID_COPY') !== -1 ||
+            raw.indexOf('into itself') !== -1
+          ) {
+            return 'Нельзя копировать или перемещать папку в саму себя или во вложенную папку.';
+          }
+          return raw;
+        }
+
+        function runCopyItems(targetFolderId, items, sourceFolderId) {
+          setStatus('Копирование…');
+          google.script.run
+            .withSuccessHandler(function () {
+              reloadCatalogSnapshot_([sourceFolderId, targetFolderId], function () {
+                setStatus('Готово');
+              });
+            })
+            .withFailureHandler(function (err) {
+              var msg = formatCatalogOpError_(err);
+              setStatus(msg);
+              showAppConfirm_(msg);
+            })
+            .copyCatalogItems({
+              targetFolderId: targetFolderId,
+              items: items
+            });
         }
 
         function runMoveItems(targetFolderId, items, sourceFolderId) {
@@ -1122,8 +1902,9 @@
               setStatus('Готово');
             })
             .withFailureHandler(function (err) {
-              setStatus((err && err.message) || String(err));
-              alert((err && err.message) || String(err));
+              var msg = formatCatalogOpError_(err);
+              setStatus(msg);
+              showAppConfirm_(msg);
             })
             .moveCatalogItems({
               targetFolderId: targetFolderId,
@@ -1131,30 +1912,44 @@
             });
         }
 
-        function moveSelectedToInactivePanel() {
-          var sourceIndex = activePanelIndex;
-          var targetIndex = sourceIndex === 0 ? 1 : 0;
-          var source = panels[sourceIndex];
-          var target = panels[targetIndex];
-          var item = source.items[source.selectedIndex];
-          if (!item || source.loading || target.loading || !target.folderId) {
-            return;
+        function countFilesInSnapshotSubtree_(rootFolderId) {
+          if (!catalogSnapshot || !rootFolderId) {
+            return 0;
           }
-          runMoveItems(
-            target.folderId,
-            [{ kind: item.kind, id: item.id }],
-            source.folderId
-          );
+          var folderIds = {};
+          var queue = [String(rootFolderId)];
+          folderIds[String(rootFolderId)] = true;
+          while (queue.length) {
+            var currentId = queue.shift();
+            Object.keys(catalogSnapshot.foldersById || {}).forEach(function (childId) {
+              var child = catalogSnapshot.foldersById[childId];
+              if (String(child.parentFolderId || '') === currentId && !folderIds[childId]) {
+                folderIds[childId] = true;
+                queue.push(childId);
+              }
+            });
+          }
+          var count = 0;
+          Object.keys(catalogSnapshot.filesById || {}).forEach(function (fileId) {
+            var file = catalogSnapshot.filesById[fileId];
+            if (folderIds[String(file.folderId || '')]) {
+              count++;
+            }
+          });
+          return count;
         }
 
-        function moveSelectedToTrash() {
-          var sourceIndex = activePanelIndex;
-          var source = panels[sourceIndex];
-          var item = source.items[source.selectedIndex];
-          if (!item || source.loading) {
-            return;
+        function estimateSelectionWeight_(item) {
+          if (!item) {
+            return { fileCount: 0, bytes: 0 };
           }
-          runMoveItems('__TRASH__', [{ kind: item.kind, id: item.id }], source.folderId);
+          if (item.kind === 'file') {
+            return { fileCount: 1, bytes: Number(item.sizeBytes) || 0 };
+          }
+          return {
+            fileCount: countFilesInSnapshotSubtree_(item.id),
+            bytes: Number(item.sizeBytes) || 0
+          };
         }
 
         var renameTarget = null;
@@ -1256,6 +2051,7 @@
         }
 
         function openCatalogItem(catalogId, panelIndex) {
+          showOpeningSplash_();
           setStatus('Открытие файла…');
           google.script.run
             .withSuccessHandler(function (result) {
@@ -1282,7 +2078,7 @@
                 }
               }
               openExternalUrl_(result.url);
-              setStatus('Открыто: ' + result.displayName);
+              setStatus('Готово');
             })
             .withFailureHandler(function (err) {
               setStatus((err && err.message) || String(err));
@@ -1292,6 +2088,7 @@
         }
 
         var canRunCatalogOperations = false;
+        var canEmptyTrash = false;
         var peopleAdminState = null;
         var peopleUserEditEmail = null;
         var peopleGroupEditId = null;
@@ -1671,6 +2468,8 @@
 
         var catalogSnapshot = null;
         var aclEditorState = null;
+        var localImportEntries_ = [];
+        var LOCAL_IMPORT_WARN_BYTES_ = HEAVY_OP_WARN_BYTES_;
 
         function comparePanelItemsClient_(a, b) {
           if (a.kind !== b.kind) {
@@ -1695,6 +2494,7 @@
             modifiedAt: item.modifiedAt,
             approved: item.approved,
             approvedBy: item.approvedBy,
+            approvedByName: item.approvedByName || '',
             isSystem: item.isSystem,
             editors: (item.editors || []).slice(),
             commenters: (item.commenters || []).slice(),
@@ -1994,6 +2794,7 @@
               modifiedAt: child.modifiedAt,
               approved: false,
               approvedBy: '',
+              approvedByName: '',
               isSystem: !!child.isSystem,
               editors: child.editors || [],
               commenters: child.commenters || [],
@@ -2014,6 +2815,7 @@
               modifiedAt: file.modifiedAt,
               approved: !!file.approved,
               approvedBy: file.approvedBy || '',
+              approvedByName: file.approvedByName || '',
               isSystem: false,
               editors: file.editors || [],
               commenters: file.commenters || [],
@@ -2125,6 +2927,7 @@
                   modifiedAt: file.modifiedAt,
                   approved: !!file.approved,
                   approvedBy: file.approvedBy || '',
+                  approvedByName: file.approvedByName || '',
                   isSystem: false,
                   editors: file.editors || [],
                   commenters: file.commenters || [],
@@ -2148,6 +2951,7 @@
                   modifiedAt: folder.modifiedAt,
                   approved: false,
                   approvedBy: '',
+                  approvedByName: '',
                   isSystem: !!folder.isSystem,
                   editors: folder.editors || [],
                   commenters: folder.commenters || [],
@@ -2270,6 +3074,7 @@
             modifiedAt: item.modifiedAt,
             approved: !!item.approved,
             approvedBy: item.approvedBy || '',
+            approvedByName: item.approvedByName || '',
             editors: item.editors || [],
             commenters: item.commenters || [],
             readers: item.readers || []
@@ -2391,6 +3196,7 @@
           state.folderName = data.folderName;
           state.items = data.items || [];
           state.loading = false;
+          state.selectedMap = {};
           if (state.selectedIndex < 0 && state.items.length) {
             state.selectedIndex = 0;
           }
@@ -2398,6 +3204,7 @@
             state.selectedIndex = state.items.length ? state.items.length - 1 : -1;
           }
           renderPanel(panelIndex);
+          updateEmptyTrashButton_();
         }
 
         function loadPanelContents(panelIndex, folderId, options) {
@@ -2448,6 +3255,7 @@
               ingestCatalogSnapshot_(data);
               applyPanelFromSnapshot_(0, folderId);
               applyPanelFromSnapshot_(1, folderId);
+              updateEmptyTrashButton_();
               setStatus('Готово');
             })
             .withFailureHandler(function (err) {
@@ -2455,6 +3263,7 @@
               panels[1].loading = false;
               renderPanel(0);
               renderPanel(1);
+              updateEmptyTrashButton_();
               setStatus((err && err.message) || String(err));
             })
             .getCatalogSnapshot();
@@ -2478,7 +3287,12 @@
             return;
           }
 
+          canEmptyTrash =
+            !!data.canEmptyTrash ||
+            data.loginRole === 'controller' ||
+            !!data.isSpreadsheetOwner;
           applyCommandBarAccess_(data.canRunCatalogOperations);
+          updateEmptyTrashButton_();
 
           document.getElementById('main-user').textContent = data.userEmail
             ? data.userEmail
@@ -2486,6 +3300,10 @@
 
           document.getElementById('btn-users').addEventListener('click', openPeopleModal);
           document.getElementById('btn-import').addEventListener('click', openImportModal);
+          var emptyTrashBtn = document.getElementById('btn-empty-trash');
+          if (emptyTrashBtn) {
+            emptyTrashBtn.addEventListener('click', emptyTrashAction_);
+          }
           document.getElementById('people-close').addEventListener('click', closePeopleModal);
           document.getElementById('people-modal').addEventListener('click', function (e) {
             if (e.target.id === 'people-modal') {
@@ -2513,11 +3331,40 @@
           document.getElementById('btn-copy').addEventListener('click', copySelectedToInactivePanel);
           document.getElementById('btn-move').addEventListener('click', moveSelectedToInactivePanel);
           document.getElementById('btn-delete').addEventListener('click', moveSelectedToTrash);
+          document.getElementById('btn-approve').addEventListener('click', approveSelectedFiles);
           document.getElementById('btn-create').addEventListener('click', openCreateModal);
           document.getElementById('import-cancel').addEventListener('click', closeImportModal);
           document.getElementById('import-submit').addEventListener('click', submitImport);
+          document.getElementById('confirm-ok').addEventListener('click', function () {
+            finishAppConfirm_(true);
+          });
+          document.getElementById('confirm-cancel').addEventListener('click', function () {
+            finishAppConfirm_(false);
+          });
+          document.getElementById('confirm-modal').addEventListener('click', function (e) {
+            if (e.target.id === 'confirm-modal') {
+              finishAppConfirm_(false);
+            }
+          });
           document.querySelectorAll('input[name="import-scenario"]').forEach(function (el) {
             el.addEventListener('change', updateImportScenarioUi);
+          });
+          document.getElementById('import-local-files-btn').addEventListener('click', function () {
+            document.getElementById('import-local-files').click();
+          });
+          document.getElementById('import-local-folder-btn').addEventListener('click', function () {
+            document.getElementById('import-local-folder').click();
+          });
+          document.getElementById('import-local-clear-btn').addEventListener('click', function () {
+            clearLocalImportSelection_();
+          });
+          document.getElementById('import-local-files').addEventListener('change', function (e) {
+            appendLocalImportFiles_(e.target.files, false);
+            e.target.value = '';
+          });
+          document.getElementById('import-local-folder').addEventListener('change', function (e) {
+            appendLocalImportFiles_(e.target.files, true);
+            e.target.value = '';
           });
           document.getElementById('import-modal').addEventListener('click', function (e) {
             if (e.target.id === 'import-modal') {
@@ -2576,13 +3423,140 @@
           var scenario = scenarioInput ? scenarioInput.value : 'files';
           var filesBlock = document.getElementById('import-files-block');
           var folderBlock = document.getElementById('import-folder-block');
+          var localBlock = document.getElementById('import-local-block');
+          var driveModeRow = document.getElementById('import-drive-mode-row');
+
+          filesBlock.classList.add('hidden');
+          folderBlock.classList.add('hidden');
+          localBlock.classList.add('hidden');
+          driveModeRow.classList.add('hidden');
+
           if (scenario === 'folder') {
-            filesBlock.classList.add('hidden');
             folderBlock.classList.remove('hidden');
+            driveModeRow.classList.remove('hidden');
+          } else if (scenario === 'local') {
+            localBlock.classList.remove('hidden');
           } else {
-            folderBlock.classList.add('hidden');
             filesBlock.classList.remove('hidden');
+            driveModeRow.classList.remove('hidden');
           }
+        }
+
+        function clearLocalImportSelection_() {
+          localImportEntries_ = [];
+          updateLocalImportSummary_();
+        }
+
+        function appendLocalImportFiles_(fileList, fromFolder) {
+          if (!fileList || !fileList.length) {
+            return;
+          }
+          for (var i = 0; i < fileList.length; i++) {
+            var file = fileList[i];
+            if (!file) {
+              continue;
+            }
+            var relativePath = fromFolder
+              ? String(file.webkitRelativePath || file.name || '').replace(/\\/g, '/')
+              : String(file.name || '');
+            if (!relativePath) {
+              continue;
+            }
+            localImportEntries_.push({
+              file: file,
+              relativePath: relativePath,
+              size: Number(file.size) || 0
+            });
+          }
+          updateLocalImportSummary_();
+        }
+
+        function updateLocalImportSummary_() {
+          var el = document.getElementById('import-local-summary');
+          if (!localImportEntries_.length) {
+            el.textContent = 'Ничего не выбрано.';
+            return;
+          }
+          var total = 0;
+          var maxFile = 0;
+          localImportEntries_.forEach(function (e) {
+            total += e.size;
+            if (e.size > maxFile) {
+              maxFile = e.size;
+            }
+          });
+          el.textContent =
+            'Выбрано файлов: ' +
+            localImportEntries_.length +
+            ', суммарно ' +
+            formatBytes(total) +
+            (maxFile >= LOCAL_IMPORT_WARN_BYTES_ || total >= LOCAL_IMPORT_WARN_BYTES_
+              ? ' (есть объекты ≥ 10 МБ — будет предупреждение)'
+              : '');
+        }
+
+        function parentDirOfRelativePath_(relativePath) {
+          var path = String(relativePath || '').replace(/\\/g, '/');
+          var idx = path.lastIndexOf('/');
+          if (idx <= 0) {
+            return '';
+          }
+          return path.substring(0, idx);
+        }
+
+        function fileNameOfRelativePath_(relativePath) {
+          var path = String(relativePath || '').replace(/\\/g, '/');
+          var idx = path.lastIndexOf('/');
+          return idx >= 0 ? path.substring(idx + 1) : path;
+        }
+
+        function collectLocalFolderPaths_(entries) {
+          var seen = {};
+          var paths = [];
+          entries.forEach(function (entry) {
+            var dir = parentDirOfRelativePath_(entry.relativePath);
+            if (!dir) {
+              return;
+            }
+            var parts = dir.split('/');
+            var accum = '';
+            for (var i = 0; i < parts.length; i++) {
+              accum = accum ? accum + '/' + parts[i] : parts[i];
+              if (!seen[accum]) {
+                seen[accum] = true;
+                paths.push(accum);
+              }
+            }
+          });
+          return paths;
+        }
+
+        function readFileAsBase64_(file) {
+          return new Promise(function (resolve, reject) {
+            var reader = new FileReader();
+            reader.onload = function () {
+              resolve(String(reader.result || ''));
+            };
+            reader.onerror = function () {
+              reject(new Error('Не удалось прочитать файл: ' + (file && file.name)));
+            };
+            reader.readAsDataURL(file);
+          });
+        }
+
+        function gasRun_(fnName, payload) {
+          return new Promise(function (resolve, reject) {
+            var runner = google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(function (err) {
+                reject(err || new Error('Ошибка сервера'));
+              });
+            if (typeof runner[fnName] !== 'function') {
+              reject(new Error('Нет серверной функции: ' + fnName));
+              return;
+            }
+            runner[fnName](payload);
+          });
         }
 
         function openImportModal() {
@@ -2596,6 +3570,7 @@
           document.getElementById('import-drive-urls').value = '';
           document.getElementById('import-folder-url').value = '';
           document.querySelector('input[name="import-mode"][value="copy"]').checked = true;
+          clearLocalImportSelection_();
           updateImportScenarioUi();
           showImportMessage('', '');
           document.getElementById('import-modal').classList.remove('hidden');
@@ -2645,7 +3620,123 @@
           if (result.kind === 'files') {
             return 'Файлы: ' + result.fileCount + mix;
           }
+          if (result.kind === 'local') {
+            return (
+              'С компьютера: ' +
+              (result.fileCount || 0) +
+              ' файл., ' +
+              (result.folderCount || 0) +
+              ' пап.'
+            );
+          }
           return 'Импортирован: ' + (result.displayName || '');
+        }
+
+        function submitLocalImport_(state, btn) {
+          if (!localImportEntries_.length) {
+            showImportMessage('Выберите файлы или папку с компьютера.', 'error');
+            return;
+          }
+
+          var targetName = state.folderName || 'папку';
+          var total = 0;
+          localImportEntries_.forEach(function (e) {
+            total += e.size;
+          });
+
+          confirmCatalogAction_(
+            'Импортировать ' +
+              localImportEntries_.length +
+              ' файл(ов) с компьютера в «' +
+              targetName +
+              '»?'
+          )
+            .then(function (ok) {
+              if (!ok) {
+                return null;
+              }
+              return confirmHeavyOperation_(localImportEntries_.length, total);
+            })
+            .then(function (okHeavy) {
+              if (!okHeavy) {
+                return;
+              }
+
+              btn.disabled = true;
+              showImportMessage('', '');
+              setStatus('Загрузка с компьютера…');
+
+              var folderPaths = collectLocalFolderPaths_(localImportEntries_);
+              var pathToFolderId = {};
+
+              return gasRun_('prepareLocalImportTree', {
+                targetFolderId: state.folderId,
+                folderPaths: folderPaths
+              })
+                .then(function (treeResult) {
+                  pathToFolderId = (treeResult && treeResult.pathToFolderId) || {};
+                  var chain = Promise.resolve();
+                  localImportEntries_.forEach(function (entry, index) {
+                    chain = chain.then(function () {
+                      setStatus(
+                        'Загрузка ' +
+                          (index + 1) +
+                          '/' +
+                          localImportEntries_.length +
+                          ': ' +
+                          entry.relativePath
+                      );
+                      return readFileAsBase64_(entry.file).then(function (base64Data) {
+                        var dir = parentDirOfRelativePath_(entry.relativePath);
+                        var parentFolderId = dir
+                          ? pathToFolderId[dir] || state.folderId
+                          : state.folderId;
+                        return gasRun_('importLocalFile', {
+                          parentFolderId: parentFolderId,
+                          fileName: fileNameOfRelativePath_(entry.relativePath),
+                          mimeType: entry.file.type || 'application/octet-stream',
+                          base64Data: base64Data,
+                          sizeBytes: entry.size
+                        });
+                      });
+                    });
+                  });
+                  return chain;
+                })
+                .then(function () {
+                  btn.disabled = false;
+                  closeImportModal();
+                  reloadCatalogSnapshot_([state.folderId], function () {
+                    setStatus('Готово');
+                  });
+                })
+                .catch(function (err) {
+                  btn.disabled = false;
+                  showImportMessage((err && err.message) || String(err), 'error');
+                  setStatus((err && err.message) || String(err));
+                });
+            });
+        }
+
+        function runDriveImportPayload_(state, btn, payload) {
+          btn.disabled = true;
+          showImportMessage('', '');
+          setStatus('Импорт…');
+
+          google.script.run
+            .withSuccessHandler(function () {
+              btn.disabled = false;
+              closeImportModal();
+              reloadCatalogSnapshot_([state.folderId], function () {
+                setStatus('Готово');
+              });
+            })
+            .withFailureHandler(function (err) {
+              btn.disabled = false;
+              showImportMessage((err && err.message) || String(err), 'error');
+              setStatus((err && err.message) || String(err));
+            })
+            .importFromDrive(payload);
         }
 
         function submitImport() {
@@ -2655,16 +3746,23 @@
           var modeInput = document.querySelector('input[name="import-mode"]:checked');
           var mode = modeInput ? modeInput.value : 'copy';
           var btn = document.getElementById('import-submit');
-          var payload = {
-            targetFolderId: state && state.folderId,
-            scenario: scenario,
-            mode: mode
-          };
 
           if (!state || !state.folderId) {
             showImportMessage('Не выбрана целевая папка.', 'error');
             return;
           }
+
+          if (scenario === 'local') {
+            submitLocalImport_(state, btn);
+            return;
+          }
+
+          var payload = {
+            targetFolderId: state.folderId,
+            scenario: scenario,
+            mode: mode
+          };
+          var targetName = state.folderName || 'папку';
 
           if (scenario === 'folder') {
             var folderUrl = document.getElementById('import-folder-url').value.trim();
@@ -2672,48 +3770,62 @@
               showImportMessage('Укажите ссылку на папку.', 'error');
               return;
             }
-            payload.driveFolderUrl = folderUrl;
-            payload.driveUrl = folderUrl;
-          } else {
-            var raw = document.getElementById('import-drive-urls').value.trim();
-            if (!raw) {
-              showImportMessage('Укажите хотя бы одну ссылку на файл.', 'error');
-              return;
-            }
-            var urls = raw
-              .split(/\r?\n/)
-              .map(function (line) {
-                return line.trim();
+            confirmCatalogAction_('Импортировать папку Drive в «' + targetName + '»?')
+              .then(function (ok) {
+                if (!ok) {
+                  return null;
+                }
+                return showAppConfirm_(
+                  'Импорт папки Drive может занять время (лимит 30 файлов на сервере).\nПродолжить?'
+                );
               })
-              .filter(Boolean);
-            if (!urls.length) {
-              showImportMessage('Укажите хотя бы одну ссылку на файл.', 'error');
-              return;
-            }
-            if (urls.length > 30) {
-              showImportMessage('Не больше 30 файлов за один импорт.', 'error');
-              return;
-            }
-            payload.driveUrls = urls;
+              .then(function (okHeavy) {
+                if (!okHeavy) {
+                  return;
+                }
+                payload.driveFolderUrl = folderUrl;
+                payload.driveUrl = folderUrl;
+                runDriveImportPayload_(state, btn, payload);
+              });
+            return;
           }
 
-          btn.disabled = true;
-          showImportMessage('', '');
-          setStatus('Импорт…');
+          var raw = document.getElementById('import-drive-urls').value.trim();
+          if (!raw) {
+            showImportMessage('Укажите хотя бы одну ссылку на файл.', 'error');
+            return;
+          }
+          var urls = raw
+            .split(/\r?\n/)
+            .map(function (line) {
+              return line.trim();
+            })
+            .filter(Boolean);
+          if (!urls.length) {
+            showImportMessage('Укажите хотя бы одну ссылку на файл.', 'error');
+            return;
+          }
+          if (urls.length > 30) {
+            showImportMessage('Не больше 30 файлов за один импорт с Drive.', 'error');
+            return;
+          }
 
-          google.script.run
-            .withSuccessHandler(function (result) {
-              btn.disabled = false;
-              closeImportModal();
-              setStatus(formatImportStatus_(result));
-              reloadCatalogSnapshot_([state.folderId]);
+          confirmCatalogAction_(
+            'Импортировать ' + urls.length + ' файл(ов) Drive в «' + targetName + '»?'
+          )
+            .then(function (ok) {
+              if (!ok) {
+                return null;
+              }
+              return confirmHeavyOperation_(urls.length, 0);
             })
-            .withFailureHandler(function (err) {
-              btn.disabled = false;
-              showImportMessage((err && err.message) || String(err), 'error');
-              setStatus((err && err.message) || String(err));
-            })
-            .importFromDrive(payload);
+            .then(function (okHeavy) {
+              if (!okHeavy) {
+                return;
+              }
+              payload.driveUrls = urls;
+              runDriveImportPayload_(state, btn, payload);
+            });
         }
 
         function openAclEditor(panelIndex, item) {
@@ -2905,21 +4017,68 @@
         function onPanelKeydown(e) {
           var panelIndex = Number(e.currentTarget.dataset.panelIndex);
           var state = panels[panelIndex];
-          if (state.loading || !state.items.length) {
+
+          if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowRight') {
+            e.preventDefault();
+            syncPanelFolder_(0, 1);
+            return;
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowLeft') {
+            e.preventDefault();
+            syncPanelFolder_(1, 0);
+            return;
+          }
+
+          if (state.loading) {
+            return;
+          }
+          if (!state.items.length && !state.parentFolderId) {
             return;
           }
 
           if (e.key === 'ArrowDown') {
             e.preventDefault();
-            var next = Math.min(state.selectedIndex + 1, state.items.length - 1);
-            if (next < 0) next = 0;
-            selectRow(panelIndex, next);
+            var next;
+            if (state.selectedIndex < 0) {
+              next = state.items.length ? 0 : -1;
+            } else {
+              next = Math.min(state.selectedIndex + 1, state.items.length - 1);
+            }
+            moveFocusByArrow_(panelIndex, next, e.shiftKey);
           } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            var prev = Math.max(state.selectedIndex - 1, 0);
-            selectRow(panelIndex, prev);
+            var prev;
+            if (state.selectedIndex <= 0) {
+              prev = state.parentFolderId ? -1 : 0;
+            } else {
+              prev = state.selectedIndex - 1;
+            }
+            moveFocusByArrow_(panelIndex, prev, e.shiftKey);
+          } else if (e.key === ' ' || e.code === 'Space') {
+            e.preventDefault();
+            if (state.selectedIndex >= 0) {
+              selectRow(panelIndex, state.selectedIndex, { mode: 'toggle' });
+            }
+          } else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+            e.preventDefault();
+            if (!state.items.length) {
+              return;
+            }
+            selectAllInPanel_(panelIndex);
+          } else if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I')) {
+            e.preventDefault();
+            if (!state.items.length) {
+              return;
+            }
+            invertSelectionInPanel_(panelIndex);
           } else if (e.key === 'Enter') {
             e.preventDefault();
+            if (state.selectedIndex < 0) {
+              if (state.parentFolderId) {
+                navigatePanel(panelIndex, state.parentFolderId);
+              }
+              return;
+            }
             var item = state.items[state.selectedIndex];
             if (!item) {
               return;

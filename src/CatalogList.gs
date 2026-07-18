@@ -14,6 +14,7 @@
  *     modifiedAt: (string|null),
  *     approved: boolean,
  *     approvedBy: string,
+ *     approvedByName: string,
  *     isSystem: boolean,
  *     editors: string[],
  *     commenters: string[],
@@ -51,6 +52,7 @@ function listFolderContents(folderId) {
  *     modifiedAt: (string|null),
  *     approved: boolean,
  *     approvedBy: string,
+ *     approvedByName: string,
  *     editors: string[],
  *     commenters: string[],
  *     readers: string[]
@@ -65,25 +67,25 @@ function getCatalogSnapshot() {
   var fileRows = readSheetRecords_('Files');
   backfillMissingMimeTypes_(fileRows);
   var folderSizes = buildFolderSizeIndex_(treeRows, fileRows);
-  var aclRows = readSheetRecords_('ACL');
-  var engine = null;
+  var engine = buildAclEngineFromRows_(
+    treeRows,
+    fileRows,
+    readSheetRecords_('ACL'),
+    readSheetRecords_('GroupMembers'),
+    readSheetRecords_('Users')
+  );
   var emptyAcl = { editors: [], commenters: [], readers: [] };
 
-  if (aclRows.length) {
-    engine = buildAclEngineFromRows_(
-      treeRows,
-      fileRows,
-      aclRows,
-      readSheetRecords_('GroupMembers'),
-      readSheetRecords_('Users')
-    );
-  }
-
   function aclFor(objectType, objectId) {
-    if (!engine) {
+    try {
+      return getEffectiveAclDisplayFromEngine_(engine, objectType, objectId);
+    } catch (e) {
       return emptyAcl;
     }
-    return getEffectiveAclDisplayFromEngine_(engine, objectType, objectId);
+  }
+
+  function approvedByNameFor_(email) {
+    return resolveUserLabelFromEngine_(engine, email);
   }
 
   var folders = treeRows.map(function (row) {
@@ -103,6 +105,7 @@ function getCatalogSnapshot() {
 
   var files = fileRows.map(function (row) {
     var acl = aclFor('file', row.catalog_id);
+    var approvedBy = row.approved_by || '';
     return {
       id: row.catalog_id,
       folderId: String(row.folder_id || ''),
@@ -111,7 +114,8 @@ function getCatalogSnapshot() {
       sizeBytes: parseNumber_(row.size_bytes),
       modifiedAt: formatCatalogDate_(row.drive_modified_at),
       approved: parseBoolean_(row.approved),
-      approvedBy: row.approved_by || '',
+      approvedBy: approvedBy,
+      approvedByName: approvedBy ? approvedByNameFor_(approvedBy) : '',
       editors: acl.editors,
       commenters: acl.commenters,
       readers: acl.readers
@@ -141,25 +145,25 @@ function listFolderContentsBatch(folderIds) {
   var fileRows = readSheetRecords_('Files');
   var folderById = indexTreeFolders_(treeRows);
   var folderSizes = buildFolderSizeIndex_(treeRows, fileRows);
-  var aclRows = readSheetRecords_('ACL');
-  var engine = null;
+  var engine = buildAclEngineFromRows_(
+    treeRows,
+    fileRows,
+    readSheetRecords_('ACL'),
+    readSheetRecords_('GroupMembers'),
+    readSheetRecords_('Users')
+  );
   var emptyAcl = { editors: [], commenters: [], readers: [] };
 
-  if (aclRows.length) {
-    engine = buildAclEngineFromRows_(
-      treeRows,
-      fileRows,
-      aclRows,
-      readSheetRecords_('GroupMembers'),
-      readSheetRecords_('Users')
-    );
-  }
-
   function aclFor(objectType, objectId) {
-    if (!engine) {
+    try {
+      return getEffectiveAclDisplayFromEngine_(engine, objectType, objectId);
+    } catch (e) {
       return emptyAcl;
     }
-    return getEffectiveAclDisplayFromEngine_(engine, objectType, objectId);
+  }
+
+  function approvedByNameFor_(email) {
+    return resolveUserLabelFromEngine_(engine, email);
   }
 
   return folderIds.map(function (folderId) {
@@ -184,6 +188,7 @@ function listFolderContentsBatch(folderIds) {
         modifiedAt: formatCatalogDate_(row.folder_created_at),
         approved: false,
         approvedBy: '',
+        approvedByName: '',
         isSystem: parseBoolean_(row.is_system),
         editors: acl.editors,
         commenters: acl.commenters,
@@ -196,6 +201,7 @@ function listFolderContentsBatch(folderIds) {
         return;
       }
       var fileAcl = aclFor('file', row.catalog_id);
+      var approvedBy = row.approved_by || '';
       items.push({
         kind: 'file',
         id: row.catalog_id,
@@ -204,7 +210,8 @@ function listFolderContentsBatch(folderIds) {
         sizeBytes: parseNumber_(row.size_bytes),
         modifiedAt: formatCatalogDate_(row.drive_modified_at),
         approved: parseBoolean_(row.approved),
-        approvedBy: row.approved_by || '',
+        approvedBy: approvedBy,
+        approvedByName: approvedBy ? approvedByNameFor_(approvedBy) : '',
         isSystem: false,
         editors: fileAcl.editors,
         commenters: fileAcl.commenters,

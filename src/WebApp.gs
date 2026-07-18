@@ -9,7 +9,8 @@
  *   setupBlocked: boolean,
  *   virtualRootFolderId: (string|null),
  *   loginRole: (('user'|'manager'|'controller')|null),
- *   canRunCatalogOperations: boolean
+ *   canRunCatalogOperations: boolean,
+ *   canEmptyTrash: boolean
  * }}
  */
 function getWebAppBootstrap() {
@@ -45,6 +46,7 @@ function getWebAppBootstrap() {
     email.toLowerCase() === controllerEmail.toLowerCase();
   var canRunCatalogOperations =
     loginRole === 'manager' || loginRole === 'controller' || isController || isOwner;
+  var canEmptyTrash = loginRole === 'controller' || isController || isOwner;
 
   return {
     userEmail: email,
@@ -54,7 +56,8 @@ function getWebAppBootstrap() {
     setupBlocked: setupBlocked,
     virtualRootFolderId: virtualRootFolderId,
     loginRole: loginRole,
-    canRunCatalogOperations: canRunCatalogOperations
+    canRunCatalogOperations: canRunCatalogOperations,
+    canEmptyTrash: canEmptyTrash
   };
 }
 
