@@ -103,11 +103,81 @@ function moveCatalogItems(input) {
   });
 
   applyFileFolderUpdates_(fileUpdates, folderUpdates);
+  applyTargetFolderAclAfterMove_(engine, targetFolderId, moved);
 
   return {
     ok: true,
     moved: moved
   };
+}
+
+/**
+ * §14.7 / §4.4 — после move явные ACL объекта (папка → поддерево) = права целевой папки.
+ * У корня ACL нет → entries пустые → права очищаются.
+ *
+ * @param {Object} engine
+ * @param {string} targetFolderId
+ * @param {Array<{ kind: 'folder'|'file', id: string }>} movedItems
+ */
+function applyTargetFolderAclAfterMove_(engine, targetFolderId, movedItems) {
+  if (!movedItems || !movedItems.length) {
+    return;
+  }
+
+  var entries = buildAclEntriesFromObject_(engine, 'folder', targetFolderId);
+  var targetKeys = {};
+  var targets = [];
+
+  function addTarget(objectType, objectId) {
+    var key = objectType + ':' + objectId;
+    if (targetKeys[key]) {
+      return;
+    }
+    targetKeys[key] = true;
+    targets.push({ objectType: objectType, objectId: objectId });
+  }
+
+  movedItems.forEach(function (item) {
+    if (item.kind === 'file') {
+      addTarget('file', item.id);
+      return;
+    }
+    collectFolderSubtreeObjects_(engine, item.id).forEach(function (obj) {
+      addTarget(obj.objectType, obj.objectId);
+    });
+  });
+
+  if (!targets.length) {
+    return;
+  }
+
+  replaceAclForObjects_(targets, entries, engine);
+}
+
+/**
+ * Явные/унаследованные ACL объекта → entries для replaceAclForObjects_.
+ *
+ * @param {Object} engine
+ * @param {'folder'|'file'} objectType
+ * @param {string} objectId
+ * @returns {Array<{ principalType: string, principalId: string, permissionLevel: string }>}
+ */
+function buildAclEntriesFromObject_(engine, objectType, objectId) {
+  var aclRows = resolveInheritedAclRows_(engine, objectType, objectId);
+  var entries = [];
+  for (var i = 0; i < aclRows.length; i++) {
+    var principalType = String(aclRows[i].principal_type || '').trim();
+    var principalId = String(aclRows[i].principal_id || '').trim();
+    if (!principalType || !principalId) {
+      continue;
+    }
+    entries.push({
+      principalType: principalType,
+      principalId: principalId,
+      permissionLevel: normalizePermissionLevel_(aclRows[i].permission_level)
+    });
+  }
+  return entries;
 }
 
 /**
@@ -254,8 +324,9 @@ function applyFileFolderUpdates_(fileUpdates, folderUpdates) {
       folderColData.push([value]);
     }
     if (changed) {
+      // getRange(row, column, numRows, numColumns) — 3-й/4-й аргументы = размеры, не lastRow/lastCol
       filesSheet
-        .getRange(2, folderCol + 1, fileValues.length, folderCol + 1)
+        .getRange(2, folderCol + 1, folderColData.length, 1)
         .setValues(folderColData);
     }
   }
@@ -296,7 +367,7 @@ function applyFileFolderUpdates_(fileUpdates, folderUpdates) {
     }
     if (parentChanged) {
       treeSheet
-        .getRange(2, parentCol + 1, treeValues.length, parentCol + 1)
+        .getRange(2, parentCol + 1, parentColData.length, 1)
         .setValues(parentColData);
     }
   }

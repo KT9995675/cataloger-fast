@@ -1,5 +1,5 @@
 /** @const {string} Версия схемы листов — §3.11 */
-var SCHEMA_VERSION_ = '0.2';
+var SCHEMA_VERSION_ = '0.3';
 
 /**
  * §15.2 п.1 — создаёт листы каталога и строку заголовков (row 1), если отсутствуют.
@@ -65,6 +65,7 @@ function ensureCatalogSchemaUpToDate_() {
   if (current && current !== SCHEMA_VERSION_) {
     props.setProperty(PROP_SCHEMA_VERSION_, SCHEMA_VERSION_);
   }
+  backfillEmptyUserDisplayNames_();
   return result;
 }
 
@@ -145,7 +146,7 @@ function getCatalogSheetSchema_() {
       'source_file_id',
       'mime_type'
     ],
-    Users: ['email', 'login_role', 'added_at', 'added_by'],
+    Users: ['email', 'login_role', 'added_at', 'added_by', 'display_name'],
     ACL: [
       'acl_id',
       'object_type',

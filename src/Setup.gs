@@ -213,22 +213,45 @@ function findTreeRowByFolderId_(sheet, folderId) {
  * @param {Date} now
  */
 function writeControllerUser_(controllerEmail, now) {
+  ensureCatalogSchemaUpToDate_();
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
   if (!sheet) {
     throw catalogError_('SCHEMA_MISMATCH', 'Users sheet is missing.');
   }
 
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var headers = sheet
+    .getRange(1, 1, 1, lastCol)
+    .getValues()[0]
+    .map(function (h) {
+      return String(h).trim();
+    });
+  var emailCol = headers.indexOf('email');
+  var roleCol = headers.indexOf('login_role');
+  var nameCol = headers.indexOf('display_name');
+  if (emailCol < 0 || roleCol < 0) {
+    throw catalogError_('SCHEMA_MISMATCH', 'Users sheet headers are invalid.');
+  }
+
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).toLowerCase() === controllerEmail.toLowerCase()) {
-      if (String(data[i][1]) !== 'controller') {
-        sheet.getRange(i + 1, 2).setValue('controller');
+    if (String(data[i][emailCol] || '').toLowerCase() === controllerEmail.toLowerCase()) {
+      if (String(data[i][roleCol]) !== 'controller') {
+        sheet.getRange(i + 1, roleCol + 1).setValue('controller');
+      }
+      if (nameCol >= 0 && !String(data[i][nameCol] || '').trim()) {
+        sheet.getRange(i + 1, nameCol + 1).setValue(controllerEmail);
       }
       return;
     }
   }
 
-  sheet.appendRow([controllerEmail, 'controller', now, '']);
+  appendOrEnsureUserRow_({
+    email: controllerEmail,
+    loginRole: 'controller',
+    addedBy: '',
+    displayName: controllerEmail
+  });
 }
 
 /**

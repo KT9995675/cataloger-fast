@@ -74,7 +74,8 @@ function getCatalogSnapshot() {
       treeRows,
       fileRows,
       aclRows,
-      readSheetRecords_('GroupMembers')
+      readSheetRecords_('GroupMembers'),
+      readSheetRecords_('Users')
     );
   }
 
@@ -149,7 +150,8 @@ function listFolderContentsBatch(folderIds) {
       treeRows,
       fileRows,
       aclRows,
-      readSheetRecords_('GroupMembers')
+      readSheetRecords_('GroupMembers'),
+      readSheetRecords_('Users')
     );
   }
 

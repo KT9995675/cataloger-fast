@@ -33,7 +33,8 @@ function createAclEngine_() {
     readSheetRecords_('Tree'),
     readSheetRecords_('Files'),
     readSheetRecords_('ACL'),
-    readSheetRecords_('GroupMembers')
+    readSheetRecords_('GroupMembers'),
+    readSheetRecords_('Users')
   );
 }
 
@@ -42,9 +43,10 @@ function createAclEngine_() {
  * @param {Object.<string, string>[]} fileRows
  * @param {Object.<string, string>[]} aclRows
  * @param {Object.<string, string>[]} groupMemberRows
+ * @param {Object.<string, string>[]=} userRows
  * @returns {Object}
  */
-function buildAclEngineFromRows_(treeRows, fileRows, aclRows, groupMemberRows) {
+function buildAclEngineFromRows_(treeRows, fileRows, aclRows, groupMemberRows, userRows) {
   var foldersById = {};
   treeRows.forEach(function (row) {
     foldersById[row.folder_id] = row;
@@ -82,11 +84,21 @@ function buildAclEngineFromRows_(treeRows, fileRows, aclRows, groupMemberRows) {
     groupMembers[groupId].push(email);
   });
 
+  var userDisplayNameByEmail = {};
+  (userRows || []).forEach(function (row) {
+    var email = String(row.email || '').trim();
+    if (!email) {
+      return;
+    }
+    userDisplayNameByEmail[email.toLowerCase()] = resolveUserDisplayName_(row);
+  });
+
   return {
     foldersById: foldersById,
     filesByCatalogId: filesByCatalogId,
     aclByObject: aclByObject,
-    groupMembers: groupMembers
+    groupMembers: groupMembers,
+    userDisplayNameByEmail: userDisplayNameByEmail
   };
 }
 
@@ -224,12 +236,13 @@ function aclRowsToDisplay_(engine, aclRows, approved) {
     }
 
     var email = emailDisplay[key] || key;
+    var label = resolveUserLabelFromEngine_(engine, email);
     if (level === 'editor') {
-      editors.push(email);
+      editors.push(label);
     } else if (level === 'commenter') {
-      commenters.push(email);
+      commenters.push(label);
     } else if (level === 'reader') {
-      readers.push(email);
+      readers.push(label);
     }
   });
 
@@ -238,6 +251,21 @@ function aclRowsToDisplay_(engine, aclRows, approved) {
     commenters: sortEmails_(commenters),
     readers: sortEmails_(readers)
   };
+}
+
+/**
+ * @param {Object} engine
+ * @param {string} email
+ * @returns {string}
+ */
+function resolveUserLabelFromEngine_(engine, email) {
+  var trimmed = String(email || '').trim();
+  if (!trimmed) {
+    return '';
+  }
+  var map = (engine && engine.userDisplayNameByEmail) || {};
+  var named = map[trimmed.toLowerCase()];
+  return named || trimmed;
 }
 
 /**

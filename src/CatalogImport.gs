@@ -1,36 +1,126 @@
+/** Sync import safety limit (GAS execution time). */
+var IMPORT_DRIVE_MAX_FILES_ = 30;
+
 /**
- * §9.1, §9.2, §9.6 — импорт одного файла с Google Drive в каталог.
- * Запись в `Files` создаётся сразу; копия/перемещение на Drive — синхронно (v1).
+ * §9.10–§9.12 — импорт с Drive: сценарий «файлы» или «папка».
  *
  * @param {{
  *   targetFolderId: string,
- *   driveFileUrl: string,
+ *   scenario?: 'files'|'folder',
+ *   driveUrl?: string,
+ *   driveUrls?: string[],
+ *   driveFileUrl?: string,
+ *   driveFolderUrl?: string,
+ *   mode?: 'copy'|'move'
+ * }} input
+ * @returns {Object}
+ */
+function importFromDrive(input) {
+  input = input || {};
+  var scenario = String(input.scenario || 'files').trim().toLowerCase();
+  if (scenario === 'folder') {
+    return importDriveFolder({
+      targetFolderId: input.targetFolderId,
+      driveFolderUrl: input.driveFolderUrl || input.driveUrl || input.driveFileUrl,
+      mode: input.mode
+    });
+  }
+  if (scenario !== 'files') {
+    throw catalogError_('INVALID_INPUT', 'scenario must be files or folder.');
+  }
+
+  var urls = normalizeImportDriveUrls_(input);
+  return importDriveFiles({
+    targetFolderId: input.targetFolderId,
+    driveUrls: urls,
+    mode: input.mode
+  });
+}
+
+/**
+ * @param {Object} input
+ * @returns {string[]}
+ */
+function normalizeImportDriveUrls_(input) {
+  var urls = [];
+  if (Array.isArray(input.driveUrls)) {
+    input.driveUrls.forEach(function (u) {
+      var s = String(u || '').trim();
+      if (s) {
+        urls.push(s);
+      }
+    });
+  }
+  if (!urls.length) {
+    var single = String(input.driveUrl || input.driveFileUrl || '').trim();
+    if (single) {
+      single.split(/\r?\n/).forEach(function (line) {
+        var s = String(line || '').trim();
+        if (s) {
+          urls.push(s);
+        }
+      });
+    }
+  }
+  if (!urls.length) {
+    throw catalogError_('INVALID_INPUT', 'Укажите хотя бы одну ссылку на файл.');
+  }
+  return urls;
+}
+
+/**
+ * §9.1 / §9.12 — импорт одного или нескольких файлов (плоско в целевую папку).
+ *
+ * @param {{
+ *   targetFolderId: string,
+ *   driveUrls: string[],
  *   mode?: 'copy'|'move'
  * }} input
  * @returns {{
  *   ok: true,
- *   catalogId: string,
+ *   kind: 'files',
+ *   fileCount: number,
+ *   movedCount: number,
+ *   copiedCount: number,
  *   displayName: string,
- *   fileId: string,
- *   mode: 'copy'|'move'
+ *   mode: 'copy'|'move',
+ *   items: Array<{ catalogId: string, displayName: string, appliedMode: 'copy'|'move' }>
  * }}
  */
-function importDriveFile(input) {
+function importDriveFiles(input) {
   assertCatalogReady_();
 
   input = input || {};
   var targetFolderId = String(input.targetFolderId || '').trim();
-  var driveFileUrl = String(input.driveFileUrl || '').trim();
   var mode = String(input.mode || 'copy').trim().toLowerCase();
+  var driveUrls = Array.isArray(input.driveUrls) ? input.driveUrls : [];
 
   if (!targetFolderId) {
     throw catalogError_('INVALID_INPUT', 'targetFolderId is required.');
   }
-  if (!driveFileUrl) {
-    throw catalogError_('INVALID_INPUT', 'driveFileUrl is required.');
-  }
   if (mode !== 'copy' && mode !== 'move') {
     throw catalogError_('INVALID_INPUT', 'mode must be copy or move.');
+  }
+
+  var urls = [];
+  driveUrls.forEach(function (u) {
+    var s = String(u || '').trim();
+    if (s) {
+      urls.push(s);
+    }
+  });
+  if (!urls.length) {
+    throw catalogError_('INVALID_INPUT', 'Укажите хотя бы одну ссылку на файл.');
+  }
+  if (urls.length > IMPORT_DRIVE_MAX_FILES_) {
+    throw catalogError_(
+      'IMPORT_TOO_LARGE',
+      'Слишком много файлов (' +
+        urls.length +
+        '). За один раз не больше ' +
+        IMPORT_DRIVE_MAX_FILES_ +
+        '. Разбейте список или дождитесь фоновых Jobs.'
+    );
   }
 
   var userEmail = Session.getActiveUser().getEmail();
@@ -47,45 +137,442 @@ function importDriveFile(input) {
   }
   assertEditorOnFolderForMove_(engine, userEmail, loginRole, targetFolderId);
 
-  var sourceFileId = parseDriveFileId_(driveFileUrl);
-  var sourceFile;
-  try {
-    sourceFile = DriveApp.getFileById(sourceFileId);
-  } catch (e) {
-    throw catalogError_('INVALID_FILE', 'Drive file not found or not accessible.');
+  for (var k = 0; k < urls.length; k++) {
+    if (resolveDriveImportKind_(urls[k]) === 'folder') {
+      throw catalogError_(
+        'INVALID_INPUT',
+        'В сценарии «Файлы» нужна ссылка на файл, не на папку. Для папки выберите сценарий «Папка».'
+      );
+    }
   }
 
   var controllerEmail =
     PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) || '';
-  var ownedByController = isDriveFileOwnedByEmail_(sourceFile, controllerEmail);
-  if (!ownedByController && mode === 'move') {
-    throw catalogError_('COPY_ONLY', 'Files not owned by the catalog controller can only be copied.');
+  var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
+
+  var items = [];
+  var movedCount = 0;
+  var copiedCount = 0;
+
+  for (var i = 0; i < urls.length; i++) {
+    var sourceFileId = parseDriveFileId_(urls[i]);
+    var sourceFile;
+    try {
+      sourceFile = DriveApp.getFileById(sourceFileId);
+    } catch (e) {
+      throw catalogError_('INVALID_FILE', 'Drive file not found or not accessible: ' + urls[i]);
+    }
+
+    var appliedMode = resolveDriveImportPlaceMode_(mode, sourceFile, controllerEmail);
+    var catalogFile = placeFileInCatalogRoot_(sourceFile, catalogRootFolder, appliedMode);
+    ensureUsersFromDriveFile_(sourceFile, userEmail);
+
+    var catalogId = Utilities.getUuid();
+    appendCatalogFileRow_({
+      catalogId: catalogId,
+      folderId: targetFolderId,
+      fileId: catalogFile.getId(),
+      displayName: sourceFile.getName(),
+      sizeBytes: catalogFile.getSize(),
+      driveModifiedAt: catalogFile.getLastUpdated(),
+      sourceFileId: appliedMode === 'copy' ? sourceFileId : '',
+      mimeType: getDriveFileMimeType_(catalogFile)
+    });
+
+    if (appliedMode === 'move') {
+      movedCount++;
+    } else {
+      copiedCount++;
+    }
+    items.push({
+      catalogId: catalogId,
+      displayName: sourceFile.getName(),
+      appliedMode: appliedMode
+    });
   }
 
-  var catalogRootFolderId = getCatalogRootFolderId_();
-  var catalogRootFolder = DriveApp.getFolderById(catalogRootFolderId);
-  var catalogFile = placeFileInCatalogRoot_(sourceFile, catalogRootFolder, mode);
-  ensureUsersFromDriveFile_(sourceFile, userEmail);
+  return {
+    ok: true,
+    kind: 'files',
+    fileCount: items.length,
+    movedCount: movedCount,
+    copiedCount: copiedCount,
+    displayName: items.length === 1 ? items[0].displayName : items.length + ' файл(ов)',
+    mode: mode,
+    items: items
+  };
+}
 
-  var catalogId = Utilities.getUuid();
-  appendCatalogFileRow_({
-    catalogId: catalogId,
-    folderId: targetFolderId,
-    fileId: catalogFile.getId(),
-    displayName: sourceFile.getName(),
-    sizeBytes: catalogFile.getSize(),
-    driveModifiedAt: catalogFile.getLastUpdated(),
-    sourceFileId: mode === 'copy' ? sourceFileId : '',
-    mimeType: getDriveFileMimeType_(catalogFile)
+/**
+ * §9.1, §9.2 — импорт одного файла (обёртка над importDriveFiles).
+ *
+ * @param {{
+ *   targetFolderId: string,
+ *   driveFileUrl: string,
+ *   mode?: 'copy'|'move'
+ * }} input
+ * @returns {Object}
+ */
+function importDriveFile(input) {
+  input = input || {};
+  return importDriveFiles({
+    targetFolderId: input.targetFolderId,
+    driveUrls: [String(input.driveFileUrl || input.driveUrl || '').trim()],
+    mode: input.mode
+  });
+}
+
+/**
+ * §9.8, §9.11 — импорт папки Drive: структура в Tree, файлы в плоскую папку каталога.
+ *
+ * @param {{
+ *   targetFolderId: string,
+ *   driveFolderUrl: string,
+ *   mode?: 'copy'|'move'
+ * }} input
+ * @returns {{
+ *   ok: true,
+ *   kind: 'folder',
+ *   rootFolderId: string,
+ *   displayName: string,
+ *   folderCount: number,
+ *   fileCount: number,
+ *   movedCount: number,
+ *   copiedCount: number,
+ *   skippedShortcuts: number,
+ *   mode: 'copy'|'move'
+ * }}
+ */
+function importDriveFolder(input) {
+  assertCatalogReady_();
+
+  input = input || {};
+  var targetFolderId = String(input.targetFolderId || '').trim();
+  var driveFolderUrl = String(input.driveFolderUrl || input.driveUrl || '').trim();
+  var mode = String(input.mode || 'copy').trim().toLowerCase();
+
+  if (!targetFolderId) {
+    throw catalogError_('INVALID_INPUT', 'targetFolderId is required.');
+  }
+  if (!driveFolderUrl) {
+    throw catalogError_('INVALID_INPUT', 'driveFolderUrl is required.');
+  }
+  if (mode !== 'copy' && mode !== 'move') {
+    throw catalogError_('INVALID_INPUT', 'mode must be copy or move.');
+  }
+  if (resolveDriveImportKind_(driveFolderUrl) === 'file') {
+    throw catalogError_(
+      'INVALID_INPUT',
+      'В сценарии «Папка» нужна ссылка на папку. Для файлов выберите сценарий «Файлы».'
+    );
+  }
+
+  var userEmail = Session.getActiveUser().getEmail();
+  if (!userEmail) {
+    throw catalogError_('AUTH_REQUIRED', 'Google account email is required.');
+  }
+
+  var loginRole = getLoginRoleForUser_(userEmail);
+  assertCanRunCatalogOperations_(loginRole);
+
+  var engine = createAclEngine_();
+  if (!engine.foldersById[targetFolderId]) {
+    throw catalogError_('FOLDER_NOT_FOUND', 'Target folder not found: ' + targetFolderId);
+  }
+  assertEditorOnFolderForMove_(engine, userEmail, loginRole, targetFolderId);
+
+  var sourceFolderId = parseDriveFolderId_(driveFolderUrl);
+  var sourceFolder;
+  try {
+    sourceFolder = DriveApp.getFolderById(sourceFolderId);
+  } catch (e) {
+    throw catalogError_('INVALID_FOLDER', 'Drive folder not found or not accessible.');
+  }
+
+  var walk = walkDriveFolderForImport_(sourceFolder, IMPORT_DRIVE_MAX_FILES_);
+  if (walk.fileCount > IMPORT_DRIVE_MAX_FILES_) {
+    throw catalogError_(
+      'IMPORT_TOO_LARGE',
+      'Слишком много файлов в папке (' +
+        walk.fileCount +
+        '). За один раз не больше ' +
+        IMPORT_DRIVE_MAX_FILES_ +
+        '. Разбейте на подпапки или дождитесь фоновых Jobs.'
+    );
+  }
+
+  var controllerEmail =
+    PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) || '';
+  var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
+  var treeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Tree');
+  if (!treeSheet) {
+    throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: Tree');
+  }
+
+  var now = new Date();
+  var driveToVirtual = {};
+  var folderCount = 0;
+
+  walk.folders.forEach(function (node) {
+    var virtualId = Utilities.getUuid();
+    driveToVirtual[node.driveFolderId] = virtualId;
+    var parentVirtualId =
+      node.parentDriveFolderId === null
+        ? targetFolderId
+        : driveToVirtual[node.parentDriveFolderId];
+    if (!parentVirtualId) {
+      throw catalogError_('IMPORT_WALK_FAILED', 'Parent virtual folder missing during import.');
+    }
+    treeSheet.appendRow([virtualId, parentVirtualId, node.name, now, false]);
+    folderCount++;
+  });
+
+  var rootVirtualId = driveToVirtual[sourceFolderId];
+  applyDriveFolderAclToCatalogFolder_(sourceFolder, rootVirtualId, userEmail);
+
+  var importedFiles = 0;
+  var movedCount = 0;
+  var copiedCount = 0;
+
+  walk.files.forEach(function (item) {
+    var virtualParentId = driveToVirtual[item.parentDriveFolderId];
+    if (!virtualParentId) {
+      throw catalogError_('IMPORT_WALK_FAILED', 'Virtual folder missing for file parent.');
+    }
+    var appliedMode = resolveDriveImportPlaceMode_(mode, item.file, controllerEmail);
+    var sourceFileId = item.file.getId();
+    var catalogFile = placeFileInCatalogRoot_(item.file, catalogRootFolder, appliedMode);
+    var catalogId = Utilities.getUuid();
+    appendCatalogFileRow_({
+      catalogId: catalogId,
+      folderId: virtualParentId,
+      fileId: catalogFile.getId(),
+      displayName: item.file.getName(),
+      sizeBytes: catalogFile.getSize(),
+      driveModifiedAt: catalogFile.getLastUpdated(),
+      sourceFileId: appliedMode === 'copy' ? sourceFileId : '',
+      mimeType: getDriveFileMimeType_(catalogFile)
+    });
+    importedFiles++;
+    if (appliedMode === 'move') {
+      movedCount++;
+    } else {
+      copiedCount++;
+    }
   });
 
   return {
     ok: true,
-    catalogId: catalogId,
-    displayName: sourceFile.getName(),
-    fileId: catalogFile.getId(),
+    kind: 'folder',
+    rootFolderId: rootVirtualId,
+    displayName: sourceFolder.getName(),
+    folderCount: folderCount,
+    fileCount: importedFiles,
+    movedCount: movedCount,
+    copiedCount: copiedCount,
+    skippedShortcuts: walk.skippedShortcuts,
     mode: mode
   };
+}
+
+/**
+ * При mode=move: свой файл → move, чужой → copy (§9.12).
+ *
+ * @param {'copy'|'move'} requestedMode
+ * @param {GoogleAppsScript.Drive.File} driveFile
+ * @param {string} controllerEmail
+ * @returns {'copy'|'move'}
+ */
+function resolveDriveImportPlaceMode_(requestedMode, driveFile, controllerEmail) {
+  if (requestedMode !== 'move') {
+    return 'copy';
+  }
+  return isDriveFileOwnedByEmail_(driveFile, controllerEmail) ? 'move' : 'copy';
+}
+
+/**
+ * @param {string} urlOrId
+ * @returns {'file'|'folder'}
+ */
+function resolveDriveImportKind_(urlOrId) {
+  var value = String(urlOrId || '').trim();
+  if (/\/folders\//.test(value)) {
+    return 'folder';
+  }
+  if (
+    /\/file\/d\//.test(value) ||
+    /\/(?:document|spreadsheets|presentation)\//.test(value)
+  ) {
+    return 'file';
+  }
+
+  var id = '';
+  try {
+    id = parseDriveFolderId_(value);
+  } catch (e1) {
+    try {
+      id = parseDriveFileId_(value);
+    } catch (e2) {
+      throw catalogError_('INVALID_DRIVE_URL', 'Cannot parse Drive file or folder from URL.');
+    }
+  }
+
+  try {
+    DriveApp.getFolderById(id);
+    return 'folder';
+  } catch (eFolder) {
+    try {
+      DriveApp.getFileById(id);
+      return 'file';
+    } catch (eFile) {
+      throw catalogError_('INVALID_DRIVE_URL', 'Drive item not found or not accessible.');
+    }
+  }
+}
+
+/**
+ * Depth-first walk: folders (root first) + files. Shortcuts skipped.
+ *
+ * @param {GoogleAppsScript.Drive.Folder} rootFolder
+ * @param {number} maxFiles
+ * @returns {{
+ *   folders: Array<{ driveFolderId: string, parentDriveFolderId: (string|null), name: string }>,
+ *   files: Array<{ file: GoogleAppsScript.Drive.File, parentDriveFolderId: string }>,
+ *   fileCount: number,
+ *   skippedShortcuts: number
+ * }}
+ */
+function walkDriveFolderForImport_(rootFolder, maxFiles) {
+  var folders = [];
+  var files = [];
+  var skippedShortcuts = 0;
+  var queue = [{ folder: rootFolder, parentDriveFolderId: null }];
+
+  while (queue.length) {
+    var current = queue.shift();
+    var driveFolder = current.folder;
+    var driveFolderId = driveFolder.getId();
+    folders.push({
+      driveFolderId: driveFolderId,
+      parentDriveFolderId: current.parentDriveFolderId,
+      name: driveFolder.getName()
+    });
+
+    var fileIt = driveFolder.getFiles();
+    while (fileIt.hasNext()) {
+      var file = fileIt.next();
+      var mime = '';
+      try {
+        mime = String(file.getMimeType() || '');
+      } catch (eMime) {
+        mime = '';
+      }
+      if (mime === 'application/vnd.google-apps.shortcut') {
+        skippedShortcuts++;
+        continue;
+      }
+      files.push({
+        file: file,
+        parentDriveFolderId: driveFolderId
+      });
+      if (files.length > maxFiles) {
+        return {
+          folders: folders,
+          files: files,
+          fileCount: files.length,
+          skippedShortcuts: skippedShortcuts
+        };
+      }
+    }
+
+    var folderIt = driveFolder.getFolders();
+    while (folderIt.hasNext()) {
+      queue.push({
+        folder: folderIt.next(),
+        parentDriveFolderId: driveFolderId
+      });
+    }
+  }
+
+  return {
+    folders: folders,
+    files: files,
+    fileCount: files.length,
+    skippedShortcuts: skippedShortcuts
+  };
+}
+
+/**
+ * @param {Array<{ file: GoogleAppsScript.Drive.File }>} fileItems
+ * @param {string} controllerEmail
+ */
+/**
+ * §9.8 — ACL с корня исходной папки Drive → явные права на корень импортированной ветки.
+ *
+ * @param {GoogleAppsScript.Drive.Folder} driveFolder
+ * @param {string} catalogFolderId
+ * @param {string} addedBy
+ */
+function applyDriveFolderAclToCatalogFolder_(driveFolder, catalogFolderId, addedBy) {
+  var levelsByEmail = {};
+  var namesByEmail = {};
+  var emailByKey = {};
+
+  function remember(users, level) {
+    if (!users) {
+      return;
+    }
+    var list = [];
+    if (typeof users.hasNext === 'function') {
+      while (users.hasNext()) {
+        list.push(users.next());
+      }
+    } else if (Array.isArray(users)) {
+      list = users;
+    }
+    for (var i = 0; i < list.length; i++) {
+      var user = list[i];
+      if (!user) {
+        continue;
+      }
+      var email = '';
+      try {
+        email = String(user.getEmail() || '').trim();
+      } catch (e) {
+        continue;
+      }
+      if (!email) {
+        continue;
+      }
+      var key = email.toLowerCase();
+      emailByKey[key] = email;
+      namesByEmail[key] = resolveDriveUserDisplayName_(user) || email;
+      levelsByEmail[key] = maxPermissionLevel_(levelsByEmail[key], level);
+    }
+  }
+
+  remember(driveFolder.getEditors(), 'editor');
+  try {
+    remember(driveFolder.getCommenters(), 'commenter');
+  } catch (eComment) {
+    // optional on some folder types
+  }
+  remember(driveFolder.getViewers(), 'reader');
+
+  Object.keys(levelsByEmail).forEach(function (key) {
+    var level = levelsByEmail[key];
+    if (!level || level === 'none') {
+      return;
+    }
+    var email = emailByKey[key] || key;
+    appendOrEnsureUserRow_({
+      email: email,
+      loginRole: 'user',
+      addedBy: addedBy || '',
+      displayName: namesByEmail[key] || email
+    });
+    appendExplicitUserAclRow_('folder', catalogFolderId, email, level);
+  });
 }
 
 /**
@@ -165,42 +652,27 @@ function placeFileInCatalogRoot_(sourceFile, catalogRootFolder, mode) {
  * @param {string} addedBy
  */
 function ensureUsersFromDriveFile_(driveFile, addedBy) {
-  var emails = collectDriveFileParticipantEmails_(driveFile);
-  if (!emails.length) {
+  var participants = collectDriveFileParticipants_(driveFile);
+  if (!participants.length) {
     return;
   }
 
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
-  if (!sheet) {
-    return;
-  }
-
-  var values = sheet.getDataRange().getValues();
-  var existing = {};
-  for (var i = 1; i < values.length; i++) {
-    var email = String(values[i][0] || '').trim().toLowerCase();
-    if (email) {
-      existing[email] = true;
-    }
-  }
-
-  var now = new Date();
-  emails.forEach(function (email) {
-    var key = email.toLowerCase();
-    if (existing[key]) {
-      return;
-    }
-    sheet.appendRow([email, 'user', now, addedBy || '']);
-    existing[key] = true;
+  participants.forEach(function (p) {
+    appendOrEnsureUserRow_({
+      email: p.email,
+      loginRole: 'user',
+      addedBy: addedBy || '',
+      displayName: p.displayName || p.email
+    });
   });
 }
 
 /**
  * @param {GoogleAppsScript.Drive.File} driveFile
- * @returns {string[]}
+ * @returns {Array<{ email: string, displayName: string }>}
  */
-function collectDriveFileParticipantEmails_(driveFile) {
-  var emails = {};
+function collectDriveFileParticipants_(driveFile) {
+  var byEmail = {};
 
   function rememberUsers(users) {
     if (!users) {
@@ -225,9 +697,22 @@ function collectDriveFileParticipantEmails_(driveFile) {
     if (!user) {
       return;
     }
-    var email = user.getEmail();
-    if (email) {
-      emails[email.toLowerCase()] = email;
+    var email = '';
+    try {
+      email = String(user.getEmail() || '').trim();
+    } catch (e) {
+      return;
+    }
+    if (!email) {
+      return;
+    }
+    var key = email.toLowerCase();
+    var displayName = resolveDriveUserDisplayName_(user);
+    if (!byEmail[key] || (displayName && displayName.toLowerCase() !== key)) {
+      byEmail[key] = {
+        email: email,
+        displayName: displayName || email
+      };
     }
   }
 
@@ -239,10 +724,21 @@ function collectDriveFileParticipantEmails_(driveFile) {
     // commenters may be unavailable for some mime types
   }
 
-  return Object.keys(emails).map(function (key) {
-    return emails[key];
+  return Object.keys(byEmail).map(function (k) {
+    return byEmail[k];
   });
 }
+
+/**
+ * @param {GoogleAppsScript.Drive.File} driveFile
+ * @returns {string[]}
+ */
+function collectDriveFileParticipantEmails_(driveFile) {
+  return collectDriveFileParticipants_(driveFile).map(function (p) {
+    return p.email;
+  });
+}
+
 
 /**
  * @param {{

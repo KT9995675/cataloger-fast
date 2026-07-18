@@ -357,6 +357,104 @@
         border: 1px solid var(--border);
       }
       .modal-card.wide { max-width: 720px; max-height: 90vh; display: flex; flex-direction: column; }
+      .people-tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 12px;
+      }
+      .people-tab {
+        flex: 1;
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 6px 10px;
+        font-weight: 600;
+      }
+      .people-tab.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .people-pane { display: none; min-height: 280px; }
+      .people-pane.active { display: block; }
+      .people-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .people-toolbar .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .people-list-wrap {
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        max-height: 48vh;
+      }
+      .people-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .people-table th,
+      .people-table td {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+      }
+      .people-table th {
+        color: var(--muted);
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        background: var(--panel);
+      }
+      .people-table tr.selected {
+        background: rgba(14, 99, 156, 0.35);
+      }
+      .people-table tr { cursor: pointer; }
+      .people-email {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .people-members {
+        margin-top: 10px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 8px 10px;
+        max-height: 28vh;
+        overflow: auto;
+      }
+      .people-members label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 3px 0;
+        font-size: 13px;
+      }
+      .people-form {
+        margin-top: 10px;
+        border-top: 1px solid var(--border);
+        padding-top: 10px;
+      }
+      .people-form label {
+        display: block;
+        margin: 8px 0 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .people-form input,
+      .people-form select {
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .people-toolbar .cmd-btn {
+        flex: 0 0 auto;
+      }
       .acl-principals-wrap {
         overflow: auto;
         border: 1px solid var(--border);
@@ -386,10 +484,25 @@
       }
       .acl-principal-label {
         overflow: hidden;
+        min-width: 0;
+      }
+      .acl-principal-label .acl-name {
+        display: block;
+        overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        font-weight: 600;
       }
-      .acl-principal-label.group-label { color: #9cdcfe; }
+      .acl-principal-label .acl-email {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .acl-principal-label.group-label .acl-name { color: #9cdcfe; }
       .acl-radio-cell {
         display: flex;
         justify-content: center;
@@ -410,6 +523,7 @@
         display: flex;
         gap: 16px;
         margin-bottom: 16px;
+        flex-wrap: wrap;
       }
       .mode-row label {
         display: inline-flex;
@@ -418,6 +532,28 @@
         margin: 0;
         font-size: 14px;
         color: var(--text);
+      }
+      #import-drive-urls {
+        width: 100%;
+        min-height: 88px;
+        margin-bottom: 16px;
+        padding: 8px 10px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        font: inherit;
+        resize: vertical;
+      }
+      #import-folder-url {
+        width: 100%;
+        margin-bottom: 16px;
+        padding: 8px 10px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        font: inherit;
       }
     </style>
   </head>
@@ -511,6 +647,7 @@
         <footer class="app-footer">
           <div class="command-bar">
             <div class="command-buttons">
+              <button type="button" id="btn-users" class="cmd-btn hidden">Пользователи</button>
               <button type="button" id="btn-import" class="cmd-btn hidden">Импорт</button>
               <button type="button" id="btn-copy" class="cmd-btn hidden">F5 Копир.</button>
               <button type="button" id="btn-move" class="cmd-btn hidden">F6 Перем.</button>
@@ -535,16 +672,30 @@
     <div id="import-modal" class="modal-backdrop hidden">
       <div class="modal-card">
         <h2>Импорт с Google Drive</h2>
-        <p class="sub">Файл будет добавлен в текущую папку <strong id="import-target-name">…</strong> активной панели.</p>
-        <label for="import-drive-url">Ссылка на файл Google Drive</label>
-        <input
-          type="url"
-          id="import-drive-url"
-          placeholder="https://drive.google.com/file/d/…"
-        />
+        <p class="sub">Цель: текущая папка <strong id="import-target-name">…</strong> активной панели.</p>
+        <div class="mode-row" style="margin-bottom:12px;">
+          <label><input type="radio" name="import-scenario" value="files" checked /> Файлы</label>
+          <label><input type="radio" name="import-scenario" value="folder" /> Папка</label>
+        </div>
+        <div id="import-files-block">
+          <label for="import-drive-urls">Ссылки на файлы (по одной на строку, до 30)</label>
+          <textarea
+            id="import-drive-urls"
+            placeholder="https://drive.google.com/file/d/…&#10;https://docs.google.com/document/d/…"
+          ></textarea>
+        </div>
+        <div id="import-folder-block" class="hidden">
+          <label for="import-folder-url">Ссылка на одну папку Drive</label>
+          <input
+            type="url"
+            id="import-folder-url"
+            placeholder="https://drive.google.com/drive/folders/…"
+          />
+          <p class="sub" style="margin-top:-8px;">Структура подпапок сохранится в каталоге. Не больше 30 файлов внутри.</p>
+        </div>
         <div class="mode-row">
           <label><input type="radio" name="import-mode" value="copy" checked /> Копировать</label>
-          <label><input type="radio" name="import-mode" value="move" /> Переместить</label>
+          <label><input type="radio" name="import-mode" value="move" /> Переместить (чужие — скопировать)</label>
         </div>
         <div id="import-msg" class="msg"></div>
         <div class="modal-actions">
@@ -594,6 +745,84 @@
         <div class="modal-actions">
           <button type="button" id="rename-submit">Переименовать</button>
           <button type="button" class="secondary" id="rename-cancel">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+
+    <div id="people-modal" class="modal-backdrop hidden">
+      <div class="modal-card wide">
+        <h2>Пользователи и группы</h2>
+        <p class="sub" id="people-modal-sub">Управление списком каталога.</p>
+        <div class="people-tabs">
+          <button type="button" class="people-tab active" data-people-tab="users" id="people-tab-users">Люди</button>
+          <button type="button" class="people-tab" data-people-tab="groups" id="people-tab-groups">Группы</button>
+        </div>
+        <div id="people-pane-users" class="people-pane active">
+          <div class="people-toolbar">
+            <span class="hint" id="people-users-hint"></span>
+            <button type="button" id="people-user-add" class="cmd-btn hidden">Добавить</button>
+          </div>
+          <div class="people-list-wrap">
+            <table class="people-table">
+              <thead>
+                <tr>
+                  <th>Имя</th>
+                  <th>Роль</th>
+                  <th>Email</th>
+                </tr>
+              </thead>
+              <tbody id="people-users-tbody"></tbody>
+            </table>
+          </div>
+          <div id="people-user-form" class="people-form hidden">
+            <label for="people-user-email">Email</label>
+            <input type="email" id="people-user-email" autocomplete="off" />
+            <label for="people-user-name">Имя</label>
+            <input type="text" id="people-user-name" autocomplete="off" />
+            <label for="people-user-role">Роль входа</label>
+            <select id="people-user-role">
+              <option value="user">Пользователь</option>
+              <option value="manager">Менеджер</option>
+            </select>
+            <div class="modal-actions" style="margin-top:10px;">
+              <button type="button" id="people-user-save">Сохранить</button>
+              <button type="button" class="secondary" id="people-user-cancel">Отмена</button>
+              <button type="button" class="secondary" id="people-user-delete">Удалить</button>
+            </div>
+          </div>
+        </div>
+        <div id="people-pane-groups" class="people-pane">
+          <div class="people-toolbar">
+            <span class="hint" id="people-groups-hint"></span>
+            <button type="button" id="people-group-add" class="cmd-btn hidden">Добавить группу</button>
+          </div>
+          <div class="people-list-wrap">
+            <table class="people-table">
+              <thead>
+                <tr>
+                  <th>Группа</th>
+                  <th>Участников</th>
+                </tr>
+              </thead>
+              <tbody id="people-groups-tbody"></tbody>
+            </table>
+          </div>
+          <div id="people-group-form" class="people-form hidden">
+            <label for="people-group-name">Имя группы</label>
+            <input type="text" id="people-group-name" autocomplete="off" />
+            <div class="hint" style="margin:8px 0 4px;">Участники</div>
+            <div id="people-group-members" class="people-members"></div>
+            <div class="modal-actions" style="margin-top:10px;">
+              <button type="button" id="people-group-save">Сохранить</button>
+              <button type="button" class="secondary" id="people-group-cancel">Отмена</button>
+              <button type="button" class="secondary" id="people-group-delete">Удалить</button>
+            </div>
+          </div>
+        </div>
+        <div id="people-msg" class="msg"></div>
+        <div class="modal-actions">
+          <button type="button" class="secondary" id="people-close">Закрыть</button>
         </div>
       </div>
     </div>
@@ -1063,6 +1292,383 @@
         }
 
         var canRunCatalogOperations = false;
+        var peopleAdminState = null;
+        var peopleUserEditEmail = null;
+        var peopleGroupEditId = null;
+
+        function roleLabelRu_(role) {
+          if (role === 'controller') return 'Управляющий';
+          if (role === 'manager') return 'Менеджер';
+          return 'Пользователь';
+        }
+
+        function showPeopleMessage_(text, kind) {
+          var el = document.getElementById('people-msg');
+          el.className = 'msg' + (kind ? ' ' + kind : '');
+          el.textContent = text || '';
+          el.style.display = text ? 'block' : 'none';
+        }
+
+        function setPeopleTab_(tab) {
+          document.getElementById('people-tab-users').classList.toggle('active', tab === 'users');
+          document.getElementById('people-tab-groups').classList.toggle('active', tab === 'groups');
+          document.getElementById('people-pane-users').classList.toggle('active', tab === 'users');
+          document.getElementById('people-pane-groups').classList.toggle('active', tab === 'groups');
+          hidePeopleUserForm_();
+          hidePeopleGroupForm_();
+        }
+
+        function reloadPeopleAdmin_() {
+          setStatus('Обновление пользователей…');
+          google.script.run
+            .withSuccessHandler(function (data) {
+              peopleAdminState = data || null;
+              renderPeopleAdmin_();
+              setStatus('Готово');
+            })
+            .withFailureHandler(function (err) {
+              showPeopleMessage_((err && err.message) || String(err), 'error');
+              setStatus((err && err.message) || String(err));
+            })
+            .getCatalogPeopleAdmin();
+        }
+
+        function openPeopleModal() {
+          if (!canRunCatalogOperations) {
+            setStatus('Управление пользователями доступно Менеджеру и Управляющему.');
+            return;
+          }
+          showPeopleMessage_('', '');
+          setPeopleTab_('users');
+          document.getElementById('people-users-tbody').innerHTML =
+            '<tr><td colspan="3">Загрузка…</td></tr>';
+          document.getElementById('people-groups-tbody').innerHTML =
+            '<tr><td colspan="2">Загрузка…</td></tr>';
+          document.getElementById('people-modal').classList.remove('hidden');
+          reloadPeopleAdmin_();
+        }
+
+        function closePeopleModal() {
+          document.getElementById('people-modal').classList.add('hidden');
+          peopleAdminState = null;
+          peopleUserEditEmail = null;
+          peopleGroupEditId = null;
+        }
+
+        function hidePeopleUserForm_() {
+          document.getElementById('people-user-form').classList.add('hidden');
+          peopleUserEditEmail = null;
+        }
+
+        function hidePeopleGroupForm_() {
+          document.getElementById('people-group-form').classList.add('hidden');
+          peopleGroupEditId = null;
+        }
+
+        function renderPeopleAdmin_() {
+          var data = peopleAdminState;
+          if (!data) {
+            return;
+          }
+          var canEditUsers = !!data.canEditUsers;
+          var canEditGroups = !!data.canEditGroups;
+          document.getElementById('people-users-hint').textContent = canEditUsers
+            ? 'Выберите строку для изменения или добавьте пользователя.'
+            : '';
+          document.getElementById('people-groups-hint').textContent = canEditGroups
+            ? 'Выберите группу или создайте новую.'
+            : 'Просмотр. Изменять группы может только Управляющий.';
+          document.getElementById('people-user-add').classList.toggle('hidden', !canEditUsers);
+          document.getElementById('people-group-add').classList.toggle('hidden', !canEditGroups);
+
+          var usersTbody = document.getElementById('people-users-tbody');
+          usersTbody.innerHTML = '';
+          (data.users || []).forEach(function (user) {
+            var tr = document.createElement('tr');
+            tr.dataset.email = user.email || '';
+            if (peopleUserEditEmail && peopleUserEditEmail === user.email) {
+              tr.classList.add('selected');
+            }
+            tr.innerHTML =
+              '<td>' +
+              escapeHtml(user.displayName || user.email || '') +
+              '</td>' +
+              '<td>' +
+              escapeHtml(roleLabelRu_(user.loginRole)) +
+              '</td>' +
+              '<td class="people-email">' +
+              escapeHtml(user.email || '') +
+              '</td>';
+            tr.addEventListener('click', function () {
+              if (!canEditUsers) {
+                return;
+              }
+              openPeopleUserForm_(user);
+            });
+            usersTbody.appendChild(tr);
+          });
+          if (!(data.users || []).length) {
+            usersTbody.innerHTML = '<tr><td colspan="3">Нет пользователей</td></tr>';
+          }
+
+          var groupsTbody = document.getElementById('people-groups-tbody');
+          groupsTbody.innerHTML = '';
+          (data.groups || []).forEach(function (group) {
+            var tr = document.createElement('tr');
+            tr.dataset.groupId = group.groupId;
+            if (peopleGroupEditId && peopleGroupEditId === group.groupId) {
+              tr.classList.add('selected');
+            }
+            tr.innerHTML =
+              '<td>#' +
+              escapeHtml(group.name || '') +
+              '</td>' +
+              '<td>' +
+              String((group.memberEmails || []).length) +
+              '</td>';
+            tr.addEventListener('click', function () {
+              openPeopleGroupForm_(group, canEditGroups);
+            });
+            groupsTbody.appendChild(tr);
+          });
+          if (!(data.groups || []).length) {
+            groupsTbody.innerHTML = '<tr><td colspan="2">Нет групп</td></tr>';
+            if (!peopleGroupEditId) {
+              hidePeopleGroupForm_();
+            }
+          } else if (peopleGroupEditId) {
+            var keep = null;
+            (data.groups || []).forEach(function (g) {
+              if (g.groupId === peopleGroupEditId) {
+                keep = g;
+              }
+            });
+            if (keep) {
+              openPeopleGroupForm_(keep, canEditGroups);
+            }
+          }
+        }
+
+        function openPeopleUserForm_(user) {
+          peopleUserEditEmail = user ? user.email : null;
+          var form = document.getElementById('people-user-form');
+          form.classList.remove('hidden');
+          var emailInput = document.getElementById('people-user-email');
+          var nameInput = document.getElementById('people-user-name');
+          var roleSelect = document.getElementById('people-user-role');
+          var deleteBtn = document.getElementById('people-user-delete');
+          if (user) {
+            emailInput.value = user.email || '';
+            emailInput.disabled = true;
+            nameInput.value = user.displayName || user.email || '';
+            if (user.loginRole === 'controller') {
+              roleSelect.innerHTML = '<option value="controller">Управляющий</option>';
+              roleSelect.value = 'controller';
+              roleSelect.disabled = true;
+              deleteBtn.classList.add('hidden');
+            } else {
+              roleSelect.innerHTML =
+                '<option value="user">Пользователь</option><option value="manager">Менеджер</option>';
+              roleSelect.value = user.loginRole === 'manager' ? 'manager' : 'user';
+              roleSelect.disabled = false;
+              deleteBtn.classList.remove('hidden');
+            }
+          } else {
+            emailInput.value = '';
+            emailInput.disabled = false;
+            nameInput.value = '';
+            roleSelect.innerHTML =
+              '<option value="user">Пользователь</option><option value="manager">Менеджер</option>';
+            roleSelect.value = 'user';
+            roleSelect.disabled = false;
+            deleteBtn.classList.add('hidden');
+          }
+          renderPeopleAdmin_();
+          showPeopleMessage_('', '');
+        }
+
+        function openPeopleGroupForm_(group, canEdit) {
+          peopleGroupEditId = group ? group.groupId : null;
+          var form = document.getElementById('people-group-form');
+          form.classList.remove('hidden');
+          var nameInput = document.getElementById('people-group-name');
+          var saveBtn = document.getElementById('people-group-save');
+          var deleteBtn = document.getElementById('people-group-delete');
+          nameInput.value = group ? group.name || '' : '';
+          nameInput.disabled = !canEdit;
+          saveBtn.classList.toggle('hidden', !canEdit);
+          deleteBtn.classList.toggle('hidden', !canEdit || !group);
+
+          var memberSet = {};
+          if (group && group.memberEmails) {
+            group.memberEmails.forEach(function (email) {
+              memberSet[String(email).toLowerCase()] = true;
+            });
+          }
+          var box = document.getElementById('people-group-members');
+          var html = '';
+          (peopleAdminState.users || []).forEach(function (user) {
+            var checked = memberSet[String(user.email || '').toLowerCase()] ? ' checked' : '';
+            var disabled = canEdit ? '' : ' disabled';
+            html +=
+              '<label><input type="checkbox" data-member-email="' +
+              escapeAttr(user.email || '') +
+              '"' +
+              checked +
+              disabled +
+              ' /> ' +
+              escapeHtml(user.displayName || user.email) +
+              '</label>';
+          });
+          if (!(peopleAdminState.users || []).length) {
+            html = '<div class="hint">Нет пользователей в каталоге</div>';
+          }
+          box.innerHTML = html;
+
+          var rows = document.querySelectorAll('#people-groups-tbody tr');
+          Array.prototype.forEach.call(rows, function (tr) {
+            tr.classList.toggle(
+              'selected',
+              !!(group && tr.dataset.groupId === group.groupId)
+            );
+          });
+          showPeopleMessage_('', '');
+        }
+
+        function collectGroupMemberEmails_() {
+          var emails = [];
+          var inputs = document.querySelectorAll(
+            '#people-group-members input[type="checkbox"][data-member-email]'
+          );
+          Array.prototype.forEach.call(inputs, function (input) {
+            if (input.checked) {
+              emails.push(input.getAttribute('data-member-email'));
+            }
+          });
+          return emails;
+        }
+
+        function submitPeopleUserSave_() {
+          var email = document.getElementById('people-user-email').value.trim();
+          var displayName = document.getElementById('people-user-name').value.trim();
+          var loginRole = document.getElementById('people-user-role').value;
+          if (!email) {
+            showPeopleMessage_('Укажите email.', 'error');
+            return;
+          }
+          if (!displayName) {
+            displayName = email;
+            document.getElementById('people-user-name').value = displayName;
+          }
+
+          var isNew = !peopleUserEditEmail;
+          setStatus(isNew ? 'Добавление пользователя…' : 'Сохранение…');
+          var runner = google.script.run
+            .withSuccessHandler(function () {
+              showPeopleMessage_(isNew ? 'Пользователь добавлен.' : 'Сохранено.', 'ok');
+              hidePeopleUserForm_();
+              reloadPeopleAdmin_();
+              reloadCatalogSnapshot_();
+            })
+            .withFailureHandler(function (err) {
+              showPeopleMessage_((err && err.message) || String(err), 'error');
+              setStatus((err && err.message) || String(err));
+            });
+          if (isNew) {
+            runner.createCatalogUser({
+              email: email,
+              displayName: displayName,
+              loginRole: loginRole
+            });
+          } else {
+            var upd = { email: peopleUserEditEmail, displayName: displayName };
+            if (loginRole !== 'controller') {
+              upd.loginRole = loginRole;
+            }
+            runner.updateCatalogUser(upd);
+          }
+        }
+
+        function submitPeopleUserDelete_() {
+          if (!peopleUserEditEmail) {
+            return;
+          }
+          if (!window.confirm('Удалить пользователя ' + peopleUserEditEmail + ' из каталога?')) {
+            return;
+          }
+          setStatus('Удаление пользователя…');
+          google.script.run
+            .withSuccessHandler(function () {
+              showPeopleMessage_('Пользователь удалён.', 'ok');
+              hidePeopleUserForm_();
+              reloadPeopleAdmin_();
+              reloadCatalogSnapshot_();
+            })
+            .withFailureHandler(function (err) {
+              showPeopleMessage_((err && err.message) || String(err), 'error');
+              setStatus((err && err.message) || String(err));
+            })
+            .deleteCatalogUser({ email: peopleUserEditEmail });
+        }
+
+        function submitPeopleGroupSave_() {
+          if (!peopleAdminState || !peopleAdminState.canEditGroups) {
+            return;
+          }
+          var name = document.getElementById('people-group-name').value.trim();
+          var memberEmails = collectGroupMemberEmails_();
+          if (!name) {
+            showPeopleMessage_('Укажите имя группы.', 'error');
+            return;
+          }
+          var isNew = !peopleGroupEditId;
+          setStatus(isNew ? 'Создание группы…' : 'Сохранение группы…');
+          var runner = google.script.run
+            .withSuccessHandler(function (result) {
+              showPeopleMessage_(isNew ? 'Группа создана.' : 'Сохранено.', 'ok');
+              if (result && result.groupId) {
+                peopleGroupEditId = result.groupId;
+              }
+              reloadPeopleAdmin_();
+              reloadCatalogSnapshot_();
+            })
+            .withFailureHandler(function (err) {
+              showPeopleMessage_((err && err.message) || String(err), 'error');
+              setStatus((err && err.message) || String(err));
+            });
+          if (isNew) {
+            runner.createCatalogGroup({ name: name, memberEmails: memberEmails });
+          } else {
+            runner.updateCatalogGroup({
+              groupId: peopleGroupEditId,
+              name: name,
+              memberEmails: memberEmails
+            });
+          }
+        }
+
+        function submitPeopleGroupDelete_() {
+          if (!peopleGroupEditId) {
+            return;
+          }
+          if (!window.confirm('Удалить группу и её права на все объекты?')) {
+            return;
+          }
+          setStatus('Удаление группы…');
+          google.script.run
+            .withSuccessHandler(function () {
+              showPeopleMessage_('Группа удалена.', 'ok');
+              hidePeopleGroupForm_();
+              reloadPeopleAdmin_();
+              reloadCatalogSnapshot_();
+            })
+            .withFailureHandler(function (err) {
+              showPeopleMessage_((err && err.message) || String(err), 'error');
+              setStatus((err && err.message) || String(err));
+            })
+            .deleteCatalogGroup({ groupId: peopleGroupEditId });
+        }
+
         var catalogSnapshot = null;
         var aclEditorState = null;
 
@@ -1555,7 +2161,7 @@
         }
 
         /**
-         * После F6/F8 — патч снимка + панелей; сервер уже записал.
+         * После F6/F8 — патч снимка + панелей; сервер уже записал folder_id и ACL (§14.7).
          */
         function applyLocalMove_(sourceFolderId, targetFolderId, movedItems) {
           if (!movedItems || !movedItems.length) {
@@ -1564,16 +2170,60 @@
           }
 
           if (catalogSnapshot) {
+            var parentFolder = catalogSnapshot.foldersById[String(targetFolderId)];
+            var parentAcl = {
+              editors: (parentFolder && parentFolder.editors) || [],
+              commenters: (parentFolder && parentFolder.commenters) || [],
+              readers: (parentFolder && parentFolder.readers) || []
+            };
+
             movedItems.forEach(function (item) {
               if (item.kind === 'file' && catalogSnapshot.filesById[item.id]) {
                 catalogSnapshot.filesById[item.id].folderId = String(targetFolderId);
+                applyParentAclToSnapshotItem_(catalogSnapshot.filesById[item.id], parentAcl);
               } else if (item.kind === 'folder' && catalogSnapshot.foldersById[item.id]) {
                 catalogSnapshot.foldersById[item.id].parentFolderId = String(targetFolderId);
+                applyParentAclToSnapshotSubtree_(item.id, parentAcl);
               }
             });
           }
 
           refreshOpenPanels_([sourceFolderId, targetFolderId]);
+        }
+
+        function applyParentAclToSnapshotItem_(item, parentAcl) {
+          if (!item || !parentAcl) {
+            return;
+          }
+          item.editors = (parentAcl.editors || []).slice();
+          item.commenters = (parentAcl.commenters || []).slice();
+          item.readers = (parentAcl.readers || []).slice();
+        }
+
+        /** Папка + всё поддерево в снимке получают ACL целевой папки. */
+        function applyParentAclToSnapshotSubtree_(rootFolderId, parentAcl) {
+          var folderIds = {};
+          var queue = [String(rootFolderId)];
+          folderIds[String(rootFolderId)] = true;
+          while (queue.length) {
+            var currentId = queue.shift();
+            Object.keys(catalogSnapshot.foldersById).forEach(function (childId) {
+              var child = catalogSnapshot.foldersById[childId];
+              if (String(child.parentFolderId || '') === currentId && !folderIds[childId]) {
+                folderIds[childId] = true;
+                queue.push(childId);
+              }
+            });
+          }
+          Object.keys(folderIds).forEach(function (fid) {
+            applyParentAclToSnapshotItem_(catalogSnapshot.foldersById[fid], parentAcl);
+          });
+          Object.keys(catalogSnapshot.filesById).forEach(function (fileId) {
+            var file = catalogSnapshot.filesById[fileId];
+            if (folderIds[String(file.folderId || '')]) {
+              applyParentAclToSnapshotItem_(file, parentAcl);
+            }
+          });
         }
 
         function applyLocalRename_(kind, id, newName, parentFolderId) {
@@ -1812,7 +2462,7 @@
 
         function applyCommandBarAccess_(canOperate) {
           canRunCatalogOperations = !!canOperate;
-          ['btn-import', 'btn-copy', 'btn-move', 'btn-delete'].forEach(function (id) {
+          ['btn-users', 'btn-import', 'btn-copy', 'btn-move', 'btn-delete'].forEach(function (id) {
             var el = document.getElementById(id);
             el.classList.toggle('hidden', !canOperate);
             el.disabled = !canOperate;
@@ -1834,13 +2484,41 @@
             ? data.userEmail
             : '';
 
+          document.getElementById('btn-users').addEventListener('click', openPeopleModal);
           document.getElementById('btn-import').addEventListener('click', openImportModal);
+          document.getElementById('people-close').addEventListener('click', closePeopleModal);
+          document.getElementById('people-modal').addEventListener('click', function (e) {
+            if (e.target.id === 'people-modal') {
+              closePeopleModal();
+            }
+          });
+          document.getElementById('people-tab-users').addEventListener('click', function () {
+            setPeopleTab_('users');
+          });
+          document.getElementById('people-tab-groups').addEventListener('click', function () {
+            setPeopleTab_('groups');
+          });
+          document.getElementById('people-user-add').addEventListener('click', function () {
+            openPeopleUserForm_(null);
+          });
+          document.getElementById('people-user-save').addEventListener('click', submitPeopleUserSave_);
+          document.getElementById('people-user-cancel').addEventListener('click', hidePeopleUserForm_);
+          document.getElementById('people-user-delete').addEventListener('click', submitPeopleUserDelete_);
+          document.getElementById('people-group-add').addEventListener('click', function () {
+            openPeopleGroupForm_(null, true);
+          });
+          document.getElementById('people-group-save').addEventListener('click', submitPeopleGroupSave_);
+          document.getElementById('people-group-cancel').addEventListener('click', hidePeopleGroupForm_);
+          document.getElementById('people-group-delete').addEventListener('click', submitPeopleGroupDelete_);
           document.getElementById('btn-copy').addEventListener('click', copySelectedToInactivePanel);
           document.getElementById('btn-move').addEventListener('click', moveSelectedToInactivePanel);
           document.getElementById('btn-delete').addEventListener('click', moveSelectedToTrash);
           document.getElementById('btn-create').addEventListener('click', openCreateModal);
           document.getElementById('import-cancel').addEventListener('click', closeImportModal);
           document.getElementById('import-submit').addEventListener('click', submitImport);
+          document.querySelectorAll('input[name="import-scenario"]').forEach(function (el) {
+            el.addEventListener('change', updateImportScenarioUi);
+          });
           document.getElementById('import-modal').addEventListener('click', function (e) {
             if (e.target.id === 'import-modal') {
               closeImportModal();
@@ -1893,6 +2571,20 @@
           showScreen('main');
         }
 
+        function updateImportScenarioUi() {
+          var scenarioInput = document.querySelector('input[name="import-scenario"]:checked');
+          var scenario = scenarioInput ? scenarioInput.value : 'files';
+          var filesBlock = document.getElementById('import-files-block');
+          var folderBlock = document.getElementById('import-folder-block');
+          if (scenario === 'folder') {
+            filesBlock.classList.add('hidden');
+            folderBlock.classList.remove('hidden');
+          } else {
+            folderBlock.classList.add('hidden');
+            filesBlock.classList.remove('hidden');
+          }
+        }
+
         function openImportModal() {
           var state = panels[activePanelIndex];
           if (!state || !state.folderId || state.loading) {
@@ -1900,11 +2592,14 @@
             return;
           }
           document.getElementById('import-target-name').textContent = state.folderName || 'каталог';
-          document.getElementById('import-drive-url').value = '';
+          document.querySelector('input[name="import-scenario"][value="files"]').checked = true;
+          document.getElementById('import-drive-urls').value = '';
+          document.getElementById('import-folder-url').value = '';
           document.querySelector('input[name="import-mode"][value="copy"]').checked = true;
+          updateImportScenarioUi();
           showImportMessage('', '');
           document.getElementById('import-modal').classList.remove('hidden');
-          document.getElementById('import-drive-url').focus();
+          document.getElementById('import-drive-urls').focus();
         }
 
         function closeImportModal() {
@@ -1918,20 +2613,88 @@
           el.style.display = text ? 'block' : 'none';
         }
 
+        function formatImportStatus_(result) {
+          if (!result) {
+            return 'Импорт завершён';
+          }
+          var mix = '';
+          if (result.mode === 'move' && (result.movedCount || result.copiedCount)) {
+            mix =
+              ' — перенесено ' +
+              (result.movedCount || 0) +
+              ', скопировано ' +
+              (result.copiedCount || 0);
+          }
+          if (result.kind === 'folder') {
+            var extra =
+              result.skippedShortcuts > 0
+                ? '; ярлыков пропущено: ' + result.skippedShortcuts
+                : '';
+            return (
+              'Папка: ' +
+              result.displayName +
+              ' (' +
+              result.folderCount +
+              ' пап., ' +
+              result.fileCount +
+              ' файл.)' +
+              mix +
+              extra
+            );
+          }
+          if (result.kind === 'files') {
+            return 'Файлы: ' + result.fileCount + mix;
+          }
+          return 'Импортирован: ' + (result.displayName || '');
+        }
+
         function submitImport() {
           var state = panels[activePanelIndex];
-          var url = document.getElementById('import-drive-url').value.trim();
+          var scenarioInput = document.querySelector('input[name="import-scenario"]:checked');
+          var scenario = scenarioInput ? scenarioInput.value : 'files';
           var modeInput = document.querySelector('input[name="import-mode"]:checked');
           var mode = modeInput ? modeInput.value : 'copy';
           var btn = document.getElementById('import-submit');
+          var payload = {
+            targetFolderId: state && state.folderId,
+            scenario: scenario,
+            mode: mode
+          };
 
-          if (!url) {
-            showImportMessage('Укажите ссылку на файл.', 'error');
-            return;
-          }
           if (!state || !state.folderId) {
             showImportMessage('Не выбрана целевая папка.', 'error');
             return;
+          }
+
+          if (scenario === 'folder') {
+            var folderUrl = document.getElementById('import-folder-url').value.trim();
+            if (!folderUrl) {
+              showImportMessage('Укажите ссылку на папку.', 'error');
+              return;
+            }
+            payload.driveFolderUrl = folderUrl;
+            payload.driveUrl = folderUrl;
+          } else {
+            var raw = document.getElementById('import-drive-urls').value.trim();
+            if (!raw) {
+              showImportMessage('Укажите хотя бы одну ссылку на файл.', 'error');
+              return;
+            }
+            var urls = raw
+              .split(/\r?\n/)
+              .map(function (line) {
+                return line.trim();
+              })
+              .filter(Boolean);
+            if (!urls.length) {
+              showImportMessage('Укажите хотя бы одну ссылку на файл.', 'error');
+              return;
+            }
+            if (urls.length > 30) {
+              showImportMessage('Не больше 30 файлов за один импорт.', 'error');
+              return;
+            }
+            payload.driveUrls = urls;
           }
 
           btn.disabled = true;
@@ -1942,7 +2705,7 @@
             .withSuccessHandler(function (result) {
               btn.disabled = false;
               closeImportModal();
-              setStatus('Импортирован: ' + result.displayName);
+              setStatus(formatImportStatus_(result));
               reloadCatalogSnapshot_([state.folderId]);
             })
             .withFailureHandler(function (err) {
@@ -1950,11 +2713,7 @@
               showImportMessage((err && err.message) || String(err), 'error');
               setStatus((err && err.message) || String(err));
             })
-            .importDriveFile({
-              targetFolderId: state.folderId,
-              driveFileUrl: url,
-              mode: mode
-            });
+            .importFromDrive(payload);
         }
 
         function openAclEditor(panelIndex, item) {
@@ -2049,8 +2808,19 @@
             label.className =
               'acl-principal-label' +
               (principal.principalType === 'group' ? ' group-label' : '');
-            label.textContent = principal.label;
-            label.title = principal.label;
+            var nameEl = document.createElement('span');
+            nameEl.className = 'acl-name';
+            nameEl.textContent = principal.label || principal.principalId || '';
+            label.appendChild(nameEl);
+            if (principal.principalType === 'user') {
+              var emailEl = document.createElement('span');
+              emailEl.className = 'acl-email';
+              emailEl.textContent = principal.principalId || '';
+              label.appendChild(emailEl);
+              label.title = principal.principalId || '';
+            } else {
+              label.title = principal.label || '';
+            }
             row.appendChild(label);
 
             var radioName =

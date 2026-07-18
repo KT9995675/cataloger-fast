@@ -125,11 +125,17 @@ function getObjectAclForEdit(input) {
   readSheetRecords_('Users').forEach(function (row) {
     var email = String(row.email || '').trim();
     if (email) {
-      users.push({ email: email });
+      users.push({
+        email: email,
+        displayName: resolveUserDisplayName_(row)
+      });
     }
   });
   users.sort(function (a, b) {
-    return a.email.localeCompare(b.email, 'ru');
+    return String(a.displayName || a.email).localeCompare(
+      String(b.displayName || b.email),
+      'ru'
+    );
   });
 
   var principals = [];
@@ -150,7 +156,7 @@ function getObjectAclForEdit(input) {
     principals.push({
       principalType: 'user',
       principalId: user.email,
-      label: user.email,
+      label: user.displayName || user.email,
       permissionLevel: getEffectivePermissionForUserFromEngine_(
         engine,
         objectType,
@@ -485,6 +491,9 @@ function replaceAclForObjects_(targetObjects, entries, engine) {
 
   var lastRow = sheet.getLastRow();
   if (lastRow > kept.length) {
-    sheet.getRange(kept.length + 1, 1, lastRow, headers.length).clearContent();
+    // getRange(row, column, numRows, numColumns)
+    sheet
+      .getRange(kept.length + 1, 1, lastRow - kept.length, headers.length)
+      .clearContent();
   }
 }
