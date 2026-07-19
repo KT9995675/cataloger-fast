@@ -52,6 +52,7 @@ function setupCatalog(input) {
     setupAt: now.toISOString()
   });
   ensureDailyRevokeTrigger_();
+  ensureCatalogJobsTrigger_();
 
   return {
     ok: true,

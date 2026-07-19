@@ -1,23 +1,30 @@
-/** Sync import safety limit (GAS execution time). */
+/** Sync import safety limit — OLD; импорт всегда через Jobs (§9.6). */
 var IMPORT_DRIVE_MAX_FILES_ = 30;
+/* <!-- OLD: жёсткий отказ при >30; теперь enqueue без sync-лимита, потолок IMPORT_DRIVE_JOB_MAX_FILES_ --> */
 
 /**
- * §9.10–§9.12 — импорт с Drive: сценарий «файлы» или «папка».
+ * §9.10–§9.12 — импорт с Drive.
+ * Сценарии: `drive` (файлы+папки, поиск/ссылки), legacy `files` / `folder`.
+ * Всегда Jobs (фон); при активной очереди — JOBS_BUSY.
  *
  * @param {{
  *   targetFolderId: string,
- *   scenario?: 'files'|'folder',
+ *   scenario?: 'drive'|'files'|'folder',
  *   driveUrl?: string,
  *   driveUrls?: string[],
  *   driveFileUrl?: string,
  *   driveFolderUrl?: string,
+ *   items?: Array<{ kind?: 'file'|'folder', id?: string, url?: string }>,
  *   mode?: 'copy'|'move'
  * }} input
  * @returns {Object}
  */
 function importFromDrive(input) {
   input = input || {};
-  var scenario = String(input.scenario || 'files').trim().toLowerCase();
+  var scenario = String(input.scenario || 'drive').trim().toLowerCase();
+  if (scenario === 'drive' || scenario === 'selection') {
+    return importDriveSelection(input);
+  }
   if (scenario === 'folder') {
     return importDriveFolder({
       targetFolderId: input.targetFolderId,
@@ -25,16 +32,15 @@ function importFromDrive(input) {
       mode: input.mode
     });
   }
-  if (scenario !== 'files') {
-    throw catalogError_('INVALID_INPUT', 'scenario must be files or folder.');
+  if (scenario === 'files') {
+    var urls = normalizeImportDriveUrls_(input);
+    return importDriveFiles({
+      targetFolderId: input.targetFolderId,
+      driveUrls: urls,
+      mode: input.mode
+    });
   }
-
-  var urls = normalizeImportDriveUrls_(input);
-  return importDriveFiles({
-    targetFolderId: input.targetFolderId,
-    driveUrls: urls,
-    mode: input.mode
-  });
+  throw catalogError_('INVALID_INPUT', 'scenario must be drive, files or folder.');
 }
 
 /**
@@ -69,7 +75,7 @@ function normalizeImportDriveUrls_(input) {
 }
 
 /**
- * §9.1 / §9.12 — импорт одного или нескольких файлов (плоско в целевую папку).
+ * §9.1 / §9.12 — импорт одного или нескольких файлов → Jobs (фаза права → copy).
  *
  * @param {{
  *   targetFolderId: string,
@@ -78,17 +84,16 @@ function normalizeImportDriveUrls_(input) {
  * }} input
  * @returns {{
  *   ok: true,
+ *   queued: true,
  *   kind: 'files',
+ *   jobId: string,
  *   fileCount: number,
- *   movedCount: number,
- *   copiedCount: number,
- *   displayName: string,
- *   mode: 'copy'|'move',
- *   items: Array<{ catalogId: string, displayName: string, appliedMode: 'copy'|'move' }>
+ *   mode: 'copy'|'move'
  * }}
  */
 function importDriveFiles(input) {
   assertCatalogReady_();
+  assertNoActiveCatalogJobs_();
 
   input = input || {};
   var targetFolderId = String(input.targetFolderId || '').trim();
@@ -112,14 +117,14 @@ function importDriveFiles(input) {
   if (!urls.length) {
     throw catalogError_('INVALID_INPUT', 'Укажите хотя бы одну ссылку на файл.');
   }
-  if (urls.length > IMPORT_DRIVE_MAX_FILES_) {
+  if (urls.length > IMPORT_DRIVE_JOB_MAX_FILES_) {
     throw catalogError_(
       'IMPORT_TOO_LARGE',
       'Слишком много файлов (' +
         urls.length +
-        '). За один раз не больше ' +
-        IMPORT_DRIVE_MAX_FILES_ +
-        '. Разбейте список или дождитесь фоновых Jobs.'
+        '). Максимум за одну очередь: ' +
+        IMPORT_DRIVE_JOB_MAX_FILES_ +
+        '.'
     );
   }
 
@@ -146,14 +151,8 @@ function importDriveFiles(input) {
     }
   }
 
-  var controllerEmail =
-    PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) || '';
-  var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
-
   var items = [];
-  var movedCount = 0;
-  var copiedCount = 0;
-
+  var fileRows = [];
   for (var i = 0; i < urls.length; i++) {
     var sourceFileId = parseDriveFileId_(urls[i]);
     var sourceFile;
@@ -162,44 +161,34 @@ function importDriveFiles(input) {
     } catch (e) {
       throw catalogError_('INVALID_FILE', 'Drive file not found or not accessible: ' + urls[i]);
     }
-
-    var appliedMode = resolveDriveImportPlaceMode_(mode, sourceFile, controllerEmail);
-    var catalogFile = placeFileInCatalogRoot_(sourceFile, catalogRootFolder, appliedMode);
-    ensureUsersFromDriveFile_(sourceFile, userEmail);
-
-    var catalogId = Utilities.getUuid();
-    appendCatalogFileRow_({
-      catalogId: catalogId,
-      folderId: targetFolderId,
-      fileId: catalogFile.getId(),
-      displayName: sourceFile.getName(),
-      sizeBytes: catalogFile.getSize(),
-      driveModifiedAt: catalogFile.getLastUpdated(),
-      sourceFileId: appliedMode === 'copy' ? sourceFileId : '',
-      mimeType: getDriveFileMimeType_(catalogFile)
-    });
-
-    if (appliedMode === 'move') {
-      movedCount++;
-    } else {
-      copiedCount++;
-    }
-    items.push({
-      catalogId: catalogId,
-      displayName: sourceFile.getName(),
-      appliedMode: appliedMode
-    });
+    var built = buildPendingImportFileItem_(sourceFileId, targetFolderId, sourceFile.getName());
+    items.push(built.item);
+    fileRows.push(built.row);
   }
+  appendCatalogFileRowsBatch_(fileRows);
+
+  var jobId = enqueueCatalogJob_(
+    'import_drive',
+    {
+      scenario: 'files',
+      mode: mode,
+      targetFolderId: targetFolderId,
+      phase: 'work',
+      items: items
+    },
+    userEmail
+  );
+  ensureCatalogJobsTrigger_();
+  kickCatalogJobsProcessing_();
 
   return {
     ok: true,
+    queued: true,
     kind: 'files',
+    jobId: jobId,
     fileCount: items.length,
-    movedCount: movedCount,
-    copiedCount: copiedCount,
-    displayName: items.length === 1 ? items[0].displayName : items.length + ' файл(ов)',
     mode: mode,
-    items: items
+    displayName: items.length === 1 ? items[0].displayName : items.length + ' файл(ов)'
   };
 }
 
@@ -223,7 +212,7 @@ function importDriveFile(input) {
 }
 
 /**
- * §9.8, §9.11 — импорт папки Drive: структура в Tree, файлы в плоскую папку каталога.
+ * §9.8, §9.11 — импорт папки Drive → Tree сразу, файлы в Jobs.
  *
  * @param {{
  *   targetFolderId: string,
@@ -232,19 +221,20 @@ function importDriveFile(input) {
  * }} input
  * @returns {{
  *   ok: true,
+ *   queued: true,
  *   kind: 'folder',
+ *   jobId: string,
  *   rootFolderId: string,
  *   displayName: string,
  *   folderCount: number,
  *   fileCount: number,
- *   movedCount: number,
- *   copiedCount: number,
  *   skippedShortcuts: number,
  *   mode: 'copy'|'move'
  * }}
  */
 function importDriveFolder(input) {
   assertCatalogReady_();
+  assertNoActiveCatalogJobs_();
 
   input = input || {};
   var targetFolderId = String(input.targetFolderId || '').trim();
@@ -289,21 +279,18 @@ function importDriveFolder(input) {
     throw catalogError_('INVALID_FOLDER', 'Drive folder not found or not accessible.');
   }
 
-  var walk = walkDriveFolderForImport_(sourceFolder, IMPORT_DRIVE_MAX_FILES_);
-  if (walk.fileCount > IMPORT_DRIVE_MAX_FILES_) {
+  var walk = walkDriveFolderForImport_(sourceFolder, IMPORT_DRIVE_JOB_MAX_FILES_);
+  if (walk.fileCount > IMPORT_DRIVE_JOB_MAX_FILES_) {
     throw catalogError_(
       'IMPORT_TOO_LARGE',
       'Слишком много файлов в папке (' +
         walk.fileCount +
-        '). За один раз не больше ' +
-        IMPORT_DRIVE_MAX_FILES_ +
-        '. Разбейте на подпапки или дождитесь фоновых Jobs.'
+        '). Максимум за одну очередь: ' +
+        IMPORT_DRIVE_JOB_MAX_FILES_ +
+        '.'
     );
   }
 
-  var controllerEmail =
-    PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) || '';
-  var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
   var treeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Tree');
   if (!treeSheet) {
     throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: Tree');
@@ -312,6 +299,7 @@ function importDriveFolder(input) {
   var now = new Date();
   var driveToVirtual = {};
   var folderCount = 0;
+  var treeRows = [];
 
   walk.folders.forEach(function (node) {
     var virtualId = Utilities.getUuid();
@@ -323,53 +311,57 @@ function importDriveFolder(input) {
     if (!parentVirtualId) {
       throw catalogError_('IMPORT_WALK_FAILED', 'Parent virtual folder missing during import.');
     }
-    treeSheet.appendRow([virtualId, parentVirtualId, node.name, now, false]);
+    treeRows.push([virtualId, parentVirtualId, node.name, now, false]);
     folderCount++;
   });
+  if (treeRows.length) {
+    treeSheet.getRange(treeSheet.getLastRow() + 1, 1, treeRows.length, 5).setValues(treeRows);
+  }
 
   var rootVirtualId = driveToVirtual[sourceFolderId];
   applyDriveFolderAclToCatalogFolder_(sourceFolder, rootVirtualId, userEmail);
 
-  var importedFiles = 0;
-  var movedCount = 0;
-  var copiedCount = 0;
-
+  var items = [];
+  var fileRows = [];
   walk.files.forEach(function (item) {
     var virtualParentId = driveToVirtual[item.parentDriveFolderId];
     if (!virtualParentId) {
       throw catalogError_('IMPORT_WALK_FAILED', 'Virtual folder missing for file parent.');
     }
-    var appliedMode = resolveDriveImportPlaceMode_(mode, item.file, controllerEmail);
-    var sourceFileId = item.file.getId();
-    var catalogFile = placeFileInCatalogRoot_(item.file, catalogRootFolder, appliedMode);
-    var catalogId = Utilities.getUuid();
-    appendCatalogFileRow_({
-      catalogId: catalogId,
-      folderId: virtualParentId,
-      fileId: catalogFile.getId(),
-      displayName: item.file.getName(),
-      sizeBytes: catalogFile.getSize(),
-      driveModifiedAt: catalogFile.getLastUpdated(),
-      sourceFileId: appliedMode === 'copy' ? sourceFileId : '',
-      mimeType: getDriveFileMimeType_(catalogFile)
-    });
-    importedFiles++;
-    if (appliedMode === 'move') {
-      movedCount++;
-    } else {
-      copiedCount++;
-    }
+    var built = buildPendingImportFileItem_(
+      item.file.getId(),
+      virtualParentId,
+      item.file.getName()
+    );
+    items.push(built.item);
+    fileRows.push(built.row);
   });
+  appendCatalogFileRowsBatch_(fileRows);
+
+  var jobId = enqueueCatalogJob_(
+    'import_drive',
+    {
+      scenario: 'folder',
+      mode: mode,
+      targetFolderId: targetFolderId,
+      rootFolderId: rootVirtualId,
+      phase: 'work',
+      items: items
+    },
+    userEmail
+  );
+  ensureCatalogJobsTrigger_();
+  kickCatalogJobsProcessing_();
 
   return {
     ok: true,
+    queued: true,
     kind: 'folder',
+    jobId: jobId,
     rootFolderId: rootVirtualId,
     displayName: sourceFolder.getName(),
     folderCount: folderCount,
-    fileCount: importedFiles,
-    movedCount: movedCount,
-    copiedCount: copiedCount,
+    fileCount: items.length,
     skippedShortcuts: walk.skippedShortcuts,
     mode: mode
   };
@@ -747,7 +739,7 @@ function collectDriveFileParticipantEmails_(driveFile) {
  *   fileId: string,
  *   displayName: string,
  *   sizeBytes: number,
- *   driveModifiedAt: Date,
+ *   driveModifiedAt: Date|string,
  *   sourceFileId: string,
  *   mimeType?: string,
  *   approved?: boolean,
@@ -758,6 +750,18 @@ function collectDriveFileParticipantEmails_(driveFile) {
  * }} row
  */
 function appendCatalogFileRow_(row) {
+  appendCatalogFileRowsBatch_([row]);
+}
+
+/**
+ * Пакетная запись строк Files (один setValues).
+ *
+ * @param {Array<Object>} rows
+ */
+function appendCatalogFileRowsBatch_(rows) {
+  if (!rows || !rows.length) {
+    return;
+  }
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Files');
   if (!sheet) {
     throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: Files');
@@ -779,28 +783,33 @@ function appendCatalogFileRow_(row) {
     throw catalogError_('SCHEMA_MISMATCH', 'Files sheet has no headers.');
   }
 
-  var byHeader = {
-    catalog_id: row.catalogId,
-    folder_id: row.folderId,
-    file_id: row.fileId,
-    display_name: row.displayName,
-    size_bytes: row.sizeBytes,
-    drive_modified_at: row.driveModifiedAt,
-    approved: row.approved === true,
-    approved_by: row.approvedBy || '',
-    approved_at: row.approvedAt || '',
-    status: row.status || 'ready',
-    last_error: row.lastError || '',
-    source_file_id: row.sourceFileId || '',
-    mime_type: row.mimeType || ''
-  };
+  var lines = rows.map(function (row) {
+    var byHeader = {
+      catalog_id: row.catalogId,
+      folder_id: row.folderId,
+      file_id: row.fileId,
+      display_name: row.displayName,
+      size_bytes: row.sizeBytes,
+      drive_modified_at: row.driveModifiedAt,
+      approved: row.approved === true,
+      approved_by: row.approvedBy || '',
+      approved_at: row.approvedAt || '',
+      status: row.status || 'ready',
+      last_error: row.lastError || '',
+      source_file_id: row.sourceFileId || '',
+      mime_type: row.mimeType || ''
+    };
+    var line = [];
+    for (var c = 0; c < headers.length; c++) {
+      var key = headers[c];
+      line.push(Object.prototype.hasOwnProperty.call(byHeader, key) ? byHeader[key] : '');
+    }
+    return line;
+  });
 
-  var line = [];
-  for (var c = 0; c < headers.length; c++) {
-    var key = headers[c];
-    line.push(Object.prototype.hasOwnProperty.call(byHeader, key) ? byHeader[key] : '');
-  }
-  sheet.appendRow(line);
+  var startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, lines.length, headers.length).setValues(lines);
+  SpreadsheetApp.flush();
 }
 
 /**

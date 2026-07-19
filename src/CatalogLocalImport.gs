@@ -87,21 +87,111 @@ function prepareLocalImportTree(input) {
 }
 
 /**
+ * §9.13 — старт локального импорта как Jobs-очереди (байтты шлёт клиент).
+ *
+ * @param {{
+ *   targetFolderId: string,
+ *   folderPaths: string[],
+ *   files: Array<{ relativePath: string, fileName: string, sizeBytes?: number, mimeType?: string }>
+ * }} input
+ * @returns {{
+ *   ok: true,
+ *   queued: true,
+ *   jobId: string,
+ *   pathToFolderId: Object.<string, string>,
+ *   folderCount: number,
+ *   fileCount: number
+ * }}
+ */
+function startLocalImportJob(input) {
+  assertCatalogReady_();
+  assertNoActiveCatalogJobs_();
+
+  input = input || {};
+  var files = Array.isArray(input.files) ? input.files : [];
+  if (!files.length) {
+    throw catalogError_('INVALID_INPUT', 'Нет файлов для загрузки.');
+  }
+
+  var tree = prepareLocalImportTree({
+    targetFolderId: input.targetFolderId,
+    folderPaths: input.folderPaths || []
+  });
+
+  var userEmail = Session.getActiveUser().getEmail() || '';
+  var targetFolderId = String(input.targetFolderId || '').trim();
+  var pathToFolderId = tree.pathToFolderId || {};
+
+  var items = files.map(function (f, index) {
+    var relativePath = String(f.relativePath || f.fileName || '').trim();
+    var fileName = String(f.fileName || '').trim();
+    if (!fileName && relativePath) {
+      var slash = relativePath.lastIndexOf('/');
+      fileName = slash >= 0 ? relativePath.substring(slash + 1) : relativePath;
+    }
+    var dir = '';
+    if (relativePath.indexOf('/') >= 0) {
+      dir = relativePath.substring(0, relativePath.lastIndexOf('/'));
+    }
+    var parentFolderId = dir ? pathToFolderId[dir] || targetFolderId : targetFolderId;
+    return {
+      index: index,
+      relativePath: relativePath,
+      fileName: fileName,
+      parentFolderId: parentFolderId,
+      sizeBytes: parseNumber_(f.sizeBytes),
+      mimeType: String(f.mimeType || 'application/octet-stream'),
+      status: 'waiting',
+      catalogId: '',
+      error: ''
+    };
+  });
+
+  var jobId = enqueueCatalogJob_(
+    'import_upload',
+    {
+      targetFolderId: targetFolderId,
+      items: items
+    },
+    userEmail
+  );
+  ensureCatalogJobsTrigger_();
+  markCatalogJobRunning_(jobId);
+  patchCatalogJobRow_(jobId, {
+    progress: 0,
+    progress_message: 'Загрузка: 0/' + items.length
+  });
+
+  return {
+    ok: true,
+    queued: true,
+    jobId: jobId,
+    pathToFolderId: pathToFolderId,
+    folderCount: tree.folderCount || 0,
+    fileCount: items.length
+  };
+}
+
+/**
  * Загружает один локальный файл в плоскую папку каталога на Drive + Files.
+ * При jobId — часть очереди import_upload.
  *
  * @param {{
  *   parentFolderId: string,
  *   fileName: string,
  *   mimeType?: string,
  *   base64Data: string,
- *   sizeBytes?: number
+ *   sizeBytes?: number,
+ *   jobId?: string,
+ *   relativePath?: string
  * }} input
  * @returns {{
  *   ok: true,
  *   catalogId: string,
  *   displayName: string,
  *   fileId: string,
- *   sizeBytes: number
+ *   sizeBytes: number,
+ *   jobId?: string
  * }}
  */
 function importLocalFile(input) {
@@ -113,6 +203,8 @@ function importLocalFile(input) {
   var mimeType = String(input.mimeType || 'application/octet-stream').trim();
   var base64Data = String(input.base64Data || '').trim();
   var sizeBytes = parseNumber_(input.sizeBytes);
+  var jobId = String(input.jobId || '').trim();
+  var relativePath = String(input.relativePath || '').trim();
 
   if (!parentFolderId) {
     throw catalogError_('INVALID_INPUT', 'parentFolderId is required.');
@@ -143,10 +235,24 @@ function importLocalFile(input) {
   }
   assertEditorOnFolderForMove_(engine, userEmail, loginRole, parentFolderId);
 
+  if (jobId) {
+    var job = getCatalogJobById_(jobId);
+    if (!job || String(job.job_type) !== 'import_upload') {
+      throw catalogError_('JOB_NOT_FOUND', 'Задача локального импорта не найдена.');
+    }
+    var st = String(job.status || '').toLowerCase();
+    if (st !== 'running' && st !== 'pending') {
+      throw catalogError_('JOB_NOT_ACTIVE', 'Очередь импорта уже завершена.');
+    }
+  }
+
   var bytes;
   try {
     bytes = Utilities.base64Decode(base64Data);
   } catch (e) {
+    if (jobId) {
+      markLocalImportItem_(jobId, relativePath, fileName, 'failed', '', (e && e.message) || 'decode');
+    }
     throw catalogError_('INVALID_INPUT', 'Не удалось разобрать содержимое файла.');
   }
 
@@ -154,42 +260,118 @@ function importLocalFile(input) {
     sizeBytes = bytes.length;
   }
 
-  var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
-  var blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', fileName);
-  var driveFile = catalogRootFolder.createFile(blob);
-
-  var controllerEmail =
-    PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) || '';
-  if (controllerEmail) {
-    transferDriveFileToController_(driveFile, controllerEmail, userEmail);
-  }
-
-  var catalogId = Utilities.getUuid();
-  var resolvedMime = '';
   try {
-    resolvedMime = String(driveFile.getMimeType() || mimeType || '');
-  } catch (eMime) {
-    resolvedMime = mimeType || '';
+    var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
+    var blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', fileName);
+    var driveFile = catalogRootFolder.createFile(blob);
+
+    var controllerEmail =
+      PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) || '';
+    if (controllerEmail) {
+      transferDriveFileToController_(driveFile, controllerEmail, userEmail);
+    }
+
+    var catalogId = Utilities.getUuid();
+    var resolvedMime = '';
+    try {
+      resolvedMime = String(driveFile.getMimeType() || mimeType || '');
+    } catch (eMime) {
+      resolvedMime = mimeType || '';
+    }
+
+    appendCatalogFileRow_({
+      catalogId: catalogId,
+      folderId: parentFolderId,
+      fileId: driveFile.getId(),
+      displayName: fileName,
+      sizeBytes: sizeBytes,
+      driveModifiedAt: driveFile.getLastUpdated(),
+      sourceFileId: '',
+      mimeType: resolvedMime,
+      status: 'ready'
+    });
+
+    if (jobId) {
+      markLocalImportItem_(jobId, relativePath, fileName, 'done', catalogId, '');
+    }
+
+    return {
+      ok: true,
+      catalogId: catalogId,
+      displayName: fileName,
+      fileId: driveFile.getId(),
+      sizeBytes: sizeBytes,
+      jobId: jobId || undefined
+    };
+  } catch (eUp) {
+    if (jobId) {
+      markLocalImportItem_(
+        jobId,
+        relativePath,
+        fileName,
+        'failed',
+        '',
+        (eUp && eUp.message) || String(eUp)
+      );
+    }
+    throw eUp;
   }
+}
 
-  appendCatalogFileRow_({
-    catalogId: catalogId,
-    folderId: parentFolderId,
-    fileId: driveFile.getId(),
-    displayName: fileName,
-    sizeBytes: sizeBytes,
-    driveModifiedAt: driveFile.getLastUpdated(),
-    sourceFileId: '',
-    mimeType: resolvedMime
+/**
+ * @param {string} jobId
+ * @param {string} relativePath
+ * @param {string} fileName
+ * @param {'done'|'failed'} status
+ * @param {string} catalogId
+ * @param {string} error
+ */
+function markLocalImportItem_(jobId, relativePath, fileName, status, catalogId, error) {
+  var job = getCatalogJobById_(jobId);
+  if (!job) {
+    return;
+  }
+  var payload = parseJobPayload_(job);
+  var items = payload.items || [];
+  var matched = false;
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (it.status === 'done' || it.status === 'failed') {
+      continue;
+    }
+    if (
+      (relativePath && it.relativePath === relativePath) ||
+      (!relativePath && it.fileName === fileName)
+    ) {
+      it.status = status;
+      it.catalogId = catalogId || '';
+      it.error = error || '';
+      matched = true;
+      break;
+    }
+  }
+  if (!matched) {
+    return;
+  }
+  payload.items = items;
+  var done = 0;
+  var failed = 0;
+  items.forEach(function (x) {
+    if (x.status === 'done') {
+      done++;
+    } else if (x.status === 'failed') {
+      failed++;
+      done++;
+    }
   });
-
-  return {
-    ok: true,
-    catalogId: catalogId,
-    displayName: fileName,
-    fileId: driveFile.getId(),
-    sizeBytes: sizeBytes
-  };
+  var progress = Math.round((done / items.length) * 100);
+  var finished = done >= items.length;
+  var msg = finished
+    ? failed
+      ? 'Загрузка завершена с ошибками: ' + failed
+      : 'Загрузка с компьютера завершена'
+    : 'Загрузка с компьютера: ' + done + '/' + items.length;
+  saveJobPayloadProgress_(jobId, payload, progress, msg, finished);
 }
 
 /**

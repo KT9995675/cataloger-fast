@@ -376,6 +376,10 @@
         color: var(--muted);
         line-height: 1.45;
       }
+      .modal-card .sub strong {
+        color: var(--text);
+        font-weight: 600;
+      }
       .modal-actions {
         display: flex;
         gap: 8px;
@@ -565,8 +569,8 @@
       }
       #import-drive-urls {
         width: 100%;
-        min-height: 88px;
-        margin-bottom: 16px;
+        min-height: 72px;
+        margin-bottom: 12px;
         padding: 8px 10px;
         background: var(--bg);
         border: 1px solid var(--border);
@@ -575,15 +579,87 @@
         font: inherit;
         resize: vertical;
       }
-      #import-folder-url {
-        width: 100%;
-        margin-bottom: 16px;
+      .import-search-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+        align-items: stretch;
+      }
+      .import-search-row input[type="text"] {
+        flex: 1;
         padding: 8px 10px;
         background: var(--bg);
         border: 1px solid var(--border);
         border-radius: 4px;
         color: var(--text);
         font: inherit;
+      }
+      .import-search-row button {
+        flex-shrink: 0;
+      }
+      #import-search-results {
+        max-height: 180px;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        margin-bottom: 8px;
+        background: var(--bg);
+      }
+      #import-search-results:empty {
+        display: none;
+      }
+      .import-search-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .import-search-item:last-child {
+        border-bottom: none;
+      }
+      .import-search-item:hover {
+        background: rgba(0, 90, 158, 0.08);
+      }
+      .import-search-item .kind {
+        flex-shrink: 0;
+        font-size: 11px;
+        opacity: 0.7;
+        min-width: 42px;
+      }
+      .import-search-item .name {
+        flex: 1;
+        word-break: break-word;
+      }
+      #import-picked-list {
+        margin: 0 0 12px;
+        font-size: 13px;
+      }
+      #import-picked-list:empty {
+        display: none;
+      }
+      .import-picked-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin: 0 6px 6px 0;
+        padding: 2px 8px;
+        border-radius: 3px;
+        background: #e8f4fc;
+        border: 1px solid #9ec9e8;
+        color: #1a1a1a;
+        max-width: 100%;
+      }
+      .import-picked-chip button {
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        padding: 0 2px;
+        font-size: 14px;
+        line-height: 1;
+        color: #005a9e;
       }
     </style>
   </head>
@@ -731,25 +807,33 @@
         <h2>Импорт</h2>
         <p class="sub">Цель: текущая папка <strong id="import-target-name">…</strong> активной панели.</p>
         <div class="mode-row" style="margin-bottom:12px;">
-          <label><input type="radio" name="import-scenario" value="files" checked /> Drive: файлы</label>
-          <label><input type="radio" name="import-scenario" value="folder" /> Drive: папка</label>
+          <label><input type="radio" name="import-scenario" value="drive" checked /> С Google Drive</label>
           <label><input type="radio" name="import-scenario" value="local" /> С компьютера</label>
         </div>
-        <div id="import-files-block">
-          <label for="import-drive-urls">Ссылки на файлы (по одной на строку, до 30)</label>
+        <div id="import-drive-block">
+          <label for="import-search-query">Найти на Drive по имени</label>
+          <div class="import-search-row">
+            <input
+              type="text"
+              id="import-search-query"
+              placeholder="Часть имени файла или папки"
+              autocomplete="off"
+            />
+            <button type="button" class="secondary" id="import-search-btn">Найти</button>
+          </div>
+          <div id="import-search-results"></div>
+          <div class="mode-row" style="margin-bottom:12px;">
+            <button type="button" class="secondary hidden" id="import-search-more">Ещё</button>
+          </div>
+          <div id="import-picked-list"></div>
+          <label for="import-drive-urls">Или ссылки (файлы и папки, по одной на строку)</label>
           <textarea
             id="import-drive-urls"
-            placeholder="https://drive.google.com/file/d/…&#10;https://docs.google.com/document/d/…"
+            placeholder="https://drive.google.com/file/d/…&#10;https://drive.google.com/drive/folders/…"
           ></textarea>
-        </div>
-        <div id="import-folder-block" class="hidden">
-          <label for="import-folder-url">Ссылка на одну папку Drive</label>
-          <input
-            type="url"
-            id="import-folder-url"
-            placeholder="https://drive.google.com/drive/folders/…"
-          />
-          <p class="sub" style="margin-top:-8px;">Структура подпапок сохранится в каталоге. Не больше 30 файлов внутри.</p>
+          <p class="sub" style="margin-top:-8px;">
+            Файлы и папки в одной очереди (фон, до 500 файлов). Структура папок сохранится в каталоге.
+          </p>
         </div>
         <div id="import-local-block" class="hidden">
           <p class="sub" style="margin-top:0;">Выберите файлы и/или папку. Структура папок сохранится в каталоге.</p>
@@ -996,7 +1080,28 @@
         ];
 
         function setStatus(text) {
+          if (flashOperationDone_._timer) {
+            clearTimeout(flashOperationDone_._timer);
+            flashOperationDone_._timer = null;
+          }
           document.getElementById('status-text').textContent = text || 'Готово';
+        }
+
+        /**
+         * Статус «Операция выполнена» на 2 с (как splash «Открываю»).
+         */
+        function flashOperationDone_() {
+          document.getElementById('status-text').textContent = 'Операция выполнена';
+          if (flashOperationDone_._timer) {
+            clearTimeout(flashOperationDone_._timer);
+          }
+          flashOperationDone_._timer = setTimeout(function () {
+            flashOperationDone_._timer = null;
+            var el = document.getElementById('status-text');
+            if (el && el.textContent === 'Операция выполнена') {
+              el.textContent = 'Готово';
+            }
+          }, 2000);
         }
 
         function formatBytes(bytes) {
@@ -1469,22 +1574,28 @@
           return showAppConfirm_(message);
         }
 
+        /**
+         * Одно подтверждение с числом файлов и объёмом (всегда).
+         * @param {string} actionMessage
+         * @param {number} fileCount
+         * @param {number} totalBytes
+         * @returns {Promise<boolean>}
+         */
+        function confirmOperationWithWeight_(actionMessage, fileCount, totalBytes) {
+          var count = Math.max(0, Number(fileCount) || 0);
+          var bytes = Math.max(0, Number(totalBytes) || 0);
+          var lines = [String(actionMessage || '').replace(/\s+$/, '')];
+          lines.push('Файлов: ' + count + ', объём: ' + formatBytes(bytes) + '.');
+          if (count > 30 || bytes >= HEAVY_OP_WARN_BYTES_) {
+            lines.push('Операция может занять время.');
+          }
+          lines.push('Продолжить?');
+          return showAppConfirm_(lines.join('\n'));
+        }
+
+        /** @deprecated используйте confirmOperationWithWeight_ */
         function confirmHeavyOperation_(fileCount, totalBytes) {
-          var parts = [];
-          if (fileCount > 30) {
-            parts.push('файлов больше 30 (' + fileCount + ')');
-          }
-          if (totalBytes >= HEAVY_OP_WARN_BYTES_) {
-            parts.push('объём ' + formatBytes(totalBytes));
-          }
-          if (!parts.length) {
-            return Promise.resolve(true);
-          }
-          return showAppConfirm_(
-            'Внимание: ' +
-              parts.join(', ') +
-              '.\nОперация может занять время.\nПродолжить?'
-          );
+          return confirmOperationWithWeight_('Внимание.', fileCount, totalBytes);
         }
 
         function showOpeningSplash_() {
@@ -1562,29 +1673,26 @@
             if (!okNest) {
               return;
             }
-            return confirmCatalogAction_(
+            var weight = estimateItemsWeight_(items);
+            return confirmOperationWithWeight_(
               'Копировать ' +
                 formatSelectedNames_(items) +
                 ' в «' +
                 (target.folderName || 'папку') +
-                '»?'
+                '».',
+              weight.fileCount,
+              weight.bytes
             ).then(function (ok) {
               if (!ok) {
                 return;
               }
-              var weight = estimateItemsWeight_(items);
-              return confirmHeavyOperation_(weight.fileCount, weight.bytes).then(function (okHeavy) {
-                if (!okHeavy) {
-                  return;
-                }
-                runCopyItems(
-                  target.folderId,
-                  items.map(function (it) {
-                    return { kind: it.kind, id: it.id };
-                  }),
-                  source.folderId
-                );
-              });
+              runCopyItems(
+                target.folderId,
+                items.map(function (it) {
+                  return { kind: it.kind, id: it.id };
+                }),
+                source.folderId
+              );
             });
           });
         }
@@ -1602,29 +1710,26 @@
             if (!okNest) {
               return;
             }
-            return confirmCatalogAction_(
+            var weight = estimateItemsWeight_(items);
+            return confirmOperationWithWeight_(
               'Переместить ' +
                 formatSelectedNames_(items) +
                 ' в «' +
                 (target.folderName || 'папку') +
-                '»?'
+                '».',
+              weight.fileCount,
+              weight.bytes
             ).then(function (ok) {
               if (!ok) {
                 return;
               }
-              var weight = estimateItemsWeight_(items);
-              return confirmHeavyOperation_(weight.fileCount, weight.bytes).then(function (okHeavy) {
-                if (!okHeavy) {
-                  return;
-                }
-                runMoveItems(
-                  target.folderId,
-                  items.map(function (it) {
-                    return { kind: it.kind, id: it.id };
-                  }),
-                  source.folderId
-                );
-              });
+              runMoveItems(
+                target.folderId,
+                items.map(function (it) {
+                  return { kind: it.kind, id: it.id };
+                }),
+                source.folderId
+              );
             });
           });
         }
@@ -1636,25 +1741,22 @@
           if (!items.length || source.loading) {
             return;
           }
-          confirmCatalogAction_(
-            'Удалить ' + formatSelectedNames_(items) + ' в корзину?'
+          var weight = estimateItemsWeight_(items);
+          confirmOperationWithWeight_(
+            'Удалить ' + formatSelectedNames_(items) + ' в корзину.',
+            weight.fileCount,
+            weight.bytes
           ).then(function (ok) {
             if (!ok) {
               return;
             }
-            var weight = estimateItemsWeight_(items);
-            return confirmHeavyOperation_(weight.fileCount, weight.bytes).then(function (okHeavy) {
-              if (!okHeavy) {
-                return;
-              }
-              runMoveItems(
-                '__TRASH__',
-                items.map(function (it) {
-                  return { kind: it.kind, id: it.id };
-                }),
-                source.folderId
-              );
-            });
+            runMoveItems(
+              '__TRASH__',
+              items.map(function (it) {
+                return { kind: it.kind, id: it.id };
+              }),
+              source.folderId
+            );
           });
         }
 
@@ -1697,14 +1799,7 @@
                       );
                       return;
                     }
-                    var skipped =
-                      ((result && result.skippedNoPermission) || 0) +
-                      ((result && result.skippedAlready) || 0);
-                    setStatus(
-                      skipped
-                        ? 'Подписано: ' + n + ' (пропущено: ' + skipped + ')'
-                        : 'Готово'
-                    );
+                    flashOperationDone_();
                   }
                 );
               })
@@ -1719,7 +1814,7 @@
 
         function getTrashStatsFromSnapshot_() {
           if (!catalogSnapshot || !catalogSnapshot.foldersById) {
-            return { fileCount: 0, folderCount: 0 };
+            return { fileCount: 0, folderCount: 0, bytes: 0 };
           }
           var trashIds = { __TRASH__: true };
           var queue = ['__TRASH__'];
@@ -1740,13 +1835,15 @@
             }
           });
           var fileCount = 0;
+          var bytes = 0;
           Object.keys(catalogSnapshot.filesById || {}).forEach(function (fileId) {
             var file = catalogSnapshot.filesById[fileId];
             if (trashIds[String(file.folderId || '')]) {
               fileCount += 1;
+              bytes += Number(file.sizeBytes) || 0;
             }
           });
-          return { fileCount: fileCount, folderCount: folderCount };
+          return { fileCount: fileCount, folderCount: folderCount, bytes: bytes };
         }
 
         function isFolderInTrashSubtree_(folderId) {
@@ -1808,8 +1905,8 @@
             stats.fileCount +
             ' файл., ' +
             stats.folderCount +
-            ' пап.?\nФайлы будут перемещены в корзину Google Drive (~30 дней).';
-          confirmCatalogAction_(label).then(function (ok) {
+            ' пап.\nФайлы будут перемещены в корзину Google Drive (~30 дней).';
+          confirmOperationWithWeight_(label, stats.fileCount, stats.bytes).then(function (ok) {
             if (!ok) {
               return;
             }
@@ -1831,20 +1928,7 @@
                       applyPanelFromSnapshot_(panelIndex, folderId);
                     });
                     updateEmptyTrashButton_();
-                    var files = (result && result.deletedFiles) || 0;
-                    var folders = (result && result.deletedFolders) || 0;
-                    var driveErrors = (result && result.driveErrors) || 0;
-                    setStatus(
-                      driveErrors
-                        ? 'Корзина очищена: файлов ' +
-                            files +
-                            ', папок ' +
-                            folders +
-                            ' (ошибки Drive: ' +
-                            driveErrors +
-                            ')'
-                        : 'Готово'
-                    );
+                    flashOperationDone_();
                   })
                   .withFailureHandler(function (err) {
                     var msg = (err && err.message) || String(err);
@@ -1879,7 +1963,7 @@
           google.script.run
             .withSuccessHandler(function () {
               reloadCatalogSnapshot_([sourceFolderId, targetFolderId], function () {
-                setStatus('Готово');
+                flashOperationDone_();
               });
             })
             .withFailureHandler(function (err) {
@@ -1899,7 +1983,7 @@
           google.script.run
             .withSuccessHandler(function () {
               applyLocalMove_(sourceFolderId, targetFolderId, movedItems);
-              setStatus('Готово');
+              flashOperationDone_();
             })
             .withFailureHandler(function (err) {
               var msg = formatCatalogOpError_(err);
@@ -1913,8 +1997,12 @@
         }
 
         function countFilesInSnapshotSubtree_(rootFolderId) {
+          return weightInSnapshotSubtree_(rootFolderId).fileCount;
+        }
+
+        function weightInSnapshotSubtree_(rootFolderId) {
           if (!catalogSnapshot || !rootFolderId) {
-            return 0;
+            return { fileCount: 0, bytes: 0 };
           }
           var folderIds = {};
           var queue = [String(rootFolderId)];
@@ -1930,13 +2018,15 @@
             });
           }
           var count = 0;
+          var bytes = 0;
           Object.keys(catalogSnapshot.filesById || {}).forEach(function (fileId) {
             var file = catalogSnapshot.filesById[fileId];
             if (folderIds[String(file.folderId || '')]) {
               count++;
+              bytes += Number(file.sizeBytes) || 0;
             }
           });
-          return count;
+          return { fileCount: count, bytes: bytes };
         }
 
         function estimateSelectionWeight_(item) {
@@ -1946,10 +2036,7 @@
           if (item.kind === 'file') {
             return { fileCount: 1, bytes: Number(item.sizeBytes) || 0 };
           }
-          return {
-            fileCount: countFilesInSnapshotSubtree_(item.id),
-            bytes: Number(item.sizeBytes) || 0
-          };
+          return weightInSnapshotSubtree_(item.id);
         }
 
         var renameTarget = null;
@@ -2014,7 +2101,7 @@
               var name = (result && result.name) || newName;
               closeRenameModal();
               applyLocalRename_(kind, id, name, folderId);
-              setStatus('Переименовано: ' + name);
+              flashOperationDone_();
             })
             .withFailureHandler(function (err) {
               btn.disabled = false;
@@ -2089,6 +2176,8 @@
 
         var canRunCatalogOperations = false;
         var canEmptyTrash = false;
+        var jobsPollTimer_ = null;
+        var jobsPollFolderIds_ = null;
         var peopleAdminState = null;
         var peopleUserEditEmail = null;
         var peopleGroupEditId = null;
@@ -2469,6 +2558,10 @@
         var catalogSnapshot = null;
         var aclEditorState = null;
         var localImportEntries_ = [];
+        var importDrivePicked_ = {};
+        var importSearchQuery_ = '';
+        var importSearchPageToken_ = null;
+        var importSearchLoading_ = false;
         var LOCAL_IMPORT_WARN_BYTES_ = HEAVY_OP_WARN_BYTES_;
 
         function comparePanelItemsClient_(a, b) {
@@ -3144,10 +3237,11 @@
                 closeCreateModal();
                 if (result && result.folder) {
                   applyLocalCreateFolder_(result.folder);
-                  setStatus('Создана папка: ' + result.folder.name);
+                  flashOperationDone_();
                 } else {
-                  reloadCatalogSnapshot_([state.folderId]);
-                  setStatus('Папка создана');
+                  reloadCatalogSnapshot_([state.folderId], function () {
+                    flashOperationDone_();
+                  });
                 }
               })
               .withFailureHandler(function (err) {
@@ -3172,10 +3266,10 @@
               } else {
                 reloadCatalogSnapshot_([state.folderId]);
               }
-              setStatus('Создан файл: ' + (result && result.displayName ? result.displayName : name));
               if (result && result.url) {
                 openExternalUrl_(result.url);
               }
+              flashOperationDone_();
             })
             .withFailureHandler(function (err) {
               btn.disabled = false;
@@ -3335,6 +3429,18 @@
           document.getElementById('btn-create').addEventListener('click', openCreateModal);
           document.getElementById('import-cancel').addEventListener('click', closeImportModal);
           document.getElementById('import-submit').addEventListener('click', submitImport);
+          document.getElementById('import-search-btn').addEventListener('click', function () {
+            runImportDriveSearch_(false);
+          });
+          document.getElementById('import-search-more').addEventListener('click', function () {
+            runImportDriveSearch_(true);
+          });
+          document.getElementById('import-search-query').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              runImportDriveSearch_(false);
+            }
+          });
           document.getElementById('confirm-ok').addEventListener('click', function () {
             finishAppConfirm_(true);
           });
@@ -3416,30 +3522,165 @@
           loadInitialPanels(virtualRootFolderId);
           setActivePanel(0);
           showScreen('main');
+          google.script.run
+            .withSuccessHandler(function (st) {
+              if (st && st.busy) {
+                if (st.progressMessage) {
+                  setStatus(st.progressMessage);
+                }
+                startJobsPoller_([virtualRootFolderId]);
+              }
+            })
+            .getCatalogJobsStatus();
         }
 
         function updateImportScenarioUi() {
           var scenarioInput = document.querySelector('input[name="import-scenario"]:checked');
-          var scenario = scenarioInput ? scenarioInput.value : 'files';
-          var filesBlock = document.getElementById('import-files-block');
-          var folderBlock = document.getElementById('import-folder-block');
+          var scenario = scenarioInput ? scenarioInput.value : 'drive';
+          var driveBlock = document.getElementById('import-drive-block');
           var localBlock = document.getElementById('import-local-block');
           var driveModeRow = document.getElementById('import-drive-mode-row');
 
-          filesBlock.classList.add('hidden');
-          folderBlock.classList.add('hidden');
+          driveBlock.classList.add('hidden');
           localBlock.classList.add('hidden');
           driveModeRow.classList.add('hidden');
 
-          if (scenario === 'folder') {
-            folderBlock.classList.remove('hidden');
-            driveModeRow.classList.remove('hidden');
-          } else if (scenario === 'local') {
+          if (scenario === 'local') {
             localBlock.classList.remove('hidden');
           } else {
-            filesBlock.classList.remove('hidden');
+            driveBlock.classList.remove('hidden');
             driveModeRow.classList.remove('hidden');
           }
+        }
+
+        function clearImportDrivePicked_() {
+          importDrivePicked_ = {};
+          renderImportDrivePicked_();
+        }
+
+        function clearImportDriveSearch_() {
+          importSearchQuery_ = '';
+          importSearchPageToken_ = null;
+          document.getElementById('import-search-results').innerHTML = '';
+          document.getElementById('import-search-more').classList.add('hidden');
+        }
+
+        function renderImportDrivePicked_() {
+          var el = document.getElementById('import-picked-list');
+          el.innerHTML = '';
+          Object.keys(importDrivePicked_).forEach(function (id) {
+            var it = importDrivePicked_[id];
+            var chip = document.createElement('span');
+            chip.className = 'import-picked-chip';
+            chip.title = it.name;
+            chip.innerHTML =
+              '<span>' +
+              escapeHtml(it.kind === 'folder' ? 'папка: ' : 'файл: ') +
+              escapeHtml(it.name) +
+              '</span>';
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('aria-label', 'Убрать');
+            btn.textContent = '×';
+            btn.addEventListener('click', function () {
+              delete importDrivePicked_[id];
+              renderImportDrivePicked_();
+            });
+            chip.appendChild(btn);
+            el.appendChild(chip);
+          });
+        }
+
+        function toggleImportDrivePicked_(item) {
+          if (!item || !item.id) {
+            return;
+          }
+          if (importDrivePicked_[item.id]) {
+            delete importDrivePicked_[item.id];
+          } else {
+            importDrivePicked_[item.id] = {
+              id: item.id,
+              name: item.name || item.id,
+              kind: item.kind === 'folder' ? 'folder' : 'file'
+            };
+          }
+          renderImportDrivePicked_();
+        }
+
+        function appendImportSearchResults_(items, append) {
+          var box = document.getElementById('import-search-results');
+          if (!append) {
+            box.innerHTML = '';
+          }
+          if (!items || !items.length) {
+            if (!append) {
+              var empty = document.createElement('div');
+              empty.className = 'import-search-item';
+              empty.textContent = 'Ничего не найдено.';
+              box.appendChild(empty);
+            }
+            return;
+          }
+          items.forEach(function (item) {
+            var row = document.createElement('div');
+            row.className = 'import-search-item';
+            row.innerHTML =
+              '<span class="kind">' +
+              escapeHtml(item.kind === 'folder' ? 'папка' : 'файл') +
+              '</span><span class="name">' +
+              escapeHtml(item.name || item.id) +
+              '</span>';
+            row.addEventListener('click', function () {
+              toggleImportDrivePicked_(item);
+            });
+            box.appendChild(row);
+          });
+        }
+
+        function runImportDriveSearch_(loadMore) {
+          var query = String(document.getElementById('import-search-query').value || '').trim();
+          if (!query) {
+            showImportMessage('Введите текст для поиска.', 'error');
+            return;
+          }
+          if (importSearchLoading_) {
+            return;
+          }
+          if (!loadMore) {
+            importSearchQuery_ = query;
+            importSearchPageToken_ = null;
+          } else if (!importSearchPageToken_) {
+            return;
+          }
+          importSearchLoading_ = true;
+          showImportMessage(loadMore ? 'Ещё результаты…' : 'Поиск…', '');
+          var payload = { query: importSearchQuery_ || query };
+          if (loadMore && importSearchPageToken_) {
+            payload.pageToken = importSearchPageToken_;
+          }
+          gasRun_('searchDriveForImport', payload)
+            .then(function (result) {
+              importSearchLoading_ = false;
+              showImportMessage('', '');
+              appendImportSearchResults_(result && result.items, !!loadMore);
+              importSearchPageToken_ = (result && result.nextPageToken) || null;
+              document
+                .getElementById('import-search-more')
+                .classList.toggle('hidden', !importSearchPageToken_);
+            })
+            .catch(function (err) {
+              importSearchLoading_ = false;
+              showImportMessage((err && err.message) || String(err), 'error');
+            });
+        }
+
+        function collectImportDrivePayloadItems_() {
+          var items = [];
+          Object.keys(importDrivePicked_).forEach(function (id) {
+            var it = importDrivePicked_[id];
+            items.push({ kind: it.kind, id: it.id });
+          });
+          return items;
         }
 
         function clearLocalImportSelection_() {
@@ -3566,15 +3807,17 @@
             return;
           }
           document.getElementById('import-target-name').textContent = state.folderName || 'каталог';
-          document.querySelector('input[name="import-scenario"][value="files"]').checked = true;
+          document.querySelector('input[name="import-scenario"][value="drive"]').checked = true;
           document.getElementById('import-drive-urls').value = '';
-          document.getElementById('import-folder-url').value = '';
+          document.getElementById('import-search-query').value = '';
+          clearImportDriveSearch_();
+          clearImportDrivePicked_();
           document.querySelector('input[name="import-mode"][value="copy"]').checked = true;
           clearLocalImportSelection_();
           updateImportScenarioUi();
           showImportMessage('', '');
           document.getElementById('import-modal').classList.remove('hidden');
-          document.getElementById('import-drive-urls').focus();
+          document.getElementById('import-search-query').focus();
         }
 
         function closeImportModal() {
@@ -3632,6 +3875,54 @@
           return 'Импортирован: ' + (result.displayName || '');
         }
 
+        function stopJobsPoller_() {
+          if (jobsPollTimer_) {
+            clearInterval(jobsPollTimer_);
+            jobsPollTimer_ = null;
+          }
+        }
+
+        function startJobsPoller_(folderIds) {
+          jobsPollFolderIds_ = folderIds || jobsPollFolderIds_;
+          stopJobsPoller_();
+          var ticks = 0;
+          function tick() {
+            ticks += 1;
+            google.script.run.withFailureHandler(function () {}).processCatalogJobs();
+            google.script.run
+              .withSuccessHandler(function (st) {
+                if (!st || !st.busy) {
+                  stopJobsPoller_();
+                  var folders = jobsPollFolderIds_;
+                  jobsPollFolderIds_ = null;
+                  reloadCatalogSnapshot_(folders, function () {
+                    flashOperationDone_();
+                  });
+                  return;
+                }
+                if (st.progressMessage) {
+                  setStatus(st.progressMessage);
+                }
+              })
+              .withFailureHandler(function () {
+                if (ticks > 120) {
+                  stopJobsPoller_();
+                }
+              })
+              .getCatalogJobsStatus();
+          }
+          tick();
+          jobsPollTimer_ = setInterval(tick, 1500);
+        }
+
+        function formatJobsBusyError_(err) {
+          var raw = (err && err.message) || String(err || '');
+          if (raw.indexOf('JOBS_BUSY') !== -1 || raw.indexOf('фоновые процессы') !== -1) {
+            return 'Идут фоновые процессы. Дождитесь завершения текущей очереди и повторите.';
+          }
+          return raw;
+        }
+
         function submitLocalImport_(state, btn) {
           if (!localImportEntries_.length) {
             showImportMessage('Выберите файлы или папку с компьютера.', 'error');
@@ -3644,19 +3935,15 @@
             total += e.size;
           });
 
-          confirmCatalogAction_(
+          confirmOperationWithWeight_(
             'Импортировать ' +
               localImportEntries_.length +
               ' файл(ов) с компьютера в «' +
               targetName +
-              '»?'
+              '».\nЗагрузка пойдёт в фоне (очередь Jobs).',
+            localImportEntries_.length,
+            total
           )
-            .then(function (ok) {
-              if (!ok) {
-                return null;
-              }
-              return confirmHeavyOperation_(localImportEntries_.length, total);
-            })
             .then(function (okHeavy) {
               if (!okHeavy) {
                 return;
@@ -3664,27 +3951,38 @@
 
               btn.disabled = true;
               showImportMessage('', '');
-              setStatus('Загрузка с компьютера…');
+              setStatus('Постановка в очередь…');
 
               var folderPaths = collectLocalFolderPaths_(localImportEntries_);
-              var pathToFolderId = {};
+              var filesMeta = localImportEntries_.map(function (entry) {
+                return {
+                  relativePath: entry.relativePath,
+                  fileName: fileNameOfRelativePath_(entry.relativePath),
+                  sizeBytes: entry.size,
+                  mimeType: entry.file.type || 'application/octet-stream'
+                };
+              });
 
-              return gasRun_('prepareLocalImportTree', {
+              return gasRun_('startLocalImportJob', {
                 targetFolderId: state.folderId,
-                folderPaths: folderPaths
+                folderPaths: folderPaths,
+                files: filesMeta
               })
-                .then(function (treeResult) {
-                  pathToFolderId = (treeResult && treeResult.pathToFolderId) || {};
+                .then(function (startResult) {
+                  var jobId = startResult && startResult.jobId;
+                  var pathToFolderId = (startResult && startResult.pathToFolderId) || {};
+                  closeImportModal();
+                  startJobsPoller_([state.folderId]);
+                  setStatus('Загрузка: 0/' + localImportEntries_.length);
+
                   var chain = Promise.resolve();
                   localImportEntries_.forEach(function (entry, index) {
                     chain = chain.then(function () {
                       setStatus(
-                        'Загрузка ' +
+                        'Загрузка: ' +
                           (index + 1) +
                           '/' +
-                          localImportEntries_.length +
-                          ': ' +
-                          entry.relativePath
+                          localImportEntries_.length
                       );
                       return readFileAsBase64_(entry.file).then(function (base64Data) {
                         var dir = parentDirOfRelativePath_(entry.relativePath);
@@ -3696,7 +3994,9 @@
                           fileName: fileNameOfRelativePath_(entry.relativePath),
                           mimeType: entry.file.type || 'application/octet-stream',
                           base64Data: base64Data,
-                          sizeBytes: entry.size
+                          sizeBytes: entry.size,
+                          jobId: jobId,
+                          relativePath: entry.relativePath
                         });
                       });
                     });
@@ -3705,15 +4005,13 @@
                 })
                 .then(function () {
                   btn.disabled = false;
-                  closeImportModal();
-                  reloadCatalogSnapshot_([state.folderId], function () {
-                    setStatus('Готово');
-                  });
                 })
                 .catch(function (err) {
                   btn.disabled = false;
-                  showImportMessage((err && err.message) || String(err), 'error');
-                  setStatus((err && err.message) || String(err));
+                  var msg = formatJobsBusyError_(err);
+                  showImportMessage(msg, 'error');
+                  setStatus(msg);
+                  showAppConfirm_(msg);
                 });
             });
         }
@@ -3721,20 +4019,29 @@
         function runDriveImportPayload_(state, btn, payload) {
           btn.disabled = true;
           showImportMessage('', '');
-          setStatus('Импорт…');
+          setStatus('Постановка импорта в очередь…');
 
           google.script.run
-            .withSuccessHandler(function () {
+            .withSuccessHandler(function (result) {
               btn.disabled = false;
               closeImportModal();
-              reloadCatalogSnapshot_([state.folderId], function () {
-                setStatus('Готово');
-              });
+              if (result && result.queued === false) {
+                reloadCatalogSnapshot_([state.folderId], function () {
+                  flashOperationDone_();
+                });
+                return;
+              }
+              var n = (result && result.fileCount) || 0;
+              setStatus('Импорт: 0/' + n);
+              startJobsPoller_([state.folderId]);
+              google.script.run.processCatalogJobs();
             })
             .withFailureHandler(function (err) {
               btn.disabled = false;
-              showImportMessage((err && err.message) || String(err), 'error');
-              setStatus((err && err.message) || String(err));
+              var msg = formatJobsBusyError_(err);
+              showImportMessage(msg, 'error');
+              setStatus(msg);
+              showAppConfirm_(msg);
             })
             .importFromDrive(payload);
         }
@@ -3742,7 +4049,7 @@
         function submitImport() {
           var state = panels[activePanelIndex];
           var scenarioInput = document.querySelector('input[name="import-scenario"]:checked');
-          var scenario = scenarioInput ? scenarioInput.value : 'files';
+          var scenario = scenarioInput ? scenarioInput.value : 'drive';
           var modeInput = document.querySelector('input[name="import-mode"]:checked');
           var mode = modeInput ? modeInput.value : 'copy';
           var btn = document.getElementById('import-submit');
@@ -3757,74 +4064,61 @@
             return;
           }
 
-          var payload = {
-            targetFolderId: state.folderId,
-            scenario: scenario,
-            mode: mode
-          };
-          var targetName = state.folderName || 'папку';
-
-          if (scenario === 'folder') {
-            var folderUrl = document.getElementById('import-folder-url').value.trim();
-            if (!folderUrl) {
-              showImportMessage('Укажите ссылку на папку.', 'error');
-              return;
-            }
-            confirmCatalogAction_('Импортировать папку Drive в «' + targetName + '»?')
-              .then(function (ok) {
-                if (!ok) {
-                  return null;
-                }
-                return showAppConfirm_(
-                  'Импорт папки Drive может занять время (лимит 30 файлов на сервере).\nПродолжить?'
-                );
-              })
-              .then(function (okHeavy) {
-                if (!okHeavy) {
-                  return;
-                }
-                payload.driveFolderUrl = folderUrl;
-                payload.driveUrl = folderUrl;
-                runDriveImportPayload_(state, btn, payload);
-              });
-            return;
-          }
-
+          var items = collectImportDrivePayloadItems_();
           var raw = document.getElementById('import-drive-urls').value.trim();
-          if (!raw) {
-            showImportMessage('Укажите хотя бы одну ссылку на файл.', 'error');
-            return;
-          }
           var urls = raw
-            .split(/\r?\n/)
-            .map(function (line) {
-              return line.trim();
-            })
-            .filter(Boolean);
-          if (!urls.length) {
-            showImportMessage('Укажите хотя бы одну ссылку на файл.', 'error');
+            ? raw
+                .split(/\r?\n/)
+                .map(function (line) {
+                  return line.trim();
+                })
+                .filter(Boolean)
+            : [];
+          if (!items.length && !urls.length) {
+            showImportMessage('Выберите объекты поиском или укажите ссылки.', 'error');
             return;
           }
-          if (urls.length > 30) {
-            showImportMessage('Не больше 30 файлов за один импорт с Drive.', 'error');
+          if (urls.length > 500) {
+            showImportMessage('Не больше 500 ссылок за одну очередь.', 'error');
             return;
           }
 
-          confirmCatalogAction_(
-            'Импортировать ' + urls.length + ' файл(ов) Drive в «' + targetName + '»?'
-          )
-            .then(function (ok) {
-              if (!ok) {
-                return null;
-              }
-              return confirmHeavyOperation_(urls.length, 0);
+          var targetName = state.folderName || 'папку';
+          var preflightPayload = {
+            items: items,
+            driveUrls: urls
+          };
+          btn.disabled = true;
+          showImportMessage('', '');
+          setStatus('Подсчёт файлов…');
+          gasRun_('preflightDriveImport', preflightPayload)
+            .then(function (pre) {
+              return confirmOperationWithWeight_(
+                'Импортировать с Drive в «' +
+                  targetName +
+                  '».\nФайлы и папки — одна очередь Jobs.',
+                pre && pre.fileCount,
+                pre && pre.totalBytes
+              );
             })
             .then(function (okHeavy) {
               if (!okHeavy) {
+                btn.disabled = false;
+                setStatus('Готово');
                 return;
               }
-              payload.driveUrls = urls;
-              runDriveImportPayload_(state, btn, payload);
+              runDriveImportPayload_(state, btn, {
+                targetFolderId: state.folderId,
+                scenario: 'drive',
+                mode: mode,
+                items: items,
+                driveUrls: urls
+              });
+            })
+            .catch(function (err) {
+              btn.disabled = false;
+              setStatus('Готово');
+              showImportMessage(formatJobsBusyError_(err) || String(err), 'error');
             });
         }
 
@@ -3999,8 +4293,9 @@
               saveBtn.disabled = false;
               var folderId = panels[aclEditorState.panelIndex].folderId;
               closeAclModal();
-              reloadCatalogSnapshot_([folderId]);
-              setStatus('Права сохранены');
+              reloadCatalogSnapshot_([folderId], function () {
+                flashOperationDone_();
+              });
             })
             .withFailureHandler(function (err) {
               saveBtn.disabled = false;
