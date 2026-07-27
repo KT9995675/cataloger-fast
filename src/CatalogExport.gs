@@ -1,7 +1,6 @@
 /**
  * §18 — выгрузка структуры каталога в новую Google Таблицу (только Управляющий).
- * Колонка Иконка (CellImage, Drive/gstatic по MIME) + Тип + L1…L10 + права;
- * нативный outline папок (развёрнут).
+ * Иконка + Тип + Размер (МБ) + L1…L10 + права; outline; бело-голубое чередование.
  *
  * @returns {{
  *   ok: true,
@@ -27,10 +26,21 @@ function exportCatalogStructure() {
     throw catalogError_('FOLDER_NOT_FOUND', 'Корневая папка каталога не найдена.');
   }
 
+  var treeRows = [];
+  Object.keys(engine.foldersById || {}).forEach(function (id) {
+    treeRows.push(engine.foldersById[id]);
+  });
+  var fileRows = [];
+  Object.keys(engine.filesByCatalogId || {}).forEach(function (id) {
+    fileRows.push(engine.filesByCatalogId[id]);
+  });
+  var folderSizes = buildFolderSizeIndex_(treeRows, fileRows);
+
   var ownerEmails = collectCatalogOwnerEmails_();
   var header = [
     'Иконка',
     'Тип',
+    'Размер',
     'L1',
     'L2',
     'L3',
@@ -57,6 +67,7 @@ function exportCatalogStructure() {
     [],
     true,
     ownerEmails,
+    folderSizes,
     dataRows,
     groups,
     iconCache
@@ -76,12 +87,13 @@ function exportCatalogStructure() {
   sheet.getRange(1, 1, 1, header.length).setFontWeight('bold');
   sheet.setColumnWidth(1, 36);
   sheet.setColumnWidth(2, 56);
-  for (var c = 3; c <= 12; c++) {
+  sheet.setColumnWidth(3, 72);
+  for (var c = 4; c <= 13; c++) {
     sheet.setColumnWidth(c, 28);
   }
-  sheet.setColumnWidth(13, 320);
+  sheet.setColumnWidth(14, 320);
   try {
-    sheet.autoResizeColumns(14, header.length - 13);
+    sheet.autoResizeColumns(15, header.length - 14);
   } catch (e) {
     // ignore
   }
@@ -92,6 +104,8 @@ function exportCatalogStructure() {
   } catch (e2) {
     // ignore if no groups
   }
+  // Banding после outline — applyRowBanding с CellImage часто молча не рисует.
+  applyExportRowBanding_(sheet, dataRows.length, header.length);
 
   return {
     ok: true,
@@ -134,6 +148,7 @@ function collectCatalogOwnerEmails_() {
  * @param {string[]} pathNames имена предков (без текущего)
  * @param {boolean} isRoot
  * @param {Object.<string, boolean>} ownerEmails
+ * @param {Object.<string, number>} folderSizes bytes by folder_id
  * @param {Array<Array<*>>} outRows
  * @param {Array<{ start: number, end: number }>} groups 0-based indices in outRows
  * @param {Object.<string, Object>} iconCache
@@ -145,6 +160,7 @@ function walkExportFolder_(
   pathNames,
   isRoot,
   ownerEmails,
+  folderSizes,
   outRows,
   groups,
   iconCache
@@ -162,6 +178,7 @@ function walkExportFolder_(
         'Папка'
       ),
       typeLabel: 'DIR',
+      sizeMb: exportSizeMb_(folderSizes[folderId] || 0),
       depth: depth,
       name: name,
       pathNames: pathNames,
@@ -194,6 +211,7 @@ function walkExportFolder_(
       childPath,
       false,
       ownerEmails,
+      folderSizes,
       outRows,
       groups,
       iconCache
@@ -210,6 +228,7 @@ function walkExportFolder_(
       id: catalogId,
       name: String(file.display_name || catalogId),
       mimeType: String(file.mime_type || ''),
+      sizeBytes: parseNumber_(file.size_bytes) || 0,
       approved: parseBoolean_(file.approved),
       approvedBy: String(file.approved_by || '').trim()
     });
@@ -233,6 +252,7 @@ function walkExportFolder_(
           typeLabel
         ),
         typeLabel: typeLabel,
+        sizeMb: exportSizeMb_(file.sizeBytes),
         depth: depth + 1,
         name: file.name,
         pathNames: childPath,
@@ -247,6 +267,44 @@ function walkExportFolder_(
   if (!isRoot && childrenEnd >= childrenStart) {
     groups.push({ start: childrenStart, end: childrenEnd });
   }
+}
+
+/**
+ * Байты → МБ (1024²), 2 знака; без суффикса — для формул Sheets.
+ *
+ * @param {number} bytes
+ * @returns {number}
+ */
+function exportSizeMb_(bytes) {
+  var n = Math.max(0, Number(bytes) || 0);
+  return Math.round((n / (1024 * 1024)) * 100) / 100;
+}
+
+/**
+ * Чередование белый / голубой на строках данных (шапка без заливки).
+ * Явный setBackgrounds — надёжнее applyRowBanding при CellImage в колонке A.
+ * getRange(row, column, numRows, numColumns).
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number} dataRowCount
+ * @param {number} columnCount
+ */
+function applyExportRowBanding_(sheet, dataRowCount, columnCount) {
+  if (!dataRowCount || dataRowCount < 1 || !columnCount) {
+    return;
+  }
+  var white = '#FFFFFF';
+  var blue = '#DDEBF7';
+  var colors = [];
+  for (var r = 0; r < dataRowCount; r++) {
+    var fill = r % 2 === 0 ? white : blue;
+    var row = [];
+    for (var c = 0; c < columnCount; c++) {
+      row.push(fill);
+    }
+    colors.push(row);
+  }
+  sheet.getRange(2, 1, dataRowCount, columnCount).setBackgrounds(colors);
 }
 
 /**
@@ -291,6 +349,7 @@ function applyExportRowGroups_(sheet, groups, dataRowCount) {
  * @param {{
  *   icon: Object,
  *   typeLabel: string,
+ *   sizeMb: number,
  *   depth: number,
  *   name: string,
  *   pathNames: string[],
@@ -309,7 +368,12 @@ function buildExportStructureRow_(spec) {
   }
   levels[col] = cellName;
 
-  return [spec.icon, spec.typeLabel]
+  var sizeMb = Number(spec.sizeMb);
+  if (!isFinite(sizeMb) || sizeMb < 0) {
+    sizeMb = 0;
+  }
+
+  return [spec.icon, spec.typeLabel, sizeMb]
     .concat(levels)
     .concat([
       '',
