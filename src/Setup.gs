@@ -8,6 +8,7 @@ function revokeTemporaryDriveAccess() {
 
 /**
  * §15 — полная инициализация каталога (один раз).
+ * Для шаблона / «Первый запуск» с очисткой хвостов — `runFirstLaunch`.
  *
  * @param {{ driveFolderUrl: string, virtualRootName: string }} input
  * @returns {{
@@ -33,6 +34,62 @@ function setupCatalog(input) {
   }
 
   assertSetupAllowed_();
+  return completeCatalogSetup_(driveFolderUrl, virtualRootName);
+}
+
+/**
+ * §15.5 — «Первый запуск»: очистка хвостов шаблона + setup.
+ * Только владелец таблицы; только если каталог ещё не инициализирован.
+ *
+ * @param {{ driveFolderUrl: string, virtualRootName: string }} input
+ * @returns {{
+ *   ok: true,
+ *   schemaVersion: string,
+ *   catalogRootFolderId: string,
+ *   catalogVirtualRootFolderId: string,
+ *   trashFolderId: string,
+ *   controllerEmail: string,
+ *   setupAt: string,
+ *   cleared: boolean
+ * }}
+ */
+function runFirstLaunch(input) {
+  input = input || {};
+  var driveFolderUrl = String(input.driveFolderUrl || '').trim();
+  var virtualRootName = String(input.virtualRootName || '').trim();
+
+  if (!driveFolderUrl) {
+    throw catalogError_('INVALID_INPUT', 'Укажите ссылку на пустую папку Google Drive.');
+  }
+  if (!virtualRootName) {
+    throw catalogError_('INVALID_INPUT', 'Укажите имя корневой папки каталога.');
+  }
+
+  var controllerEmail = assertSpreadsheetOwner_();
+  var state = isCatalogInitialized();
+  if (state.initialized) {
+    throw catalogError_(
+      'CATALOG_ALREADY_INITIALIZED',
+      'Каталог уже инициализирован. «Первый запуск» недоступен.'
+    );
+  }
+
+  // Проверяем папку до очистки хвостов шаблона.
+  validateAndResolveDriveFolder_(driveFolderUrl, controllerEmail);
+
+  clearCatalogDataForFirstLaunch_();
+  var result = completeCatalogSetup_(driveFolderUrl, virtualRootName);
+  result.cleared = true;
+  result.controllerEmail = result.controllerEmail || controllerEmail;
+  return result;
+}
+
+/**
+ * @param {string} driveFolderUrl
+ * @param {string} virtualRootName
+ * @returns {Object}
+ */
+function completeCatalogSetup_(driveFolderUrl, virtualRootName) {
   var controllerEmail = assertSpreadsheetOwner_();
 
   var sheetsResult = setupCatalogSheets();
@@ -53,6 +110,7 @@ function setupCatalog(input) {
   });
   ensureDailyRevokeTrigger_();
   ensureCatalogJobsTrigger_();
+  bumpCatalogRev_();
 
   return {
     ok: true,
@@ -64,6 +122,39 @@ function setupCatalog(input) {
     setupAt: now.toISOString(),
     sheets: sheetsResult
   };
+}
+
+/**
+ * Очищает строки данных листов каталога и DocumentProperties (для шаблона).
+ * Не вызывать для уже инициализированного каталога.
+ */
+function clearCatalogDataForFirstLaunch_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var schema = getCatalogSheetSchema_();
+  Object.keys(schema).forEach(function (sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      return;
+    }
+    var lastRow = sheet.getLastRow();
+    var lastCol = Math.max(sheet.getLastColumn(), schema[sheetName].length, 1);
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
+    }
+    // Ensure header row matches schema
+    sheet.getRange(1, 1, 1, schema[sheetName].length).setValues([schema[sheetName]]);
+    if (sheet.getFrozenRows() < 1) {
+      sheet.setFrozenRows(1);
+    }
+  });
+
+  var props = PropertiesService.getDocumentProperties();
+  props.deleteProperty(PROP_SCHEMA_VERSION_);
+  props.deleteProperty(PROP_CATALOG_ROOT_FOLDER_ID_);
+  props.deleteProperty(PROP_CATALOG_VIRTUAL_ROOT_FOLDER_ID_);
+  props.deleteProperty(PROP_CONTROLLER_EMAIL_);
+  props.deleteProperty(PROP_SETUP_AT_);
+  props.deleteProperty(PROP_CATALOG_REV_);
 }
 
 function assertSetupAllowed_() {
@@ -190,8 +281,32 @@ function writeVirtualTreeBootstrap_(virtualRootFolderId, virtualRootName, trashF
     throw catalogError_('CATALOG_INCONSISTENT', 'Tree already contains bootstrap folders.');
   }
 
-  sheet.appendRow([virtualRootFolderId, '', virtualRootName, now, false]);
-  sheet.appendRow([trashFolderId, virtualRootFolderId, '## Корзина', now, true]);
+  var headers = getCatalogSheetSchema_().Tree;
+  var rootRow = [];
+  var trashRow = [];
+  headers.forEach(function (h) {
+    if (h === 'folder_id') {
+      rootRow.push(virtualRootFolderId);
+      trashRow.push(trashFolderId);
+    } else if (h === 'parent_folder_id') {
+      rootRow.push('');
+      trashRow.push(virtualRootFolderId);
+    } else if (h === 'name') {
+      rootRow.push(virtualRootName);
+      trashRow.push('## Корзина');
+    } else if (h === 'folder_created_at') {
+      rootRow.push(now);
+      trashRow.push(now);
+    } else if (h === 'is_system') {
+      rootRow.push(false);
+      trashRow.push(true);
+    } else {
+      rootRow.push('');
+      trashRow.push('');
+    }
+  });
+  sheet.appendRow(rootRow);
+  sheet.appendRow(trashRow);
 }
 
 /**

@@ -871,13 +871,14 @@
   <body>
     <div id="screen-loading" class="loading">Загрузка…</div>
 
-    <div id="screen-setup" class="wrap hidden">
-      <h1>Инициализация каталога</h1>
-      <p class="sub">
-        Создайте на Google Drive пустую папку для файлов каталога, затем укажите ссылку и имя корневой папки в дереве.
-      </p>
-      <p class="user-line" id="setup-user"></p>
-      <div class="card">
+    <div id="first-launch-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <h2>Первый запуск</h2>
+        <p class="sub" style="margin-top:0;">
+          Настройте каталог для этой таблицы. Будут очищены хвосты данных шаблона (если есть),
+          владельцем станет ваш аккаунт (владелец таблицы).
+        </p>
+        <p class="sub" id="setup-user" style="margin-top:0;"></p>
         <form id="setup-form">
           <label for="driveFolderUrl">Ссылка на пустую папку Google Drive</label>
           <input
@@ -895,15 +896,19 @@
             placeholder="Например: Каталог"
             required
           />
-          <button type="submit" id="setup-submit">Инициализировать</button>
+          <div id="setup-msg" class="msg"></div>
+          <div class="modal-actions">
+            <button type="submit" id="setup-submit">Запустить</button>
+          </div>
         </form>
-        <div id="setup-msg" class="msg"></div>
       </div>
     </div>
 
+    <div id="screen-setup" class="wrap hidden" aria-hidden="true"></div>
+
     <div id="screen-not-owner" class="wrap hidden">
       <h1>Каталог не настроен</h1>
-      <p class="sub">Обратитесь к владельцу таблицы — он должен один раз инициализировать каталогизатор.</p>
+      <p class="sub">Обратитесь к владельцу таблицы — он должен один раз выполнить «Первый запуск».</p>
       <div class="card msg info" style="display: block">Вы вошли как <span id="guest-email"></span></div>
     </div>
 
@@ -5817,24 +5822,31 @@
         function routeBootstrap(data) {
           var catalog = data.catalog;
           var email = data.userEmail || '';
+          var firstLaunchModal = document.getElementById('first-launch-modal');
+          if (firstLaunchModal) {
+            firstLaunchModal.classList.add('hidden');
+          }
 
           if (catalog.initialized) {
             initMainApp(data);
             return;
           }
 
-          if (data.setupBlocked) {
-            showScreen('inconsistent');
-            document.getElementById('inconsistent-msg').textContent =
-              'Каталог в несогласованном состоянии (листы и настройки не совпадают).';
+          if (data.needsFirstLaunch || (data.needsSetup && data.isSpreadsheetOwner)) {
+            document.getElementById('setup-user').textContent = email
+              ? 'Владелец таблицы: ' + email
+              : '';
+            showScreen('loading');
+            if (firstLaunchModal) {
+              firstLaunchModal.classList.remove('hidden');
+            }
             return;
           }
 
-          if (data.needsSetup && data.isSpreadsheetOwner) {
-            document.getElementById('setup-user').textContent = email
-              ? 'Владелец: ' + email
-              : '';
-            showScreen('setup');
+          if (data.setupBlocked) {
+            showScreen('inconsistent');
+            document.getElementById('inconsistent-msg').textContent =
+              'Каталог ещё не настроен или в несогласованном состоянии. Обратитесь к владельцу таблицы.';
             return;
           }
 
@@ -5855,6 +5867,10 @@
 
           google.script.run
             .withSuccessHandler(function () {
+              var modal = document.getElementById('first-launch-modal');
+              if (modal) {
+                modal.classList.add('hidden');
+              }
               google.script.run
                 .withSuccessHandler(routeBootstrap)
                 .withFailureHandler(onBootstrapError)
@@ -5864,7 +5880,7 @@
               btn.disabled = false;
               showSetupMessage((err && err.message) || String(err), 'error');
             })
-            .setupCatalog(payload);
+            .runFirstLaunch(payload);
         });
 
         google.script.run

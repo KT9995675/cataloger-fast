@@ -6,6 +6,7 @@
  *   isSpreadsheetOwner: boolean,
  *   catalog: ReturnType<typeof isCatalogInitialized>,
  *   needsSetup: boolean,
+ *   needsFirstLaunch: boolean,
  *   setupBlocked: boolean,
  *   virtualRootFolderId: (string|null),
  *   loginRole: (('user'|'manager'|'controller')|null),
@@ -22,10 +23,14 @@ function getWebAppBootstrap() {
   }
   var catalog = isCatalogInitialized();
   var hasPartialProps = hasPartialCatalogProps_(catalog);
+  var isOwner = isSpreadsheetOwnerEmail_(email);
 
-  var needsSetup = !catalog.initialized && !hasPartialProps;
+  // §15.5 — владелец может «Первый запуск» даже при хвостах шаблона (не initialized).
+  var needsFirstLaunch = !catalog.initialized && isOwner;
+  var needsSetup = needsFirstLaunch;
   var setupBlocked =
     !catalog.initialized &&
+    !isOwner &&
     (hasPartialProps ||
       (!catalog.sheetsReady && hasPartialProps) ||
       (!!catalog.schemaVersion && catalog.schemaVersion !== SCHEMA_VERSION_));
@@ -39,7 +44,6 @@ function getWebAppBootstrap() {
   var controllerEmail = catalog.initialized
     ? PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) || ''
     : '';
-  var isOwner = isSpreadsheetOwnerEmail_(email);
   var isController =
     !!email &&
     !!controllerEmail &&
@@ -50,9 +54,10 @@ function getWebAppBootstrap() {
 
   return {
     userEmail: email,
-    isSpreadsheetOwner: isSpreadsheetOwnerEmail_(email),
+    isSpreadsheetOwner: isOwner,
     catalog: catalog,
     needsSetup: needsSetup,
+    needsFirstLaunch: needsFirstLaunch,
     setupBlocked: setupBlocked,
     virtualRootFolderId: virtualRootFolderId,
     loginRole: loginRole,
