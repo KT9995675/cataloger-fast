@@ -1,6 +1,7 @@
 /**
  * §9.6 — очередь фоновых Jobs + планировщик (time-driven trigger).
- * Импорт Drive / локальный: всегда через Jobs; одновременно только одна активная очередь.
+ * Импорт Drive / локальный / очистка корзины / копирование F5: через Jobs;
+ * одновременно только одна активная очередь.
  */
 
 /** @const {string} */
@@ -82,6 +83,10 @@ function processCatalogJobs() {
     } else if (type === 'import_upload') {
       // Локальный upload кормит клиент; воркер только обновляет сообщение / завершает пустые.
       processed = processImportUploadJobIdle_(job);
+    } else if (type === 'empty_trash') {
+      processed = processEmptyTrashJobChunk_(job);
+    } else if (type === 'copy_catalog') {
+      processed = processCopyCatalogJobChunk_(job);
     } else {
       failCatalogJob_(job.job_id, 'Неизвестный тип задачи: ' + type);
       return { ok: true, processed: 0, done: false, busy: false };
@@ -185,8 +190,16 @@ function enqueueCatalogJob_(jobType, payload, createdBy, catalogId) {
 function buildInitialJobProgressMessage_(jobType, payload) {
   var items = (payload && payload.items) || [];
   var n = items.length;
-  if (String(jobType) === 'import_upload') {
+  var t = String(jobType || '');
+  if (t === 'import_upload') {
     return 'Загрузка: 0/' + n;
+  }
+  if (t === 'empty_trash') {
+    var total = n || ((payload && payload.folderIds && payload.folderIds.length) ? 1 : 0);
+    return 'Очистка: 0/' + total;
+  }
+  if (t === 'copy_catalog') {
+    return 'Копирование: 0/' + n;
   }
   return 'Импорт: 0/' + n;
 }
@@ -321,6 +334,160 @@ function saveJobPayloadProgress_(jobId, payload, progress, message, markDone) {
     fields.completed_at = new Date();
   }
   patchCatalogJobRow_(jobId, fields);
+  if (markDone) {
+    bumpCatalogRev_();
+  }
+}
+
+/**
+ * Чанк F5: Drive makeCopy для pending-файлов; Files обновляются batch.
+ *
+ * @param {Object} job
+ * @returns {number} processed items
+ */
+function processCopyCatalogJobChunk_(job) {
+  var payload = parseJobPayload_(job);
+  var items = payload.items || [];
+  if (!items.length) {
+    saveJobPayloadProgress_(job.job_id, payload, 100, 'Копирование: 0/0', true);
+    return 0;
+  }
+
+  var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
+  var batch = beginFilesUpdateBatch_();
+  var processed = 0;
+
+  for (var i = 0; i < items.length && processed < JOBS_CHUNK_SIZE_; i++) {
+    var item = items[i];
+    if (item.done) {
+      continue;
+    }
+    try {
+      var sourceDriveFile = DriveApp.getFileById(String(item.sourceDriveFileId || ''));
+      var driveCopy = sourceDriveFile.makeCopy(
+        String(item.displayName || sourceDriveFile.getName()),
+        catalogRootFolder
+      );
+      patchFilesBatchRow_(batch, item.catalogId, {
+        fileId: driveCopy.getId(),
+        sizeBytes: driveCopy.getSize(),
+        driveModifiedAt: driveCopy.getLastUpdated(),
+        mimeType: getDriveFileMimeType_(driveCopy),
+        status: 'ready',
+        lastError: ''
+      });
+    } catch (eCopy) {
+      patchFilesBatchRow_(batch, item.catalogId, {
+        status: 'failed',
+        lastError: String((eCopy && eCopy.message) || eCopy || 'Ошибка копирования')
+      });
+    }
+    item.done = true;
+    processed += 1;
+  }
+
+  commitFilesUpdateBatch_(batch);
+
+  var doneCount = 0;
+  items.forEach(function (it) {
+    if (it.done) {
+      doneCount += 1;
+    }
+  });
+
+  var message = 'Копирование: ' + doneCount + '/' + items.length;
+  saveJobPayloadProgress_(
+    job.job_id,
+    payload,
+    (doneCount / items.length) * 100,
+    message,
+    doneCount >= items.length
+  );
+  return processed;
+}
+
+/**
+ * Чанк очистки корзины: Drive trashed + удаление строк Files/ACL; папки Tree — в конце.
+ *
+ * @param {Object} job
+ * @returns {number} processed items
+ */
+function processEmptyTrashJobChunk_(job) {
+  var payload = parseJobPayload_(job);
+  var items = payload.items || [];
+  var folderIds = payload.folderIds || [];
+  var progressTotal = items.length || (folderIds.length ? 1 : 0);
+
+  if (!progressTotal) {
+    saveJobPayloadProgress_(job.job_id, payload, 100, 'Очистка: 0/0', true);
+    return 0;
+  }
+
+  var processed = 0;
+  var chunkCatalogIds = [];
+  var driveErrors = Number(payload.driveErrors) || 0;
+
+  for (var i = 0; i < items.length && processed < JOBS_CHUNK_SIZE_; i++) {
+    var item = items[i];
+    if (item.done) {
+      continue;
+    }
+    if (item.driveFileId) {
+      try {
+        moveDriveFileToTrash_(item.driveFileId);
+      } catch (eDrive) {
+        driveErrors += 1;
+      }
+    }
+    item.done = true;
+    chunkCatalogIds.push(item.catalogId);
+    processed += 1;
+  }
+
+  payload.driveErrors = driveErrors;
+
+  if (chunkCatalogIds.length) {
+    removeCatalogFileRows_(chunkCatalogIds);
+    removeAclForTrashObjects_(chunkCatalogIds, []);
+  }
+
+  var doneCount = 0;
+  items.forEach(function (it) {
+    if (it.done) {
+      doneCount += 1;
+    }
+  });
+
+  if (items.length && doneCount < items.length) {
+    var midProgress = (doneCount / items.length) * (folderIds.length ? 95 : 100);
+    saveJobPayloadProgress_(
+      job.job_id,
+      payload,
+      midProgress,
+      'Очистка: ' + doneCount + '/' + items.length,
+      false
+    );
+    return processed;
+  }
+
+  if (!payload.foldersDone) {
+    if (folderIds.length) {
+      removeCatalogTreeRows_(folderIds);
+      removeAclForTrashObjects_([], folderIds);
+    }
+    payload.foldersDone = true;
+  }
+
+  var finalDone = items.length || 1;
+  var finalTotal = items.length || 1;
+  saveJobPayloadProgress_(
+    job.job_id,
+    payload,
+    100,
+    'Очистка: ' + finalDone + '/' + finalTotal,
+    true
+  );
+  return processed || 1;
 }
 
 /**

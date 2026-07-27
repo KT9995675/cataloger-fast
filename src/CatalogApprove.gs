@@ -74,6 +74,10 @@ function approveCatalogFiles(input) {
     });
   }
 
+  if (approved.length) {
+    bumpCatalogRev_();
+  }
+
   return {
     ok: true,
     approved: approved,

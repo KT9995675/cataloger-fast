@@ -180,6 +180,7 @@ function importDriveFiles(input) {
   );
   ensureCatalogJobsTrigger_();
   kickCatalogJobsProcessing_();
+  bumpCatalogRev_();
 
   return {
     ok: true,
@@ -365,6 +366,7 @@ function importDriveFolder(input) {
   );
   ensureCatalogJobsTrigger_();
   kickCatalogJobsProcessing_();
+  bumpCatalogRev_();
 
   return {
     ok: true,
@@ -819,6 +821,69 @@ function appendCatalogFileRowsBatch_(rows) {
       last_error: row.lastError || '',
       source_file_id: row.sourceFileId || '',
       mime_type: row.mimeType || '',
+      acl_editors: row.aclEditors || '',
+      acl_commenters: row.aclCommenters || '',
+      acl_readers: row.aclReaders || ''
+    };
+    var line = [];
+    for (var c = 0; c < headers.length; c++) {
+      var key = headers[c];
+      line.push(Object.prototype.hasOwnProperty.call(byHeader, key) ? byHeader[key] : '');
+    }
+    return line;
+  });
+
+  var startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, lines.length, headers.length).setValues(lines);
+  SpreadsheetApp.flush();
+}
+
+/**
+ * Пакетная запись строк Tree (один setValues).
+ *
+ * @param {Array<{
+ *   folderId: string,
+ *   parentFolderId: string,
+ *   name: string,
+ *   folderCreatedAt: *,
+ *   isSystem?: boolean,
+ *   aclEditors?: string,
+ *   aclCommenters?: string,
+ *   aclReaders?: string
+ * }>} rows
+ */
+function appendTreeFolderRowsBatch_(rows) {
+  if (!rows || !rows.length) {
+    return;
+  }
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Tree');
+  if (!sheet) {
+    throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: Tree');
+  }
+
+  ensureCatalogSchemaUpToDate_();
+
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var headers = sheet
+    .getRange(1, 1, 1, lastCol)
+    .getValues()[0]
+    .map(function (h) {
+      return String(h).trim();
+    });
+  while (headers.length && !headers[headers.length - 1]) {
+    headers.pop();
+  }
+  if (!headers.length) {
+    throw catalogError_('SCHEMA_MISMATCH', 'Tree sheet has no headers.');
+  }
+
+  var lines = rows.map(function (row) {
+    var byHeader = {
+      folder_id: row.folderId,
+      parent_folder_id: row.parentFolderId,
+      name: row.name,
+      folder_created_at: row.folderCreatedAt,
+      is_system: row.isSystem === true,
       acl_editors: row.aclEditors || '',
       acl_commenters: row.aclCommenters || '',
       acl_readers: row.aclReaders || ''

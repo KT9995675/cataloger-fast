@@ -2,16 +2,16 @@
 var TRASH_FOLDER_ID_EMPTY_ = '__TRASH__';
 
 /**
- * §13.4 — очистить корзину: все объекты в `__TRASH__` (и вложенные папки),
- * файлы на Drive переносятся в **корзину Google Drive** (не безвозвратное DELETE),
- * строки убираются из Tree / Files / ACL.
+ * §13.4 — очистить корзину через Jobs (`empty_trash`):
+ * файлы → корзина Google Drive; строки Tree/Files/ACL — в воркере чанками.
  * Только роль входа **Управляющий**.
  *
  * @returns {{
  *   ok: true,
- *   deletedFiles: number,
- *   deletedFolders: number,
- *   driveErrors: number
+ *   queued: boolean,
+ *   jobId: (string|undefined),
+ *   fileCount: number,
+ *   folderCount: number
  * }}
  */
 function emptyCatalogTrash() {
@@ -23,6 +23,7 @@ function emptyCatalogTrash() {
   }
 
   assertIsCatalogController_(userEmail);
+  assertNoActiveCatalogJobs_();
 
   var engine = createAclEngine_();
   if (!engine.foldersById[TRASH_FOLDER_ID_EMPTY_]) {
@@ -30,8 +31,7 @@ function emptyCatalogTrash() {
   }
 
   var trashFolderIds = collectTrashSubtreeFolderIds_(engine);
-  var fileCatalogIds = [];
-  var driveFileIds = [];
+  var items = [];
 
   Object.keys(engine.filesByCatalogId).forEach(function (catalogId) {
     var file = engine.filesByCatalogId[catalogId];
@@ -39,37 +39,46 @@ function emptyCatalogTrash() {
     if (!trashFolderIds[folderId]) {
       return;
     }
-    fileCatalogIds.push(catalogId);
-    var driveId = String(file.file_id || '').trim();
-    if (driveId) {
-      driveFileIds.push(driveId);
-    }
+    items.push({
+      catalogId: catalogId,
+      driveFileId: String(file.file_id || '').trim(),
+      done: false
+    });
   });
 
   var folderIdsToDelete = Object.keys(trashFolderIds).filter(function (id) {
     return id !== TRASH_FOLDER_ID_EMPTY_;
   });
 
-  var driveErrors = 0;
-  driveFileIds.forEach(function (driveId) {
-    try {
-      moveDriveFileToTrash_(driveId);
-    } catch (e) {
-      driveErrors += 1;
-    }
-  });
+  if (!items.length && !folderIdsToDelete.length) {
+    return {
+      ok: true,
+      queued: false,
+      fileCount: 0,
+      folderCount: 0
+    };
+  }
 
-  removeCatalogFileRows_(fileCatalogIds);
-  removeCatalogTreeRows_(folderIdsToDelete);
-  removeAclForTrashObjects_(fileCatalogIds, folderIdsToDelete);
+  var payload = {
+    items: items,
+    folderIds: folderIdsToDelete,
+    foldersDone: false,
+    driveErrors: 0
+  };
+
+  var jobId = enqueueCatalogJob_('empty_trash', payload, userEmail, '');
+  kickCatalogJobsProcessing_();
 
   return {
     ok: true,
-    deletedFiles: fileCatalogIds.length,
-    deletedFolders: folderIdsToDelete.length,
-    driveErrors: driveErrors
+    queued: true,
+    jobId: jobId,
+    fileCount: items.length,
+    folderCount: folderIdsToDelete.length
   };
 }
+
+/* <!-- OLD: emptyCatalogTrash — синхронный wipe Drive+Sheets без Jobs / прогресса N/M --> */
 
 /**
  * Содержимое корзины для confirm в UI (без удаления).

@@ -122,7 +122,8 @@ function getCatalogSnapshot() {
   return {
     virtualRootFolderId: getVirtualRootFolderId_(),
     folders: folders,
-    files: files
+    files: files,
+    catalogRev: getCatalogRev_()
   };
 }
 

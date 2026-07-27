@@ -1,9 +1,141 @@
 /**
- * §9.12 — поиск на Drive по имени + единый импорт файлов и папок.
+ * §9.12 — поиск на Drive по имени + навигатор папок + единый импорт файлов и папок.
  */
 
 /** @const {number} */
 var DRIVE_IMPORT_SEARCH_PAGE_SIZE_ = 20;
+
+/** @const {string} */
+var DRIVE_FOLDER_MIME_ = 'application/vnd.google-apps.folder';
+
+/**
+ * Список содержимого папки Drive пользователя (навигатор импорта, §2.5).
+ * MVP: «Мой диск» (`root`); Shared drives / «Доступные мне» — позже.
+ *
+ * @param {{ folderId?: string, pageToken?: string }} input
+ * @returns {{
+ *   ok: true,
+ *   folderId: string,
+ *   folderName: string,
+ *   parentId: (string|null),
+ *   items: Array<{ id: string, name: string, kind: 'file'|'folder', mimeType: string }>,
+ *   nextPageToken: (string|null)
+ * }}
+ */
+function listDriveFolderForImport(input) {
+  assertCatalogReady_();
+
+  input = input || {};
+  var folderId = String(input.folderId || 'root').trim() || 'root';
+  var pageToken = String(input.pageToken || '').trim();
+
+  var userEmail = Session.getActiveUser().getEmail();
+  if (!userEmail) {
+    throw catalogError_('AUTH_REQUIRED', 'Google account email is required.');
+  }
+  var loginRole = getLoginRoleForUser_(userEmail);
+  assertCanRunCatalogOperations_(loginRole);
+
+  var token = ScriptApp.getOAuthToken();
+  var folderName = 'Мой диск';
+  var parentId = null;
+  var resolvedFolderId = folderId;
+
+  if (folderId !== 'root') {
+    var meta = driveImportFetchJson_(
+      'https://www.googleapis.com/drive/v3/files/' +
+        encodeURIComponent(folderId) +
+        '?fields=' +
+        encodeURIComponent('id,name,mimeType,parents') +
+        '&supportsAllDrives=true',
+      token
+    );
+    if (String(meta.mimeType || '') !== DRIVE_FOLDER_MIME_) {
+      throw catalogError_('INVALID_INPUT', 'Указанный объект не является папкой Drive.');
+    }
+    folderName = String(meta.name || folderId);
+    resolvedFolderId = String(meta.id || folderId);
+    if (meta.parents && meta.parents.length) {
+      parentId = String(meta.parents[0]);
+    } else {
+      parentId = 'root';
+    }
+  }
+
+  var safeId = resolvedFolderId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var q = "'" + safeId + "' in parents and trashed = false";
+  var params = [
+    'q=' + encodeURIComponent(q),
+    'pageSize=' + DRIVE_IMPORT_SEARCH_PAGE_SIZE_,
+    'fields=' + encodeURIComponent('nextPageToken,files(id,name,mimeType)'),
+    'supportsAllDrives=true',
+    'includeItemsFromAllDrives=true',
+    'corpora=user',
+    'orderBy=' + encodeURIComponent('folder,name')
+  ];
+  if (pageToken) {
+    params.push('pageToken=' + encodeURIComponent(pageToken));
+  }
+
+  var body = driveImportFetchJson_(
+    'https://www.googleapis.com/drive/v3/files?' + params.join('&'),
+    token
+  );
+
+  var items = [];
+  (body.files || []).forEach(function (f) {
+    if (!f || !f.id) {
+      return;
+    }
+    var mime = String(f.mimeType || '');
+    if (mime === 'application/vnd.google-apps.shortcut') {
+      return;
+    }
+    var kind = mime === DRIVE_FOLDER_MIME_ ? 'folder' : 'file';
+    items.push({
+      id: String(f.id),
+      name: String(f.name || f.id),
+      kind: kind,
+      mimeType: mime
+    });
+  });
+
+  return {
+    ok: true,
+    folderId: folderId === 'root' ? 'root' : resolvedFolderId,
+    folderName: folderName,
+    parentId: parentId,
+    items: items,
+    nextPageToken: body.nextPageToken ? String(body.nextPageToken) : null
+  };
+}
+
+/**
+ * @param {string} url
+ * @param {string} token
+ * @returns {Object}
+ */
+function driveImportFetchJson_(url, token) {
+  var response = UrlFetchApp.fetch(url, {
+    method: 'get',
+    headers: { Authorization: 'Bearer ' + token },
+    muteHttpExceptions: true
+  });
+  var code = response.getResponseCode();
+  var bodyText = response.getContentText() || '{}';
+  var body;
+  try {
+    body = JSON.parse(bodyText);
+  } catch (e) {
+    throw catalogError_('DRIVE_LIST_FAILED', 'Не удалось разобрать ответ Drive.');
+  }
+  if (code < 200 || code >= 300) {
+    var errMsg =
+      (body.error && body.error.message) || 'Drive list failed (' + code + ')';
+    throw catalogError_('DRIVE_LIST_FAILED', errMsg);
+  }
+  return body;
+}
 
 /**
  * Поиск файлов и папок Drive по подстроке имени.
@@ -313,6 +445,7 @@ function importDriveSelection(input) {
   }
   if (!jobItems.length) {
     // только пустые папки — Jobs не нужен
+    bumpCatalogRev_();
     return {
       ok: true,
       queued: false,
@@ -338,6 +471,7 @@ function importDriveSelection(input) {
   );
   ensureCatalogJobsTrigger_();
   kickCatalogJobsProcessing_();
+  bumpCatalogRev_();
 
   return {
     ok: true,

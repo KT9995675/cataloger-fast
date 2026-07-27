@@ -176,6 +176,7 @@ function startLocalImportJob(input) {
     progress: 0,
     progress_message: 'Загрузка: 0/' + items.length
   });
+  bumpCatalogRev_();
 
   return {
     ok: true,

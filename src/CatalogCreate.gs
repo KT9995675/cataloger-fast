@@ -66,6 +66,7 @@ function createCatalogFolder(input) {
   };
   copyExplicitAclFromParentFolder_(engine, 'folder', folderId, parentFolderId);
   var acl = getEffectiveAclDisplayFromEngine_(engine, 'folder', folderId);
+  bumpCatalogRev_();
 
   return {
     ok: true,

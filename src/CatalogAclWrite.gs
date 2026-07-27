@@ -48,6 +48,7 @@ function setObjectAcl(input) {
       : [{ objectType: 'file', objectId: objectId }];
 
   replaceAclForObjects_(targetObjects, normalizedEntries, engine);
+  bumpCatalogRev_();
 
   return {
     ok: true,
@@ -498,4 +499,108 @@ function replaceAclForObjects_(targetObjects, entries, engine) {
   }
 
   syncAclCacheForObjects_(targetObjects, entries, engine);
+}
+
+/**
+ * Добавить ACL для новых объектов (без удаления старых строк) + один проход кэша.
+ * У каждого объекта свой список entries.
+ *
+ * @param {Array<{
+ *   objectType: 'folder'|'file',
+ *   objectId: string,
+ *   entries: Array<{ principalType: string, principalId: string, permissionLevel: string }>
+ * }>} objectAclList
+ * @param {Object} engine
+ */
+function appendAclForNewObjectsBatch_(objectAclList, engine) {
+  if (!objectAclList || !objectAclList.length) {
+    return;
+  }
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ACL');
+  if (!sheet) {
+    throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: ACL');
+  }
+
+  var values = sheet.getDataRange().getValues();
+  if (!values.length) {
+    throw catalogError_('SCHEMA_MISMATCH', 'ACL sheet has no header row.');
+  }
+
+  var headers = values[0].map(function (h) {
+    return String(h).trim();
+  });
+  var kept = values.slice();
+  var treeUpdates = [];
+  var fileUpdates = [];
+
+  objectAclList.forEach(function (item) {
+    var approved = false;
+    if (item.objectType === 'file') {
+      var file = engine.filesByCatalogId[item.objectId];
+      approved = file && parseBoolean_(file.approved);
+    }
+
+    var entries = item.entries || [];
+    for (var e = 0; e < entries.length; e++) {
+      var entry = entries[e];
+      var level = entry.permissionLevel;
+      if (approved && level === 'editor') {
+        level = 'commenter';
+      }
+      kept.push([
+        Utilities.getUuid(),
+        item.objectType,
+        item.objectId,
+        entry.principalType,
+        entry.principalId,
+        level
+      ]);
+    }
+
+    var labels = aclRowsToCacheLabels_(
+      engine,
+      entries.map(function (en) {
+        return {
+          principal_type: en.principalType,
+          principal_id: en.principalId,
+          permission_level: en.permissionLevel
+        };
+      }),
+      approved
+    );
+    var payload = {
+      aclEditors: formatAclCacheField_(labels.editors),
+      aclCommenters: formatAclCacheField_(labels.commenters),
+      aclReaders: formatAclCacheField_(labels.readers)
+    };
+    if (item.objectType === 'folder') {
+      treeUpdates.push({
+        folderId: item.objectId,
+        aclEditors: payload.aclEditors,
+        aclCommenters: payload.aclCommenters,
+        aclReaders: payload.aclReaders
+      });
+    } else {
+      fileUpdates.push({
+        catalogId: item.objectId,
+        aclEditors: payload.aclEditors,
+        aclCommenters: payload.aclCommenters,
+        aclReaders: payload.aclReaders
+      });
+    }
+  });
+
+  if (kept.length > values.length) {
+    sheet.getRange(1, 1, kept.length, headers.length).setValues(kept);
+    var lastRow = sheet.getLastRow();
+    if (lastRow > kept.length) {
+      sheet
+        .getRange(kept.length + 1, 1, lastRow - kept.length, headers.length)
+        .clearContent();
+    }
+  }
+
+  writeTreeAclCacheBatch_(treeUpdates);
+  writeFilesAclCacheBatch_(fileUpdates);
 }

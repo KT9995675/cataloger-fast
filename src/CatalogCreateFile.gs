@@ -90,6 +90,7 @@ function createCatalogFile(input) {
     approved: false
   };
   var fileAcl = getEffectiveAclDisplayFromEngine_(engine, 'file', catalogId);
+  bumpCatalogRev_();
 
   return {
     ok: true,

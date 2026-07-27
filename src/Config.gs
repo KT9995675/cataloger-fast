@@ -4,6 +4,8 @@ var PROP_CATALOG_ROOT_FOLDER_ID_ = 'CATALOG_ROOT_FOLDER_ID';
 var PROP_CATALOG_VIRTUAL_ROOT_FOLDER_ID_ = 'CATALOG_VIRTUAL_ROOT_FOLDER_ID';
 var PROP_CONTROLLER_EMAIL_ = 'CONTROLLER_EMAIL';
 var PROP_SETUP_AT_ = 'SETUP_AT';
+/** Счётчик версии каталога для клиентского poll (§2.7) — см. также CatalogRev.gs */
+var PROP_CATALOG_REV_ = 'CATALOG_REV';
 
 /**
  * §15.1, §15.3 — инициализирован ли каталог (листы + обязательные DocumentProperties).

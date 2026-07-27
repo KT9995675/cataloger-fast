@@ -104,6 +104,7 @@ function moveCatalogItems(input) {
 
   applyFileFolderUpdates_(fileUpdates, folderUpdates);
   applyTargetFolderAclAfterMove_(engine, targetFolderId, moved);
+  bumpCatalogRev_();
 
   return {
     ok: true,

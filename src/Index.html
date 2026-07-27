@@ -194,6 +194,13 @@
         outline: 2px solid #7ec8e8;
         outline-offset: -2px;
       }
+      .panel-table tr.drag-over {
+        background: rgba(14, 99, 156, 0.35);
+      }
+      .panel.drag-over {
+        outline: 2px dashed #7ec8e8;
+        outline-offset: -2px;
+      }
       .panel-table tr.row-folder td.col-name {
         font-weight: 700;
       }
@@ -413,6 +420,84 @@
         border: 1px solid var(--border);
       }
       .modal-card.wide { max-width: 720px; max-height: 90vh; display: flex; flex-direction: column; }
+      .import-modal-card {
+        max-height: min(90vh, 680px);
+        overflow: hidden;
+        padding: 16px 20px;
+      }
+      .import-modal-card h2 {
+        margin-bottom: 4px;
+      }
+      .import-modal-header .sub {
+        margin-bottom: 10px;
+      }
+      .import-scenario-row {
+        margin-bottom: 0 !important;
+      }
+      .import-modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        margin-top: 12px;
+      }
+      .import-drive-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 12px;
+        align-items: stretch;
+      }
+      @media (max-width: 640px) {
+        .import-drive-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      .import-pane {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+      }
+      .import-pane-title {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        color: var(--muted);
+        margin: 0 0 6px;
+      }
+      .import-pane .import-nav {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        margin-bottom: 0;
+      }
+      .import-modal-footer {
+        flex-shrink: 0;
+        border-top: 1px solid var(--border);
+        padding-top: 10px;
+        margin-top: 8px;
+        background: var(--panel);
+      }
+      .import-modal-footer .mode-row {
+        margin-bottom: 8px;
+      }
+      .import-modal-footer .modal-actions {
+        margin-top: 8px;
+      }
+      .import-urls-details {
+        margin-top: 4px;
+        font-size: 13px;
+      }
+      .import-urls-details summary {
+        cursor: pointer;
+        color: var(--accent);
+        user-select: none;
+        margin-bottom: 6px;
+      }
+      .import-urls-details .sub {
+        margin: 4px 0 0;
+        font-size: 12px;
+      }
       .people-tabs {
         display: flex;
         gap: 4px;
@@ -591,8 +676,9 @@
       }
       #import-drive-urls {
         width: 100%;
-        min-height: 72px;
-        margin-bottom: 12px;
+        min-height: 52px;
+        max-height: 88px;
+        margin-bottom: 0;
         padding: 8px 10px;
         background: var(--bg);
         border: 1px solid var(--border);
@@ -620,15 +706,89 @@
         flex-shrink: 0;
       }
       #import-search-results {
-        max-height: 180px;
+        max-height: 96px;
         overflow: auto;
         border: 1px solid var(--border);
         border-radius: 4px;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
         background: var(--bg);
       }
       #import-search-results:empty {
         display: none;
+      }
+      .import-nav {
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        margin-bottom: 12px;
+        background: var(--bg);
+      }
+      .import-nav-toolbar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+      }
+      .import-nav-path {
+        flex: 1;
+        font-size: 13px;
+        font-weight: 600;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #import-nav-list {
+        flex: 1;
+        min-height: 100px;
+        max-height: min(28vh, 200px);
+        overflow: auto;
+      }
+      #import-nav-list:empty::before {
+        content: 'Папка пуста.';
+        display: block;
+        padding: 10px;
+        font-size: 13px;
+        opacity: 0.7;
+      }
+      .import-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+      }
+      .import-nav-item:last-child {
+        border-bottom: none;
+      }
+      .import-nav-item:hover {
+        background: rgba(0, 90, 158, 0.08);
+      }
+      .import-nav-item.picked {
+        background: rgba(0, 90, 158, 0.14);
+      }
+      .import-nav-item .kind {
+        flex-shrink: 0;
+        font-size: 11px;
+        opacity: 0.7;
+        min-width: 42px;
+      }
+      .import-nav-item .name {
+        flex: 1;
+        word-break: break-word;
+        cursor: pointer;
+        min-width: 0;
+      }
+      .import-nav-item .name.folder {
+        font-weight: 600;
+      }
+      .import-nav-item button.pick {
+        flex-shrink: 0;
+        padding: 2px 8px;
+        font-size: 12px;
+        line-height: 1.4;
       }
       .import-search-item {
         display: flex;
@@ -656,7 +816,9 @@
         word-break: break-word;
       }
       #import-picked-list {
-        margin: 0 0 12px;
+        margin: 0 0 8px;
+        max-height: 64px;
+        overflow: auto;
         font-size: 13px;
       }
       #import-picked-list:empty {
@@ -788,6 +950,7 @@
               <button type="button" id="btn-approve" class="cmd-btn" title="Утвердить выделенные файлы">Подписать</button>
               <button type="button" id="btn-users" class="cmd-btn hidden">Доступ</button>
               <button type="button" id="btn-import" class="cmd-btn hidden">Импорт</button>
+              <button type="button" id="btn-refresh" class="cmd-btn" title="Обновить снимок каталога с сервера">Обновить</button>
               <button
                 type="button"
                 id="btn-empty-trash"
@@ -831,57 +994,85 @@
     </div>
 
     <div id="import-modal" class="modal-backdrop hidden">
-      <div class="modal-card">
-        <h2>Импорт</h2>
-        <p class="sub">Цель: текущая папка <strong id="import-target-name">…</strong> активной панели.</p>
-        <div class="mode-row" style="margin-bottom:12px;">
-          <label><input type="radio" name="import-scenario" value="drive" checked /> С Google Drive</label>
-          <label><input type="radio" name="import-scenario" value="local" /> С компьютера</label>
-        </div>
-        <div id="import-drive-block">
-          <label for="import-search-query">Найти на Drive по имени</label>
-          <div class="import-search-row">
-            <input
-              type="text"
-              id="import-search-query"
-              placeholder="Часть имени файла или папки"
-              autocomplete="off"
-            />
-            <button type="button" class="secondary" id="import-search-btn">Найти</button>
+      <div class="modal-card wide import-modal-card">
+        <div class="import-modal-header">
+          <h2>Импорт</h2>
+          <p class="sub">Цель: текущая папка <strong id="import-target-name">…</strong> активной панели.</p>
+          <div class="mode-row import-scenario-row">
+            <label><input type="radio" name="import-scenario" value="drive" checked /> С Google Drive</label>
+            <label><input type="radio" name="import-scenario" value="local" /> С компьютера</label>
           </div>
-          <div id="import-search-results"></div>
-          <div class="mode-row" style="margin-bottom:12px;">
-            <button type="button" class="secondary hidden" id="import-search-more">Ещё</button>
+        </div>
+        <div class="import-modal-body">
+          <div id="import-drive-block">
+            <div class="import-drive-layout">
+              <div class="import-pane import-pane-nav">
+                <div class="import-pane-title">Мой диск — обзор</div>
+                <div class="import-nav">
+                  <div class="import-nav-toolbar">
+                    <button type="button" class="secondary" id="import-nav-up" title="Вверх">↑</button>
+                    <span class="import-nav-path" id="import-nav-path">Мой диск</span>
+                    <button type="button" class="secondary" id="import-nav-refresh">Обновить</button>
+                  </div>
+                  <div id="import-nav-list"></div>
+                  <div class="mode-row" style="margin:6px 10px 8px;">
+                    <button type="button" class="secondary hidden" id="import-nav-more">Ещё</button>
+                  </div>
+                </div>
+              </div>
+              <div class="import-pane import-pane-extra">
+                <div class="import-pane-title">Поиск и выбор</div>
+                <label for="import-search-query">Найти на Drive по имени</label>
+                <div class="import-search-row">
+                  <input
+                    type="text"
+                    id="import-search-query"
+                    placeholder="Часть имени файла или папки"
+                    autocomplete="off"
+                  />
+                  <button type="button" class="secondary" id="import-search-btn">Найти</button>
+                </div>
+                <div id="import-search-results"></div>
+                <div class="mode-row" style="margin-bottom:6px;">
+                  <button type="button" class="secondary hidden" id="import-search-more">Ещё</button>
+                </div>
+                <div id="import-picked-list"></div>
+                <details class="import-urls-details">
+                  <summary>Ссылки (необязательно)</summary>
+                  <label for="import-drive-urls">Файлы и папки, по одной ссылке на строку</label>
+                  <textarea
+                    id="import-drive-urls"
+                    placeholder="https://drive.google.com/file/d/…&#10;https://drive.google.com/drive/folders/…"
+                  ></textarea>
+                  <p class="sub">
+                    Одна очередь (фон, до 500 файлов). Структура папок сохранится в каталоге.
+                  </p>
+                </details>
+              </div>
+            </div>
           </div>
-          <div id="import-picked-list"></div>
-          <label for="import-drive-urls">Или ссылки (файлы и папки, по одной на строку)</label>
-          <textarea
-            id="import-drive-urls"
-            placeholder="https://drive.google.com/file/d/…&#10;https://drive.google.com/drive/folders/…"
-          ></textarea>
-          <p class="sub" style="margin-top:-8px;">
-            Файлы и папки в одной очереди (фон, до 500 файлов). Структура папок сохранится в каталоге.
-          </p>
-        </div>
-        <div id="import-local-block" class="hidden">
-          <p class="sub" style="margin-top:0;">Выберите файлы и/или папку. Структура папок сохранится в каталоге.</p>
-          <div class="mode-row" style="margin-bottom:10px;">
-            <button type="button" class="secondary" id="import-local-files-btn">Файлы…</button>
-            <button type="button" class="secondary" id="import-local-folder-btn">Папка…</button>
-            <button type="button" class="secondary" id="import-local-clear-btn">Очистить</button>
+          <div id="import-local-block" class="hidden">
+            <p class="sub" style="margin-top:0;">Выберите файлы и/или папку. Структура папок сохранится в каталоге.</p>
+            <div class="mode-row" style="margin-bottom:10px;">
+              <button type="button" class="secondary" id="import-local-files-btn">Файлы…</button>
+              <button type="button" class="secondary" id="import-local-folder-btn">Папка…</button>
+              <button type="button" class="secondary" id="import-local-clear-btn">Очистить</button>
+            </div>
+            <input type="file" id="import-local-files" class="hidden" multiple />
+            <input type="file" id="import-local-folder" class="hidden" webkitdirectory multiple />
+            <p class="sub" id="import-local-summary">Ничего не выбрано.</p>
           </div>
-          <input type="file" id="import-local-files" class="hidden" multiple />
-          <input type="file" id="import-local-folder" class="hidden" webkitdirectory multiple />
-          <p class="sub" id="import-local-summary">Ничего не выбрано.</p>
         </div>
-        <div id="import-drive-mode-row" class="mode-row">
-          <label><input type="radio" name="import-mode" value="copy" checked /> Копировать</label>
-          <label><input type="radio" name="import-mode" value="move" /> Переместить (чужие — скопировать)</label>
-        </div>
-        <div id="import-msg" class="msg"></div>
-        <div class="modal-actions">
-          <button type="button" id="import-submit">Импортировать</button>
-          <button type="button" class="secondary" id="import-cancel">Отмена</button>
+        <div class="import-modal-footer">
+          <div id="import-drive-mode-row" class="mode-row">
+            <label><input type="radio" name="import-mode" value="copy" checked /> Копировать</label>
+            <label><input type="radio" name="import-mode" value="move" /> Переместить (чужие — скопировать)</label>
+          </div>
+          <div id="import-msg" class="msg"></div>
+          <div class="modal-actions">
+            <button type="button" id="import-submit">Импортировать</button>
+            <button type="button" class="secondary" id="import-cancel">Отмена</button>
+          </div>
         </div>
       </div>
     </div>
@@ -920,6 +1111,10 @@
       <div class="modal-card">
         <h2>Подтверждение</h2>
         <p class="sub" id="confirm-message" style="white-space:pre-wrap;"></p>
+        <div id="confirm-dnd-mode" class="mode-row hidden" style="margin:0 0 16px;">
+          <label><input type="radio" name="confirm-dnd-mode" value="copy" checked /> Копировать</label>
+          <label><input type="radio" name="confirm-dnd-mode" value="move" /> Переместить</label>
+        </div>
         <div class="modal-actions">
           <button type="button" id="confirm-ok">OK</button>
           <button type="button" class="secondary" id="confirm-cancel">Отмена</button>
@@ -1257,6 +1452,9 @@
             if (rowIndex === state.selectedIndex && index === activePanelIndex) {
               tr.classList.add('focused');
             }
+            if (canRunCatalogOperations) {
+              tr.draggable = true;
+            }
 
             var approvedCell =
               item.kind === 'file'
@@ -1332,12 +1530,46 @@
               }
             });
             tr.addEventListener('dblclick', function () {
-              if (item.kind === 'folder') {
-                navigatePanel(index, item.id);
-              } else {
-                openCatalogItem(item.id, index);
-              }
+              selectRow(index, rowIndex, { mode: 'focus' });
+              activateFocusedPanelItem_(index);
             });
+            if (canRunCatalogOperations) {
+              tr.addEventListener('dragstart', function (e) {
+                beginCatalogDrag_(e, index, rowIndex, item);
+              });
+              tr.addEventListener('dragend', function () {
+                endCatalogDrag_();
+              });
+              tr.addEventListener('dragover', function (e) {
+                if (!dndPayload_) {
+                  return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'copy';
+                tr.classList.add('drag-over');
+                panelEls[index].root.classList.remove('drag-over');
+              });
+              tr.addEventListener('dragleave', function () {
+                tr.classList.remove('drag-over');
+              });
+              tr.addEventListener('drop', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                tr.classList.remove('drag-over');
+                panelEls[index].root.classList.remove('drag-over');
+                if (item.kind === 'folder') {
+                  handleCatalogDrop_(index, item.id, item.name);
+                } else {
+                  var panelState = panels[index];
+                  handleCatalogDrop_(
+                    index,
+                    panelState.folderId,
+                    panelState.folderName
+                  );
+                }
+              });
+            }
             var aclCells = tr.querySelectorAll('.col-acl');
             for (var c = 0; c < aclCells.length; c++) {
               aclCells[c].addEventListener('dblclick', function (e) {
@@ -1658,17 +1890,36 @@
 
         var confirmDialogResolver_ = null;
 
-        function showAppConfirm_(message) {
+        function hideConfirmDndMode_() {
+          var modeRow = document.getElementById('confirm-dnd-mode');
+          if (modeRow) {
+            modeRow.classList.add('hidden');
+          }
+        }
+
+        function showAppConfirm_(message, options) {
+          options = options || {};
           return new Promise(function (resolve) {
             var modal = document.getElementById('confirm-modal');
             var msgEl = document.getElementById('confirm-message');
             var okBtn = document.getElementById('confirm-ok');
-            var cancelBtn = document.getElementById('confirm-cancel');
+            var modeRow = document.getElementById('confirm-dnd-mode');
             if (confirmDialogResolver_) {
               confirmDialogResolver_(false);
               confirmDialogResolver_ = null;
             }
             msgEl.textContent = message;
+            if (options.showCopyMove && modeRow) {
+              modeRow.classList.remove('hidden');
+              var copyRadio = document.querySelector(
+                'input[name="confirm-dnd-mode"][value="copy"]'
+              );
+              if (copyRadio) {
+                copyRadio.checked = true;
+              }
+            } else if (modeRow) {
+              modeRow.classList.add('hidden');
+            }
             modal.classList.remove('hidden');
             confirmDialogResolver_ = resolve;
             okBtn.focus();
@@ -1678,6 +1929,7 @@
         function finishAppConfirm_(result) {
           var modal = document.getElementById('confirm-modal');
           modal.classList.add('hidden');
+          hideConfirmDndMode_();
           if (confirmDialogResolver_) {
             var resolve = confirmDialogResolver_;
             confirmDialogResolver_ = null;
@@ -1695,6 +1947,30 @@
 
         function confirmCatalogAction_(message) {
           return showAppConfirm_(message);
+        }
+
+        /**
+         * Confirm с выбором Копировать (по умолч.) / Переместить.
+         * @returns {Promise<'copy'|'move'|null>}
+         */
+        function confirmCopyOrMoveWithWeight_(actionMessage, fileCount, totalBytes) {
+          var count = Math.max(0, Number(fileCount) || 0);
+          var bytes = Math.max(0, Number(totalBytes) || 0);
+          var lines = [String(actionMessage || '').replace(/\s+$/, '')];
+          lines.push('Файлов: ' + count + ', объём: ' + formatBytes(bytes) + '.');
+          if (count > 30 || bytes >= HEAVY_OP_WARN_BYTES_) {
+            lines.push('Операция может занять время.');
+          }
+          lines.push('Продолжить?');
+          return showAppConfirm_(lines.join('\n'), { showCopyMove: true }).then(function (ok) {
+            if (!ok) {
+              return null;
+            }
+            var modeInput = document.querySelector(
+              'input[name="confirm-dnd-mode"]:checked'
+            );
+            return modeInput && modeInput.value === 'move' ? 'move' : 'copy';
+          });
         }
 
         /**
@@ -2026,32 +2302,29 @@
             showOpStartSplash_();
             google.script.run
               .withSuccessHandler(function (result) {
-                setStatus('Обновление каталога…');
-                google.script.run
-                  .withSuccessHandler(function (data) {
-                    ingestCatalogSnapshot_(data);
-                    panels.forEach(function (panel, panelIndex) {
-                      var folderId = panel.folderId;
-                      if (
-                        !folderId ||
-                        !catalogSnapshot.foldersById[folderId]
-                      ) {
-                        folderId = '__TRASH__';
-                      }
-                      applyPanelFromSnapshot_(panelIndex, folderId);
-                    });
-                    updateEmptyTrashButton_();
-                    flashOperationDone_();
-                  })
-                  .withFailureHandler(function (err) {
-                    var msg = (err && err.message) || String(err);
-                    setStatus(msg);
-                    showAppConfirm_(msg);
-                  })
-                  .getCatalogSnapshot();
+                if (result && result.queued === false) {
+                  flashOperationDone_();
+                  return;
+                }
+                var total =
+                  (result && result.fileCount) ||
+                  ((result && result.folderCount) ? 1 : 0);
+                setStatus('Очистка: 0/' + total);
+                startJobsPoller_(['__TRASH__'], function () {
+                  panels.forEach(function (panel, panelIndex) {
+                    var folderId = panel.folderId;
+                    if (!folderId || !catalogSnapshot.foldersById[folderId]) {
+                      folderId = '__TRASH__';
+                    }
+                    applyPanelFromSnapshot_(panelIndex, folderId);
+                  });
+                  updateEmptyTrashButton_();
+                  flashOperationDone_();
+                });
+                google.script.run.processCatalogJobs();
               })
               .withFailureHandler(function (err) {
-                var msg = (err && err.message) || String(err);
+                var msg = formatJobsBusyError_(err);
                 setStatus(msg);
                 showAppConfirm_(msg);
               })
@@ -2075,13 +2348,25 @@
           setStatus('Копирование…');
           showOpStartSplash_();
           google.script.run
-            .withSuccessHandler(function () {
-              reloadCatalogSnapshot_([sourceFolderId, targetFolderId], function () {
-                flashOperationDone_();
-              });
+            .withSuccessHandler(function (result) {
+              if (result && result.queued) {
+                applyLocalCopy_(targetFolderId, result.created);
+                setStatus(
+                  'Копирование: 0/' + (result.fileCount != null ? result.fileCount : 0)
+                );
+                startJobsPoller_([sourceFolderId, targetFolderId], function () {
+                  flashOperationDone_();
+                });
+                return;
+              }
+              applyLocalCopy_(targetFolderId, result && result.created);
+              flashOperationDone_();
             })
             .withFailureHandler(function (err) {
-              var msg = formatCatalogOpError_(err);
+              var msg = formatJobsBusyError_(err);
+              if (msg === ((err && err.message) || String(err || ''))) {
+                msg = formatCatalogOpError_(err);
+              }
               setStatus(msg);
               showAppConfirm_(msg);
             })
@@ -2109,6 +2394,126 @@
               targetFolderId: targetFolderId,
               items: items
             });
+        }
+
+        var dndPayload_ = null;
+
+        function clearCatalogDragOver_() {
+          panelEls.forEach(function (el) {
+            el.root.classList.remove('drag-over');
+            Array.prototype.forEach.call(
+              el.tbody.querySelectorAll('tr.drag-over'),
+              function (row) {
+                row.classList.remove('drag-over');
+              }
+            );
+          });
+        }
+
+        function beginCatalogDrag_(e, panelIndex, rowIndex, item) {
+          if (!canRunCatalogOperations || !e.dataTransfer) {
+            e.preventDefault();
+            return;
+          }
+          setActivePanel(panelIndex);
+          var state = panels[panelIndex];
+          var items;
+          if (isRowSelected_(state, rowIndex)) {
+            items = getExplicitSelectedItems_(panelIndex);
+            if (!items.length) {
+              items = [item];
+            }
+          } else {
+            items = [item];
+          }
+          dndPayload_ = {
+            sourcePanelIndex: panelIndex,
+            sourceFolderId: state.folderId,
+            items: items.slice()
+          };
+          e.dataTransfer.effectAllowed = 'copyMove';
+          try {
+            e.dataTransfer.setData(
+              'text/plain',
+              items.length === 1 ? items[0].name : items.length + ' объектов'
+            );
+          } catch (errSet) {
+            // ignore
+          }
+        }
+
+        function endCatalogDrag_() {
+          clearCatalogDragOver_();
+          dndPayload_ = null;
+        }
+
+        function handleCatalogDrop_(targetPanelIndex, targetFolderId, targetFolderName) {
+          if (!dndPayload_ || !canRunCatalogOperations) {
+            return;
+          }
+          var payload = dndPayload_;
+          dndPayload_ = null;
+          clearCatalogDragOver_();
+
+          var items = payload.items || [];
+          var sourceFolderId = payload.sourceFolderId;
+          if (!items.length || !targetFolderId) {
+            return;
+          }
+
+          var targetState = panels[targetPanelIndex];
+          if (targetState && targetState.loading) {
+            return;
+          }
+
+          var weight = estimateItemsWeight_(items);
+          var refs = items.map(function (it) {
+            return { kind: it.kind, id: it.id };
+          });
+
+          if (isFolderInTrashSubtree_(targetFolderId)) {
+            confirmOperationWithWeight_(
+              'Удалить ' + formatSelectedNames_(items) + ' в корзину.',
+              weight.fileCount,
+              weight.bytes
+            ).then(function (ok) {
+              if (!ok) {
+                return;
+              }
+              runMoveItems('__TRASH__', refs, sourceFolderId);
+            });
+            return;
+          }
+
+          confirmCopyOrMoveWithWeight_(
+            formatSelectedNames_(items) +
+              ' → «' +
+              (targetFolderName || 'папку') +
+              '».',
+            weight.fileCount,
+            weight.bytes
+          ).then(function (mode) {
+            if (!mode) {
+              return;
+            }
+            var actionLabel = mode === 'move' ? 'переместить' : 'копировать';
+            return assertNoSelfNesting_(items, targetFolderId, actionLabel).then(
+              function (okNest) {
+                if (!okNest) {
+                  return;
+                }
+                if (mode === 'move') {
+                  if (String(sourceFolderId) === String(targetFolderId)) {
+                    setStatus('Готово');
+                    return;
+                  }
+                  runMoveItems(targetFolderId, refs, sourceFolderId);
+                } else {
+                  runCopyItems(targetFolderId, refs, sourceFolderId);
+                }
+              }
+            );
+          });
         }
 
         function countFilesInSnapshotSubtree_(rootFolderId) {
@@ -2278,6 +2683,85 @@
 
         function navigatePanel(panelIndex, folderId) {
           loadPanelContents(panelIndex, folderId);
+        }
+
+        /**
+         * Enter / dblclick: войти в папку, открыть файл, [..] → вверх.
+         * @param {number} panelIndex
+         */
+        function activateFocusedPanelItem_(panelIndex) {
+          var state = panels[panelIndex];
+          if (!state || state.loading) {
+            return;
+          }
+          if (!state.items.length && !state.parentFolderId) {
+            return;
+          }
+
+          if (state.selectedIndex < 0) {
+            if (state.parentFolderId) {
+              navigatePanel(panelIndex, state.parentFolderId);
+            }
+            return;
+          }
+
+          var item = state.items[state.selectedIndex];
+          if (!item) {
+            return;
+          }
+          if (item.kind === 'folder') {
+            navigatePanel(panelIndex, item.id);
+          } else {
+            openCatalogItem(item.id, panelIndex);
+          }
+        }
+
+        function isTypingElement_(el) {
+          if (!el || el === document.body) {
+            return false;
+          }
+          var tag = String(el.tagName || '').toUpperCase();
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+            return true;
+          }
+          return !!el.isContentEditable;
+        }
+
+        function isCatalogModalOpen_() {
+          var modals = document.querySelectorAll('.modal-backdrop');
+          for (var i = 0; i < modals.length; i++) {
+            if (!modals[i].classList.contains('hidden')) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        function isFocusInsidePanel_(panelIndex) {
+          var root = panelEls[panelIndex] && panelEls[panelIndex].root;
+          var active = document.activeElement;
+          if (!root || !active) {
+            return false;
+          }
+          return root === active || root.contains(active);
+        }
+
+        /** Enter на уровне документа, если фокус ушёл с панели (клик по статусу и т.п.). */
+        function onDocumentCatalogKeydown_(e) {
+          if (e.key !== 'Enter' || e.repeat) {
+            return;
+          }
+          if (!screens.main || screens.main.classList.contains('hidden')) {
+            return;
+          }
+          if (isCatalogModalOpen_() || isTypingElement_(document.activeElement)) {
+            return;
+          }
+          if (isFocusInsidePanel_(activePanelIndex)) {
+            return;
+          }
+          e.preventDefault();
+          activateFocusedPanelItem_(activePanelIndex);
         }
 
         function openExternalUrl_(url) {
@@ -2717,12 +3201,23 @@
         }
 
         var catalogSnapshot = null;
+        /** @type {number} локальная копия CATALOG_REV после последнего snapshot */
+        var catalogRev_ = 0;
+        /** @type {number} последний rev с сервера, если выше локального */
+        var remoteCatalogRev_ = 0;
+        var catalogRevPollTimer_ = null;
+        var CATALOG_REV_POLL_MS_ = 5 * 60 * 1000;
         var aclEditorState = null;
         var localImportEntries_ = [];
         var importDrivePicked_ = {};
         var importSearchQuery_ = '';
         var importSearchPageToken_ = null;
         var importSearchLoading_ = false;
+        var importNavFolderId_ = 'root';
+        var importNavParentId_ = null;
+        var importNavPageToken_ = null;
+        var importNavLoading_ = false;
+        var importNavStack_ = [];
         var LOCAL_IMPORT_WARN_BYTES_ = HEAVY_OP_WARN_BYTES_;
 
         function itemTypeSortKey_(item) {
@@ -3079,6 +3574,9 @@
             foldersById: foldersById,
             filesById: filesById
           };
+          if (data && data.catalogRev != null) {
+            catalogRev_ = Number(data.catalogRev) || 0;
+          }
         }
 
         function listingFromSnapshot_(folderId) {
@@ -3146,6 +3644,12 @@
 
         function applyPanelFromSnapshot_(panelIndex, folderId) {
           var data = listingFromSnapshot_(folderId);
+          if (!data && catalogSnapshot) {
+            var fallback = catalogSnapshot.foldersById['__TRASH__']
+              ? '__TRASH__'
+              : catalogSnapshot.virtualRootFolderId;
+            data = listingFromSnapshot_(fallback);
+          }
           if (!data) {
             setStatus('Папка не найдена в снимке каталога.');
             return false;
@@ -3184,6 +3688,7 @@
             .withSuccessHandler(function (data) {
               ingestCatalogSnapshot_(data);
               refreshOpenPanels_(folderIds);
+              tryReloadForRemoteRev_();
               if (done) {
                 done(null, data);
               } else {
@@ -3197,6 +3702,102 @@
               }
             })
             .getCatalogSnapshot();
+        }
+
+        function isCatalogUiBusyForRevReload_() {
+          if (jobsPollTimer_) {
+            return true;
+          }
+          if (dndPayload_) {
+            return true;
+          }
+          var modals = document.querySelectorAll('.modal-backdrop');
+          for (var i = 0; i < modals.length; i++) {
+            if (!modals[i].classList.contains('hidden')) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        function tryReloadForRemoteRev_() {
+          if (!(remoteCatalogRev_ > catalogRev_)) {
+            return;
+          }
+          if (isCatalogUiBusyForRevReload_()) {
+            return;
+          }
+          var targetRev = remoteCatalogRev_;
+          setStatus('Обновление каталога…');
+          google.script.run
+            .withSuccessHandler(function (data) {
+              ingestCatalogSnapshot_(data);
+              refreshOpenPanels_(null);
+              if (catalogRev_ >= targetRev) {
+                remoteCatalogRev_ = catalogRev_;
+              }
+              setStatus('Каталог обновлён');
+            })
+            .withFailureHandler(function (err) {
+              setStatus((err && err.message) || String(err));
+            })
+            .getCatalogSnapshot();
+        }
+
+        function checkCatalogRev_() {
+          google.script.run
+            .withSuccessHandler(function (st) {
+              var rev = Number(st && st.catalogRev);
+              if (isNaN(rev)) {
+                return;
+              }
+              if (rev > catalogRev_) {
+                remoteCatalogRev_ = rev;
+                tryReloadForRemoteRev_();
+              }
+            })
+            .withFailureHandler(function () {})
+            .getCatalogRevision();
+        }
+
+        function startCatalogRevPoller_() {
+          if (catalogRevPollTimer_) {
+            clearInterval(catalogRevPollTimer_);
+          }
+          catalogRevPollTimer_ = setInterval(checkCatalogRev_, CATALOG_REV_POLL_MS_);
+          if (!window.__catalogRevVisibilityHooked) {
+            window.__catalogRevVisibilityHooked = true;
+            document.addEventListener('visibilitychange', function () {
+              if (document.visibilityState === 'visible') {
+                checkCatalogRev_();
+              }
+            });
+          }
+        }
+
+        /** Свои мутации уже в UI: не ждать ложный remote-reload из‑за bump на сервере. */
+        function noteLocalCatalogMutation_() {
+          catalogRev_ += 1;
+          if (remoteCatalogRev_ < catalogRev_) {
+            remoteCatalogRev_ = catalogRev_;
+          }
+        }
+
+        function stopCatalogRevPoller_() {
+          if (catalogRevPollTimer_) {
+            clearInterval(catalogRevPollTimer_);
+            catalogRevPollTimer_ = null;
+          }
+        }
+
+        /** Ручное обновление снимка (кнопка «Обновить»), без ожидания poll 5 мин. */
+        function refreshCatalogSnapshotManual_() {
+          reloadCatalogSnapshot_(null, function (err) {
+            if (!err) {
+              remoteCatalogRev_ = catalogRev_;
+              setStatus('Каталог обновлён');
+            }
+          });
         }
 
         function collectItemsFromFolderView_(folderId, refs) {
@@ -3306,6 +3907,7 @@
           }
 
           refreshOpenPanels_([sourceFolderId, targetFolderId]);
+          noteLocalCatalogMutation_();
         }
 
         function applyParentAclToSnapshotItem_(item, parentAcl) {
@@ -3352,6 +3954,7 @@
             }
           }
           refreshOpenPanels_([parentFolderId, kind === 'folder' ? id : null]);
+          noteLocalCatalogMutation_();
         }
 
         function applyLocalCreateFolder_(folder) {
@@ -3371,6 +3974,7 @@
             readers: folder.readers || []
           };
           refreshOpenPanels_([folder.parentFolderId]);
+          noteLocalCatalogMutation_();
         }
 
         function applyLocalCreateFile_(targetFolderId, item) {
@@ -3393,6 +3997,65 @@
             readers: item.readers || []
           };
           refreshOpenPanels_([targetFolderId]);
+          noteLocalCatalogMutation_();
+        }
+
+        /**
+         * После F5 (sync) — патч снимка без полного reload; Jobs — патч папок/pending + reload по done.
+         */
+        function applyLocalCopy_(targetFolderId, created) {
+          if (!created || !catalogSnapshot) {
+            reloadCatalogSnapshot_([targetFolderId]);
+            return;
+          }
+
+          var refreshIds = {};
+          refreshIds[String(targetFolderId)] = true;
+
+          (created.folders || []).forEach(function (folder) {
+            if (!folder || !folder.id) {
+              return;
+            }
+            catalogSnapshot.foldersById[folder.id] = {
+              id: folder.id,
+              parentFolderId: folder.parentFolderId || null,
+              name: folder.name,
+              sizeBytes: folder.sizeBytes || 0,
+              modifiedAt: folder.modifiedAt,
+              isSystem: !!folder.isSystem,
+              editors: folder.editors || [],
+              commenters: folder.commenters || [],
+              readers: folder.readers || []
+            };
+            if (folder.parentFolderId) {
+              refreshIds[String(folder.parentFolderId)] = true;
+            }
+          });
+
+          (created.files || []).forEach(function (item) {
+            if (!item || !item.id) {
+              return;
+            }
+            var folderId = String(item.folderId || targetFolderId);
+            catalogSnapshot.filesById[item.id] = {
+              id: item.id,
+              folderId: folderId,
+              name: item.name,
+              mimeType: item.mimeType || '',
+              sizeBytes: item.sizeBytes || 0,
+              modifiedAt: item.modifiedAt,
+              approved: !!item.approved,
+              approvedBy: item.approvedBy || '',
+              approvedByName: item.approvedByName || '',
+              editors: item.editors || [],
+              commenters: item.commenters || [],
+              readers: item.readers || []
+            };
+            refreshIds[folderId] = true;
+          });
+
+          refreshOpenPanels_(Object.keys(refreshIds));
+          noteLocalCatalogMutation_();
         }
 
         function openCreateModal() {
@@ -3513,14 +4176,21 @@
           state.loading = false;
           state.selectedMap = {};
           sortPanelItems_(panelIndex);
-          if (state.selectedIndex < 0 && state.items.length) {
+          if (state.parentFolderId) {
+            state.selectedIndex = -1;
+          } else if (state.items.length) {
             state.selectedIndex = 0;
+          } else {
+            state.selectedIndex = -1;
           }
-          if (state.selectedIndex >= state.items.length) {
+          if (state.selectedIndex >= 0 && state.selectedIndex >= state.items.length) {
             state.selectedIndex = state.items.length ? state.items.length - 1 : -1;
           }
           renderPanel(panelIndex);
           updateEmptyTrashButton_();
+          if (panelIndex === activePanelIndex) {
+            restorePanelKeyboardFocus_();
+          }
         }
 
         function loadPanelContents(panelIndex, folderId, options) {
@@ -3575,6 +4245,7 @@
               applyPanelFromSnapshot_(1, folderId);
               updateEmptyTrashButton_();
               focusPanelFirstRow_(0);
+              startCatalogRevPoller_();
               setStatus('Готово');
             })
             .withFailureHandler(function (err) {
@@ -3620,6 +4291,7 @@
 
           document.getElementById('btn-users').addEventListener('click', openPeopleModal);
           document.getElementById('btn-import').addEventListener('click', openImportModal);
+          document.getElementById('btn-refresh').addEventListener('click', refreshCatalogSnapshotManual_);
           var emptyTrashBtn = document.getElementById('btn-empty-trash');
           if (emptyTrashBtn) {
             emptyTrashBtn.addEventListener('click', emptyTrashAction_);
@@ -3666,6 +4338,15 @@
               e.preventDefault();
               runImportDriveSearch_(false);
             }
+          });
+          document.getElementById('import-nav-up').addEventListener('click', function () {
+            goImportNavUp_();
+          });
+          document.getElementById('import-nav-refresh').addEventListener('click', function () {
+            loadImportNavFolder_(importNavFolderId_, false);
+          });
+          document.getElementById('import-nav-more').addEventListener('click', function () {
+            loadImportNavFolder_(importNavFolderId_, true);
           });
           document.getElementById('confirm-ok').addEventListener('click', function () {
             finishAppConfirm_(true);
@@ -3743,10 +4424,33 @@
               setActivePanel(index);
             });
             el.root.addEventListener('keydown', onPanelKeydown);
+            el.root.addEventListener('dragover', function (e) {
+              if (!dndPayload_ || !canRunCatalogOperations) {
+                return;
+              }
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+              el.root.classList.add('drag-over');
+            });
+            el.root.addEventListener('dragleave', function (e) {
+              if (!el.root.contains(e.relatedTarget)) {
+                el.root.classList.remove('drag-over');
+              }
+            });
+            el.root.addEventListener('drop', function (e) {
+              if (!dndPayload_) {
+                return;
+              }
+              e.preventDefault();
+              el.root.classList.remove('drag-over');
+              var state = panels[index];
+              handleCatalogDrop_(index, state.folderId, state.folderName);
+            });
           });
 
           loadInitialPanels(virtualRootFolderId);
           setActivePanel(0);
+          document.addEventListener('keydown', onDocumentCatalogKeydown_);
           showScreen('main');
           google.script.run
             .withSuccessHandler(function (st) {
@@ -3782,6 +4486,7 @@
         function clearImportDrivePicked_() {
           importDrivePicked_ = {};
           renderImportDrivePicked_();
+          renderImportNavListHighlight_();
         }
 
         function clearImportDriveSearch_() {
@@ -3789,6 +4494,17 @@
           importSearchPageToken_ = null;
           document.getElementById('import-search-results').innerHTML = '';
           document.getElementById('import-search-more').classList.add('hidden');
+        }
+
+        function resetImportNav_() {
+          importNavFolderId_ = 'root';
+          importNavParentId_ = null;
+          importNavPageToken_ = null;
+          importNavStack_ = [];
+          document.getElementById('import-nav-path').textContent = 'Мой диск';
+          document.getElementById('import-nav-list').innerHTML = '';
+          document.getElementById('import-nav-more').classList.add('hidden');
+          document.getElementById('import-nav-up').disabled = true;
         }
 
         function renderImportDrivePicked_() {
@@ -3812,6 +4528,7 @@
             btn.addEventListener('click', function () {
               delete importDrivePicked_[id];
               renderImportDrivePicked_();
+              renderImportNavListHighlight_();
             });
             chip.appendChild(btn);
             el.appendChild(chip);
@@ -3832,6 +4549,140 @@
             };
           }
           renderImportDrivePicked_();
+          renderImportNavListHighlight_();
+        }
+
+        function renderImportNavListHighlight_() {
+          var box = document.getElementById('import-nav-list');
+          if (!box) {
+            return;
+          }
+          Array.prototype.forEach.call(box.querySelectorAll('.import-nav-item'), function (row) {
+            var id = row.getAttribute('data-id');
+            row.classList.toggle('picked', !!(id && importDrivePicked_[id]));
+            var pickBtn = row.querySelector('button.pick');
+            if (pickBtn) {
+              pickBtn.textContent = id && importDrivePicked_[id] ? '✓' : '+';
+            }
+          });
+        }
+
+        function appendImportNavItems_(items, append) {
+          var box = document.getElementById('import-nav-list');
+          if (!append) {
+            box.innerHTML = '';
+          }
+          (items || []).forEach(function (item) {
+            var row = document.createElement('div');
+            row.className = 'import-nav-item';
+            row.setAttribute('data-id', item.id);
+            if (importDrivePicked_[item.id]) {
+              row.classList.add('picked');
+            }
+            var kind = document.createElement('span');
+            kind.className = 'kind';
+            kind.textContent = item.kind === 'folder' ? 'папка' : 'файл';
+            var name = document.createElement('span');
+            name.className = 'name' + (item.kind === 'folder' ? ' folder' : '');
+            name.textContent = item.name || item.id;
+            if (item.kind === 'folder') {
+              name.title = 'Открыть папку';
+              name.addEventListener('click', function () {
+                enterImportNavFolder_(item);
+              });
+              name.addEventListener('dblclick', function (e) {
+                e.preventDefault();
+                enterImportNavFolder_(item);
+              });
+            } else {
+              name.title = 'Добавить / убрать из выбора';
+              name.addEventListener('click', function () {
+                toggleImportDrivePicked_(item);
+              });
+            }
+            var pickBtn = document.createElement('button');
+            pickBtn.type = 'button';
+            pickBtn.className = 'secondary pick';
+            pickBtn.textContent = importDrivePicked_[item.id] ? '✓' : '+';
+            pickBtn.title =
+              item.kind === 'folder'
+                ? 'Выбрать папку целиком для импорта'
+                : 'Выбрать файл';
+            pickBtn.addEventListener('click', function (e) {
+              e.stopPropagation();
+              toggleImportDrivePicked_(item);
+            });
+            row.appendChild(kind);
+            row.appendChild(name);
+            row.appendChild(pickBtn);
+            box.appendChild(row);
+          });
+        }
+
+        function enterImportNavFolder_(item) {
+          if (!item || item.kind !== 'folder' || !item.id) {
+            return;
+          }
+          importNavStack_.push({
+            id: importNavFolderId_,
+            name: document.getElementById('import-nav-path').textContent || 'Мой диск'
+          });
+          loadImportNavFolder_(item.id, false);
+        }
+
+        function goImportNavUp_() {
+          if (importNavStack_.length) {
+            var prev = importNavStack_.pop();
+            loadImportNavFolder_(prev.id || 'root', false);
+            return;
+          }
+          if (importNavParentId_) {
+            loadImportNavFolder_(importNavParentId_, false);
+            return;
+          }
+          if (importNavFolderId_ !== 'root') {
+            loadImportNavFolder_('root', false);
+          }
+        }
+
+        function loadImportNavFolder_(folderId, loadMore) {
+          if (importNavLoading_) {
+            return;
+          }
+          if (loadMore && !importNavPageToken_) {
+            return;
+          }
+          importNavLoading_ = true;
+          if (!loadMore) {
+            showImportMessage('Загрузка папки…', '');
+          }
+          var payload = { folderId: folderId || 'root' };
+          if (loadMore && importNavPageToken_) {
+            payload.pageToken = importNavPageToken_;
+          }
+          gasRun_('listDriveFolderForImport', payload)
+            .then(function (result) {
+              importNavLoading_ = false;
+              showImportMessage('', '');
+              if (!loadMore) {
+                importNavFolderId_ = (result && result.folderId) || 'root';
+                importNavParentId_ =
+                  result && result.parentId != null ? result.parentId : null;
+                document.getElementById('import-nav-path').textContent =
+                  (result && result.folderName) || 'Мой диск';
+                document.getElementById('import-nav-up').disabled =
+                  importNavFolderId_ === 'root' && !importNavStack_.length;
+              }
+              appendImportNavItems_(result && result.items, !!loadMore);
+              importNavPageToken_ = (result && result.nextPageToken) || null;
+              document
+                .getElementById('import-nav-more')
+                .classList.toggle('hidden', !importNavPageToken_);
+            })
+            .catch(function (err) {
+              importNavLoading_ = false;
+              showImportMessage((err && err.message) || String(err), 'error');
+            });
         }
 
         function appendImportSearchResults_(items, append) {
@@ -4039,12 +4890,13 @@
           document.getElementById('import-search-query').value = '';
           clearImportDriveSearch_();
           clearImportDrivePicked_();
+          resetImportNav_();
           document.querySelector('input[name="import-mode"][value="copy"]').checked = true;
           clearLocalImportSelection_();
           updateImportScenarioUi();
           showImportMessage('', '');
           document.getElementById('import-modal').classList.remove('hidden');
-          document.getElementById('import-search-query').focus();
+          loadImportNavFolder_('root', false);
         }
 
         function closeImportModal() {
@@ -4109,7 +4961,7 @@
           }
         }
 
-        function startJobsPoller_(folderIds) {
+        function startJobsPoller_(folderIds, onDone) {
           jobsPollFolderIds_ = folderIds || jobsPollFolderIds_;
           stopJobsPoller_();
           var ticks = 0;
@@ -4123,7 +4975,12 @@
                   var folders = jobsPollFolderIds_;
                   jobsPollFolderIds_ = null;
                   reloadCatalogSnapshot_(folders, function () {
-                    flashOperationDone_();
+                    if (typeof onDone === 'function') {
+                      onDone();
+                    } else {
+                      flashOperationDone_();
+                    }
+                    tryReloadForRemoteRev_();
                   });
                   return;
                 }
@@ -4304,7 +5161,10 @@
                 .filter(Boolean)
             : [];
           if (!items.length && !urls.length) {
-            showImportMessage('Выберите объекты поиском или укажите ссылки.', 'error');
+            showImportMessage(
+              'Выберите объекты в навигаторе / поиском или укажите ссылки.',
+              'error'
+            );
             return;
           }
           if (urls.length > 500) {
@@ -4598,21 +5458,7 @@
             invertSelectionInPanel_(panelIndex);
           } else if (e.key === 'Enter') {
             e.preventDefault();
-            if (state.selectedIndex < 0) {
-              if (state.parentFolderId) {
-                navigatePanel(panelIndex, state.parentFolderId);
-              }
-              return;
-            }
-            var item = state.items[state.selectedIndex];
-            if (!item) {
-              return;
-            }
-            if (item.kind === 'folder') {
-              navigatePanel(panelIndex, item.id);
-            } else {
-              openCatalogItem(item.id, panelIndex);
-            }
+            activateFocusedPanelItem_(panelIndex);
           } else if (e.key === 'Backspace' && state.parentFolderId) {
             e.preventDefault();
             navigatePanel(panelIndex, state.parentFolderId);
