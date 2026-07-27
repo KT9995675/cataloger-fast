@@ -979,6 +979,14 @@
               </button>
               <button
                 type="button"
+                id="btn-repair"
+                class="cmd-btn hidden"
+                title="Проверка и ремонт целостности каталога"
+              >
+                Ремонт
+              </button>
+              <button
+                type="button"
                 id="btn-empty-trash"
                 class="cmd-btn cmd-btn-icon hidden"
                 title="Очистить корзину"
@@ -1145,6 +1153,20 @@
         <div class="modal-actions">
           <button type="button" id="confirm-ok">OK</button>
           <button type="button" class="secondary" id="confirm-cancel">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="repair-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <h2>Ремонт каталога</h2>
+        <p class="sub">
+          Быстрая — только листы каталогизатора. Глубокая — быстрая + сверка с файлами на Drive.
+        </p>
+        <div class="modal-actions" style="flex-direction:column;align-items:stretch;gap:8px;">
+          <button type="button" id="repair-quick">Быстрая проверка</button>
+          <button type="button" id="repair-deep">Глубокая проверка</button>
+          <button type="button" class="secondary" id="repair-cancel">Отмена</button>
         </div>
       </div>
     </div>
@@ -2318,6 +2340,11 @@
             exportBtn.classList.toggle('hidden', !canEmptyTrash);
             exportBtn.disabled = !canEmptyTrash;
           }
+          var repairBtn = document.getElementById('btn-repair');
+          if (repairBtn) {
+            repairBtn.classList.toggle('hidden', !canEmptyTrash);
+            repairBtn.disabled = !canEmptyTrash;
+          }
           var btn = document.getElementById('btn-empty-trash');
           if (!btn) {
             return;
@@ -2330,6 +2357,154 @@
             isFolderInTrashSubtree_(active.folderId);
           btn.classList.toggle('hidden', !show);
           btn.disabled = !show;
+        }
+
+        function openRepairModal_() {
+          if (!canEmptyTrash) {
+            return;
+          }
+          document.getElementById('repair-modal').classList.remove('hidden');
+        }
+
+        function closeRepairModal_() {
+          document.getElementById('repair-modal').classList.add('hidden');
+          restorePanelKeyboardFocus_();
+        }
+
+        function runCatalogRepairCheckAction_(mode) {
+          if (!canEmptyTrash) {
+            return;
+          }
+          closeRepairModal_();
+          var label = mode === 'deep' ? 'Глубокая проверка…' : 'Быстрая проверка…';
+          setStatus(label);
+          showOpStartSplash_();
+          google.script.run
+            .withSuccessHandler(function (result) {
+              flashOperationDone_();
+              var url = result && result.url;
+              if (url) {
+                try {
+                  window.open(url, '_blank');
+                } catch (e) {
+                  // popup blocked
+                }
+              }
+              var count = (result && result.issueCount) || 0;
+              setStatus(
+                'Ремонт: найдено проблем — ' +
+                  count +
+                  (url ? ' (отчёт открыт)' : '')
+              );
+              runRepairFixWizard_(result || {});
+            })
+            .withFailureHandler(function (err) {
+              setStatus((err && err.message) || String(err));
+              showAppConfirm_((err && err.message) || String(err), { infoOnly: true });
+            })
+            .runCatalogRepairCheck(mode);
+        }
+
+        /**
+         * После отчёта — по очереди пакеты одного кода с confirm.
+         * @param {{
+         *   mode?: string,
+         *   url?: string,
+         *   title?: string,
+         *   issueCount?: number,
+         *   codes?: Array<{ code: string, count: number, proposedFix: string, fixable: boolean }>
+         * }} result
+         */
+        function runRepairFixWizard_(result) {
+          var codes = (result.codes || []).filter(function (c) {
+            return c && c.fixable && c.count > 0;
+          });
+          var mode = result.mode === 'deep' ? 'deep' : 'quick';
+          var url = result.url || '';
+
+          function showSummaryThenFixes_() {
+            var msg =
+              'Проверка завершена. Найдено проблем: ' +
+              ((result && result.issueCount) || 0) +
+              '.';
+            if (codes.length) {
+              msg +=
+                '\n\nДалее можно исправить однотипные ошибки пакетами (по коду), сверяясь с отчётом.';
+            } else if ((result && result.issueCount) > 0) {
+              msg +=
+                '\n\nАвто-исправление для найденных кодов не предусмотрено — смотрите отчёт.';
+            } else {
+              msg += '\n\nОшибок не найдено.';
+            }
+            return showAppConfirm_(msg, {
+              infoOnly: !codes.length,
+              linkUrl: url || undefined,
+              linkLabel: url ? 'Открыть отчёт' : undefined
+            }).then(function (ok) {
+              if (!codes.length) {
+                return;
+              }
+              if (!ok && codes.length) {
+                // infoOnly false means OK/Cancel — if Cancel, skip fixes
+                return;
+              }
+              return fixNextCode_(0);
+            });
+          }
+
+          function fixNextCode_(index) {
+            if (index >= codes.length) {
+              setStatus('Ремонт: пакеты исправлений завершены');
+              return refreshCatalogSnapshotManual_();
+            }
+            var pack = codes[index];
+            var text =
+              'Исправить все «' +
+              pack.code +
+              '» (' +
+              pack.count +
+              ')?\n\n' +
+              (pack.proposedFix || '') +
+              '\n\nОсталось типов: ' +
+              (codes.length - index) +
+              '.';
+            return showAppConfirm_(text, {
+              linkUrl: url || undefined,
+              linkLabel: url ? 'Открыть отчёт' : undefined
+            }).then(function (ok) {
+              if (!ok) {
+                return fixNextCode_(index + 1);
+              }
+              setStatus('Ремонт: исправляю ' + pack.code + '…');
+              showOpStartSplash_();
+              return new Promise(function (resolve) {
+                google.script.run
+                  .withSuccessHandler(function (fixResult) {
+                    flashOperationDone_();
+                    setStatus(
+                      'Ремонт: ' +
+                        pack.code +
+                        ' — исправлено ' +
+                        ((fixResult && fixResult.fixed) || 0) +
+                        ', пропущено ' +
+                        ((fixResult && fixResult.skipped) || 0)
+                    );
+                    resolve(fixNextCode_(index + 1));
+                  })
+                  .withFailureHandler(function (err) {
+                    setStatus((err && err.message) || String(err));
+                    showAppConfirm_((err && err.message) || String(err), {
+                      infoOnly: true
+                    }).then(function () {
+                      resolve(fixNextCode_(index + 1));
+                    });
+                  })
+                  .fixCatalogRepairByCode(pack.code, mode);
+              });
+            });
+          }
+
+          return showSummaryThenFixes_();
         }
 
         function exportCatalogStructureAction_() {
@@ -4235,6 +4410,34 @@
           var exportBtn = document.getElementById('btn-export-structure');
           if (exportBtn) {
             exportBtn.addEventListener('click', exportCatalogStructureAction_);
+          }
+          var repairBtn = document.getElementById('btn-repair');
+          if (repairBtn) {
+            repairBtn.addEventListener('click', openRepairModal_);
+          }
+          var repairQuick = document.getElementById('repair-quick');
+          if (repairQuick) {
+            repairQuick.addEventListener('click', function () {
+              runCatalogRepairCheckAction_('quick');
+            });
+          }
+          var repairDeep = document.getElementById('repair-deep');
+          if (repairDeep) {
+            repairDeep.addEventListener('click', function () {
+              runCatalogRepairCheckAction_('deep');
+            });
+          }
+          var repairCancel = document.getElementById('repair-cancel');
+          if (repairCancel) {
+            repairCancel.addEventListener('click', closeRepairModal_);
+          }
+          var repairModal = document.getElementById('repair-modal');
+          if (repairModal) {
+            repairModal.addEventListener('click', function (e) {
+              if (e.target.id === 'repair-modal') {
+                closeRepairModal_();
+              }
+            });
           }
           var emptyTrashBtn = document.getElementById('btn-empty-trash');
           if (emptyTrashBtn) {
