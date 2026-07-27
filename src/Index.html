@@ -1041,7 +1041,12 @@
           <div id="import-drive-block">
             <div class="import-drive-layout">
               <div class="import-pane import-pane-nav">
-                <div class="import-pane-title">Мой диск — обзор</div>
+                <div class="import-pane-title">Drive — обзор</div>
+                <div class="mode-row" id="import-nav-scope-row" style="margin:0 10px 8px;flex-wrap:wrap;gap:8px 12px;">
+                  <label><input type="radio" name="import-nav-scope" value="mydrive" checked /> Мой диск</label>
+                  <label><input type="radio" name="import-nav-scope" value="shared" /> Доступные мне</label>
+                  <label><input type="radio" name="import-nav-scope" value="shared_drives" /> Shared drives</label>
+                </div>
                 <div class="import-nav">
                   <div class="import-nav-toolbar">
                     <button type="button" class="secondary" id="import-nav-up" title="Вверх">↑</button>
@@ -3491,6 +3496,44 @@
         var importNavPageToken_ = null;
         var importNavLoading_ = false;
         var importNavStack_ = [];
+        var importNavScope_ = 'mydrive';
+
+        function importNavRootIdForScope_(scope) {
+          if (scope === 'shared') {
+            return 'sharedWithMe';
+          }
+          if (scope === 'shared_drives') {
+            return 'sharedDrives';
+          }
+          return 'root';
+        }
+
+        function importNavRootLabelForScope_(scope) {
+          if (scope === 'shared') {
+            return 'Доступные мне';
+          }
+          if (scope === 'shared_drives') {
+            return 'Shared drives';
+          }
+          return 'Мой диск';
+        }
+
+        function getSelectedImportNavScope_() {
+          var el = document.querySelector('input[name="import-nav-scope"]:checked');
+          var v = el ? String(el.value || '') : 'mydrive';
+          if (v === 'shared' || v === 'shared_drives') {
+            return v;
+          }
+          return 'mydrive';
+        }
+
+        function isImportNavVirtualRoot_(folderId) {
+          return (
+            folderId === 'root' ||
+            folderId === 'sharedWithMe' ||
+            folderId === 'sharedDrives'
+          );
+        }
         var LOCAL_IMPORT_WARN_BYTES_ = HEAVY_OP_WARN_BYTES_;
 
         function itemTypeSortKey_(item) {
@@ -4495,6 +4538,11 @@
           document.getElementById('import-nav-more').addEventListener('click', function () {
             loadImportNavFolder_(importNavFolderId_, true);
           });
+          document.querySelectorAll('input[name="import-nav-scope"]').forEach(function (el) {
+            el.addEventListener('change', function () {
+              switchImportNavScope_(getSelectedImportNavScope_());
+            });
+          });
           document.getElementById('confirm-ok').addEventListener('click', function () {
             finishAppConfirm_(true);
           });
@@ -4644,11 +4692,13 @@
         }
 
         function resetImportNav_() {
-          importNavFolderId_ = 'root';
+          importNavScope_ = getSelectedImportNavScope_();
+          importNavFolderId_ = importNavRootIdForScope_(importNavScope_);
           importNavParentId_ = null;
           importNavPageToken_ = null;
           importNavStack_ = [];
-          document.getElementById('import-nav-path').textContent = 'Мой диск';
+          document.getElementById('import-nav-path').textContent =
+            importNavRootLabelForScope_(importNavScope_);
           document.getElementById('import-nav-list').innerHTML = '';
           document.getElementById('import-nav-more').classList.add('hidden');
           document.getElementById('import-nav-up').disabled = true;
@@ -4780,15 +4830,19 @@
         function goImportNavUp_() {
           if (importNavStack_.length) {
             var prev = importNavStack_.pop();
-            loadImportNavFolder_(prev.id || 'root', false);
+            loadImportNavFolder_(
+              prev.id || importNavRootIdForScope_(importNavScope_),
+              false
+            );
             return;
           }
           if (importNavParentId_) {
             loadImportNavFolder_(importNavParentId_, false);
             return;
           }
-          if (importNavFolderId_ !== 'root') {
-            loadImportNavFolder_('root', false);
+          var rootId = importNavRootIdForScope_(importNavScope_);
+          if (importNavFolderId_ !== rootId) {
+            loadImportNavFolder_(rootId, false);
           }
         }
 
@@ -4803,7 +4857,10 @@
           if (!loadMore) {
             showImportMessage('Загрузка папки…', '');
           }
-          var payload = { folderId: folderId || 'root' };
+          var payload = {
+            scope: importNavScope_ || 'mydrive',
+            folderId: folderId || importNavRootIdForScope_(importNavScope_)
+          };
           if (loadMore && importNavPageToken_) {
             payload.pageToken = importNavPageToken_;
           }
@@ -4812,13 +4869,20 @@
               importNavLoading_ = false;
               showImportMessage('', '');
               if (!loadMore) {
-                importNavFolderId_ = (result && result.folderId) || 'root';
+                if (result && result.scope) {
+                  importNavScope_ = result.scope;
+                }
+                importNavFolderId_ =
+                  (result && result.folderId) ||
+                  importNavRootIdForScope_(importNavScope_);
                 importNavParentId_ =
                   result && result.parentId != null ? result.parentId : null;
                 document.getElementById('import-nav-path').textContent =
-                  (result && result.folderName) || 'Мой диск';
+                  (result && result.folderName) ||
+                  importNavRootLabelForScope_(importNavScope_);
                 document.getElementById('import-nav-up').disabled =
-                  importNavFolderId_ === 'root' && !importNavStack_.length;
+                  isImportNavVirtualRoot_(importNavFolderId_) &&
+                  !importNavStack_.length;
               }
               appendImportNavItems_(result && result.items, !!loadMore);
               importNavPageToken_ = (result && result.nextPageToken) || null;
@@ -4830,6 +4894,19 @@
               importNavLoading_ = false;
               showImportMessage((err && err.message) || String(err), 'error');
             });
+        }
+
+        function switchImportNavScope_(scope) {
+          importNavScope_ =
+            scope === 'shared' || scope === 'shared_drives' ? scope : 'mydrive';
+          var radio = document.querySelector(
+            'input[name="import-nav-scope"][value="' + importNavScope_ + '"]'
+          );
+          if (radio) {
+            radio.checked = true;
+          }
+          resetImportNav_();
+          loadImportNavFolder_(importNavFolderId_, false);
         }
 
         function appendImportSearchResults_(items, append) {
@@ -5037,13 +5114,20 @@
           document.getElementById('import-search-query').value = '';
           clearImportDriveSearch_();
           clearImportDrivePicked_();
-          resetImportNav_();
           document.querySelector('input[name="import-mode"][value="copy"]').checked = true;
           clearLocalImportSelection_();
           updateImportScenarioUi();
           showImportMessage('', '');
           document.getElementById('import-modal').classList.remove('hidden');
-          loadImportNavFolder_('root', false);
+          var myDriveRadio = document.querySelector(
+            'input[name="import-nav-scope"][value="mydrive"]'
+          );
+          if (myDriveRadio) {
+            myDriveRadio.checked = true;
+          }
+          importNavScope_ = 'mydrive';
+          resetImportNav_();
+          loadImportNavFolder_(importNavRootIdForScope_(importNavScope_), false);
         }
 
         function closeImportModal() {

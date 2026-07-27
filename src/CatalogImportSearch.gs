@@ -9,12 +9,18 @@ var DRIVE_IMPORT_SEARCH_PAGE_SIZE_ = 20;
 var DRIVE_FOLDER_MIME_ = 'application/vnd.google-apps.folder';
 
 /**
- * Список содержимого папки Drive пользователя (навигатор импорта, §2.5).
- * MVP: «Мой диск» (`root`); Shared drives / «Доступные мне» — позже.
+ * Список содержимого папки Drive (навигатор импорта, §2.5).
+ * Корни: Мой диск | Доступные мне | Shared drives (`scope`).
+ * <!-- OLD: MVP: «Мой диск» (`root`); Shared drives / «Доступные мне» — позже. -->
  *
- * @param {{ folderId?: string, pageToken?: string }} input
+ * @param {{
+ *   scope?: 'mydrive'|'shared'|'shared_drives',
+ *   folderId?: string,
+ *   pageToken?: string
+ * }} input
  * @returns {{
  *   ok: true,
+ *   scope: string,
  *   folderId: string,
  *   folderName: string,
  *   parentId: (string|null),
@@ -26,7 +32,8 @@ function listDriveFolderForImport(input) {
   assertCatalogReady_();
 
   input = input || {};
-  var folderId = String(input.folderId || 'root').trim() || 'root';
+  var scope = normalizeImportNavScope_(input.scope);
+  var folderId = String(input.folderId || '').trim() || importNavRootFolderId_(scope);
   var pageToken = String(input.pageToken || '').trim();
 
   var userEmail = Session.getActiveUser().getEmail();
@@ -37,35 +44,201 @@ function listDriveFolderForImport(input) {
   assertCanRunCatalogOperations_(loginRole);
 
   var token = ScriptApp.getOAuthToken();
-  var folderName = 'Мой диск';
-  var parentId = null;
-  var resolvedFolderId = folderId;
 
-  if (folderId !== 'root') {
-    var meta = driveImportFetchJson_(
-      'https://www.googleapis.com/drive/v3/files/' +
-        encodeURIComponent(folderId) +
-        '?fields=' +
-        encodeURIComponent('id,name,mimeType,parents') +
-        '&supportsAllDrives=true',
-      token
-    );
-    if (String(meta.mimeType || '') !== DRIVE_FOLDER_MIME_) {
-      throw catalogError_('INVALID_INPUT', 'Указанный объект не является папкой Drive.');
-    }
-    folderName = String(meta.name || folderId);
-    resolvedFolderId = String(meta.id || folderId);
-    if (meta.parents && meta.parents.length) {
-      parentId = String(meta.parents[0]);
-    } else {
-      parentId = 'root';
-    }
+  if (folderId === 'sharedDrives' || (scope === 'shared_drives' && folderId === importNavRootFolderId_('shared_drives'))) {
+    return listSharedDrivesRootForImport_(token, pageToken, scope);
+  }
+  if (folderId === 'sharedWithMe' || (scope === 'shared' && folderId === importNavRootFolderId_('shared'))) {
+    return listSharedWithMeRootForImport_(token, pageToken, scope);
+  }
+  if (folderId === 'root' || (scope === 'mydrive' && folderId === importNavRootFolderId_('mydrive'))) {
+    return listDriveChildrenForImport_(token, {
+      scope: 'mydrive',
+      folderId: 'root',
+      folderName: 'Мой диск',
+      parentId: null,
+      pageToken: pageToken,
+      corpora: 'user',
+      driveId: ''
+    });
   }
 
-  var safeId = resolvedFolderId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  var q = "'" + safeId + "' in parents and trashed = false";
+  var meta = driveImportFetchJson_(
+    'https://www.googleapis.com/drive/v3/files/' +
+      encodeURIComponent(folderId) +
+      '?fields=' +
+      encodeURIComponent('id,name,mimeType,parents,driveId') +
+      '&supportsAllDrives=true',
+    token
+  );
+
+  // Shared drive root: Drive API file id == drive id, often no parents.
+  if (scope === 'shared_drives' && isSharedDriveRootMeta_(meta, folderId)) {
+    return listDriveChildrenForImport_(token, {
+      scope: scope,
+      folderId: String(meta.id || folderId),
+      folderName: String(meta.name || folderId),
+      parentId: 'sharedDrives',
+      pageToken: pageToken,
+      corpora: 'drive',
+      driveId: String(meta.id || folderId)
+    });
+  }
+
+  if (String(meta.mimeType || '') !== DRIVE_FOLDER_MIME_) {
+    // Might be a shared drive id that isn't visible as a folder file — try as drive.
+    if (scope === 'shared_drives') {
+      return listDriveChildrenForImport_(token, {
+        scope: scope,
+        folderId: folderId,
+        folderName: String((meta && meta.name) || folderId),
+        parentId: 'sharedDrives',
+        pageToken: pageToken,
+        corpora: 'drive',
+        driveId: folderId
+      });
+    }
+    throw catalogError_('INVALID_INPUT', 'Указанный объект не является папкой Drive.');
+  }
+
+  var parentId = null;
+  if (meta.parents && meta.parents.length) {
+    parentId = String(meta.parents[0]);
+  } else if (scope === 'shared') {
+    parentId = 'sharedWithMe';
+  } else if (scope === 'shared_drives') {
+    parentId = 'sharedDrives';
+  } else {
+    parentId = 'root';
+  }
+
+  var driveId = String(meta.driveId || '').trim();
+  var corpora = 'user';
+  if (scope === 'shared_drives' && driveId) {
+    corpora = 'drive';
+  } else if (scope === 'shared_drives' && !driveId) {
+    // Nested folder without driveId field — still use all drives listing.
+    corpora = 'allDrives';
+    driveId = '';
+  }
+
+  return listDriveChildrenForImport_(token, {
+    scope: scope,
+    folderId: String(meta.id || folderId),
+    folderName: String(meta.name || folderId),
+    parentId: parentId,
+    pageToken: pageToken,
+    corpora: corpora,
+    driveId: driveId
+  });
+}
+
+/**
+ * @param {*=} value
+ * @returns {'mydrive'|'shared'|'shared_drives'}
+ */
+function normalizeImportNavScope_(value) {
+  var s = String(value || 'mydrive')
+    .trim()
+    .toLowerCase();
+  if (s === 'shared' || s === 'shared_with_me' || s === 'sharedwithme') {
+    return 'shared';
+  }
+  if (s === 'shared_drives' || s === 'shareddrives' || s === 'drives') {
+    return 'shared_drives';
+  }
+  return 'mydrive';
+}
+
+/**
+ * @param {'mydrive'|'shared'|'shared_drives'} scope
+ * @returns {string}
+ */
+function importNavRootFolderId_(scope) {
+  if (scope === 'shared') {
+    return 'sharedWithMe';
+  }
+  if (scope === 'shared_drives') {
+    return 'sharedDrives';
+  }
+  return 'root';
+}
+
+/**
+ * @param {Object} meta
+ * @param {string} folderId
+ * @returns {boolean}
+ */
+function isSharedDriveRootMeta_(meta, folderId) {
+  if (!meta) {
+    return false;
+  }
+  var id = String(meta.id || folderId || '');
+  var driveId = String(meta.driveId || '').trim();
+  if (driveId && driveId === id) {
+    return true;
+  }
+  // Drive root folders sometimes omit parents and mime is folder.
+  if (
+    String(meta.mimeType || '') === DRIVE_FOLDER_MIME_ &&
+    (!meta.parents || !meta.parents.length) &&
+    driveId === id
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @param {string} token
+ * @param {string} pageToken
+ * @param {string} scope
+ * @returns {Object}
+ */
+function listSharedDrivesRootForImport_(token, pageToken, scope) {
   var params = [
-    'q=' + encodeURIComponent(q),
+    'pageSize=' + DRIVE_IMPORT_SEARCH_PAGE_SIZE_,
+    'fields=' + encodeURIComponent('nextPageToken,drives(id,name)')
+  ];
+  if (pageToken) {
+    params.push('pageToken=' + encodeURIComponent(pageToken));
+  }
+  var body = driveImportFetchJson_(
+    'https://www.googleapis.com/drive/v3/drives?' + params.join('&'),
+    token
+  );
+  var items = [];
+  (body.drives || []).forEach(function (d) {
+    if (!d || !d.id) {
+      return;
+    }
+    items.push({
+      id: String(d.id),
+      name: String(d.name || d.id),
+      kind: 'folder',
+      mimeType: DRIVE_FOLDER_MIME_
+    });
+  });
+  return {
+    ok: true,
+    scope: scope || 'shared_drives',
+    folderId: 'sharedDrives',
+    folderName: 'Shared drives',
+    parentId: null,
+    items: items,
+    nextPageToken: body.nextPageToken ? String(body.nextPageToken) : null
+  };
+}
+
+/**
+ * @param {string} token
+ * @param {string} pageToken
+ * @param {string} scope
+ * @returns {Object}
+ */
+function listSharedWithMeRootForImport_(token, pageToken, scope) {
+  var params = [
+    'q=' + encodeURIComponent('sharedWithMe = true and trashed = false'),
     'pageSize=' + DRIVE_IMPORT_SEARCH_PAGE_SIZE_,
     'fields=' + encodeURIComponent('nextPageToken,files(id,name,mimeType)'),
     'supportsAllDrives=true',
@@ -76,14 +249,77 @@ function listDriveFolderForImport(input) {
   if (pageToken) {
     params.push('pageToken=' + encodeURIComponent(pageToken));
   }
+  var body = driveImportFetchJson_(
+    'https://www.googleapis.com/drive/v3/files?' + params.join('&'),
+    token
+  );
+  return {
+    ok: true,
+    scope: scope || 'shared',
+    folderId: 'sharedWithMe',
+    folderName: 'Доступные мне',
+    parentId: null,
+    items: mapDriveImportFileItems_(body.files || []),
+    nextPageToken: body.nextPageToken ? String(body.nextPageToken) : null
+  };
+}
+
+/**
+ * @param {string} token
+ * @param {{
+ *   scope: string,
+ *   folderId: string,
+ *   folderName: string,
+ *   parentId: (string|null),
+ *   pageToken: string,
+ *   corpora: string,
+ *   driveId: string
+ * }} opts
+ * @returns {Object}
+ */
+function listDriveChildrenForImport_(token, opts) {
+  var safeId = String(opts.folderId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var q = "'" + safeId + "' in parents and trashed = false";
+  var params = [
+    'q=' + encodeURIComponent(q),
+    'pageSize=' + DRIVE_IMPORT_SEARCH_PAGE_SIZE_,
+    'fields=' + encodeURIComponent('nextPageToken,files(id,name,mimeType)'),
+    'supportsAllDrives=true',
+    'includeItemsFromAllDrives=true',
+    'orderBy=' + encodeURIComponent('folder,name')
+  ];
+  var corpora = String(opts.corpora || 'user');
+  params.push('corpora=' + encodeURIComponent(corpora));
+  if (corpora === 'drive' && opts.driveId) {
+    params.push('driveId=' + encodeURIComponent(String(opts.driveId)));
+  }
+  if (opts.pageToken) {
+    params.push('pageToken=' + encodeURIComponent(opts.pageToken));
+  }
 
   var body = driveImportFetchJson_(
     'https://www.googleapis.com/drive/v3/files?' + params.join('&'),
     token
   );
 
+  return {
+    ok: true,
+    scope: opts.scope,
+    folderId: opts.folderId,
+    folderName: opts.folderName,
+    parentId: opts.parentId,
+    items: mapDriveImportFileItems_(body.files || []),
+    nextPageToken: body.nextPageToken ? String(body.nextPageToken) : null
+  };
+}
+
+/**
+ * @param {Array} files
+ * @returns {Array<{ id: string, name: string, kind: 'file'|'folder', mimeType: string }>}
+ */
+function mapDriveImportFileItems_(files) {
   var items = [];
-  (body.files || []).forEach(function (f) {
+  (files || []).forEach(function (f) {
     if (!f || !f.id) {
       return;
     }
@@ -99,15 +335,7 @@ function listDriveFolderForImport(input) {
       mimeType: mime
     });
   });
-
-  return {
-    ok: true,
-    folderId: folderId === 'root' ? 'root' : resolvedFolderId,
-    folderName: folderName,
-    parentId: parentId,
-    items: items,
-    nextPageToken: body.nextPageToken ? String(body.nextPageToken) : null
-  };
+  return items;
 }
 
 /**
