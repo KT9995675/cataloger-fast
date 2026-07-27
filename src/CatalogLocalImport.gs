@@ -58,6 +58,7 @@ function prepareLocalImportTree(input) {
   var now = new Date();
   var created = 0;
 
+  var createdFolders = [];
   normalized.forEach(function (path) {
     if (pathToFolderId[path]) {
       return;
@@ -72,12 +73,26 @@ function prepareLocalImportTree(input) {
         continue;
       }
       var folderId = Utilities.getUuid();
-      treeSheet.appendRow([folderId, parentId, parts[i], now, false]);
+      treeSheet.appendRow([folderId, parentId, parts[i], now, false, '', '', '']);
       pathToFolderId[accum] = folderId;
+      createdFolders.push({ folderId: folderId, parentId: parentId, name: parts[i] });
       parentId = folderId;
       created++;
     }
   });
+
+  if (createdFolders.length) {
+    var engine = createAclEngine_();
+    createdFolders.forEach(function (f) {
+      engine.foldersById[f.folderId] = {
+        folder_id: f.folderId,
+        parent_folder_id: f.parentId,
+        name: f.name,
+        is_system: false
+      };
+      copyExplicitAclFromParentFolder_(engine, 'folder', f.folderId, f.parentId);
+    });
+  }
 
   return {
     ok: true,
@@ -290,6 +305,13 @@ function importLocalFile(input) {
       mimeType: resolvedMime,
       status: 'ready'
     });
+
+    engine.filesByCatalogId[catalogId] = {
+      catalog_id: catalogId,
+      folder_id: parentFolderId,
+      approved: false
+    };
+    copyExplicitAclFromParentFolder_(engine, 'file', catalogId, parentFolderId);
 
     if (jobId) {
       markLocalImportItem_(jobId, relativePath, fileName, 'done', catalogId, '');

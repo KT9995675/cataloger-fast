@@ -311,15 +311,28 @@ function importDriveFolder(input) {
     if (!parentVirtualId) {
       throw catalogError_('IMPORT_WALK_FAILED', 'Parent virtual folder missing during import.');
     }
-    treeRows.push([virtualId, parentVirtualId, node.name, now, false]);
+    treeRows.push([virtualId, parentVirtualId, node.name, now, false, '', '', '']);
     folderCount++;
   });
   if (treeRows.length) {
-    treeSheet.getRange(treeSheet.getLastRow() + 1, 1, treeRows.length, 5).setValues(treeRows);
+    treeSheet.getRange(treeSheet.getLastRow() + 1, 1, treeRows.length, 8).setValues(treeRows);
   }
 
   var rootVirtualId = driveToVirtual[sourceFolderId];
   applyDriveFolderAclToCatalogFolder_(sourceFolder, rootVirtualId, userEmail);
+
+  var aclEngine = createAclEngine_();
+  walk.folders.forEach(function (node) {
+    if (node.parentDriveFolderId === null) {
+      return;
+    }
+    var virtualId = driveToVirtual[node.driveFolderId];
+    var parentVirtualId = driveToVirtual[node.parentDriveFolderId];
+    if (!virtualId || !parentVirtualId) {
+      return;
+    }
+    copyExplicitAclFromParentFolder_(aclEngine, 'folder', virtualId, parentVirtualId);
+  });
 
   var items = [];
   var fileRows = [];
@@ -565,6 +578,14 @@ function applyDriveFolderAclToCatalogFolder_(driveFolder, catalogFolderId, added
     });
     appendExplicitUserAclRow_('folder', catalogFolderId, email, level);
   });
+
+  var folderEngine = createAclEngine_();
+  var entries = buildAclEntriesFromObject_(folderEngine, 'folder', catalogFolderId);
+  syncAclCacheForObjects_(
+    [{ objectType: 'folder', objectId: catalogFolderId }],
+    entries,
+    folderEngine
+  );
 }
 
 /**
@@ -797,7 +818,10 @@ function appendCatalogFileRowsBatch_(rows) {
       status: row.status || 'ready',
       last_error: row.lastError || '',
       source_file_id: row.sourceFileId || '',
-      mime_type: row.mimeType || ''
+      mime_type: row.mimeType || '',
+      acl_editors: row.aclEditors || '',
+      acl_commenters: row.aclCommenters || '',
+      acl_readers: row.aclReaders || ''
     };
     var line = [];
     for (var c = 0; c < headers.length; c++) {

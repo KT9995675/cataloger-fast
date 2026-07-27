@@ -65,31 +65,29 @@ function getCatalogSnapshot() {
 
   var treeRows = readSheetRecords_('Tree');
   var fileRows = readSheetRecords_('Files');
-  backfillMissingMimeTypes_(fileRows);
-  var folderSizes = buildFolderSizeIndex_(treeRows, fileRows);
+  var aclRows = readSheetRecords_('ACL');
+  var groupMemberRows = readSheetRecords_('GroupMembers');
+  var userRows = readSheetRecords_('Users');
+  var groupRows = readSheetRecords_('Groups');
+
   var engine = buildAclEngineFromRows_(
     treeRows,
     fileRows,
-    readSheetRecords_('ACL'),
-    readSheetRecords_('GroupMembers'),
-    readSheetRecords_('Users')
+    aclRows,
+    groupMemberRows,
+    userRows,
+    groupRows
   );
-  var emptyAcl = { editors: [], commenters: [], readers: [] };
+  ensureExplicitAclAndCache_(engine, treeRows, fileRows);
 
-  function aclFor(objectType, objectId) {
-    try {
-      return getEffectiveAclDisplayFromEngine_(engine, objectType, objectId);
-    } catch (e) {
-      return emptyAcl;
-    }
-  }
+  backfillMissingMimeTypes_(fileRows);
+  var folderSizes = buildFolderSizeIndex_(treeRows, fileRows);
 
   function approvedByNameFor_(email) {
     return resolveUserLabelFromEngine_(engine, email);
   }
 
   var folders = treeRows.map(function (row) {
-    var acl = aclFor('folder', row.folder_id);
     return {
       id: row.folder_id,
       parentFolderId: row.parent_folder_id ? String(row.parent_folder_id) : null,
@@ -97,14 +95,13 @@ function getCatalogSnapshot() {
       sizeBytes: folderSizes[row.folder_id] || 0,
       modifiedAt: formatCatalogDate_(row.folder_created_at),
       isSystem: parseBoolean_(row.is_system),
-      editors: acl.editors,
-      commenters: acl.commenters,
-      readers: acl.readers
+      editors: parseAclCacheField_(row.acl_editors),
+      commenters: parseAclCacheField_(row.acl_commenters),
+      readers: parseAclCacheField_(row.acl_readers)
     };
   });
 
   var files = fileRows.map(function (row) {
-    var acl = aclFor('file', row.catalog_id);
     var approvedBy = row.approved_by || '';
     return {
       id: row.catalog_id,
@@ -116,9 +113,9 @@ function getCatalogSnapshot() {
       approved: parseBoolean_(row.approved),
       approvedBy: approvedBy,
       approvedByName: approvedBy ? approvedByNameFor_(approvedBy) : '',
-      editors: acl.editors,
-      commenters: acl.commenters,
-      readers: acl.readers
+      editors: parseAclCacheField_(row.acl_editors),
+      commenters: parseAclCacheField_(row.acl_commenters),
+      readers: parseAclCacheField_(row.acl_readers)
     };
   });
 
@@ -150,17 +147,9 @@ function listFolderContentsBatch(folderIds) {
     fileRows,
     readSheetRecords_('ACL'),
     readSheetRecords_('GroupMembers'),
-    readSheetRecords_('Users')
+    readSheetRecords_('Users'),
+    readSheetRecords_('Groups')
   );
-  var emptyAcl = { editors: [], commenters: [], readers: [] };
-
-  function aclFor(objectType, objectId) {
-    try {
-      return getEffectiveAclDisplayFromEngine_(engine, objectType, objectId);
-    } catch (e) {
-      return emptyAcl;
-    }
-  }
 
   function approvedByNameFor_(email) {
     return resolveUserLabelFromEngine_(engine, email);
@@ -179,7 +168,6 @@ function listFolderContentsBatch(folderIds) {
       if (row.parent_folder_id !== resolvedFolderId) {
         return;
       }
-      var acl = aclFor('folder', row.folder_id);
       items.push({
         kind: 'folder',
         id: row.folder_id,
@@ -190,9 +178,9 @@ function listFolderContentsBatch(folderIds) {
         approvedBy: '',
         approvedByName: '',
         isSystem: parseBoolean_(row.is_system),
-        editors: acl.editors,
-        commenters: acl.commenters,
-        readers: acl.readers
+        editors: parseAclCacheField_(row.acl_editors),
+        commenters: parseAclCacheField_(row.acl_commenters),
+        readers: parseAclCacheField_(row.acl_readers)
       });
     });
 
@@ -200,7 +188,6 @@ function listFolderContentsBatch(folderIds) {
       if (row.folder_id !== resolvedFolderId) {
         return;
       }
-      var fileAcl = aclFor('file', row.catalog_id);
       var approvedBy = row.approved_by || '';
       items.push({
         kind: 'file',
@@ -213,9 +200,9 @@ function listFolderContentsBatch(folderIds) {
         approvedBy: approvedBy,
         approvedByName: approvedBy ? approvedByNameFor_(approvedBy) : '',
         isSystem: false,
-        editors: fileAcl.editors,
-        commenters: fileAcl.commenters,
-        readers: fileAcl.readers
+        editors: parseAclCacheField_(row.acl_editors),
+        commenters: parseAclCacheField_(row.acl_commenters),
+        readers: parseAclCacheField_(row.acl_readers)
       });
     });
 

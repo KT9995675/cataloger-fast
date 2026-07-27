@@ -34,7 +34,8 @@ function createAclEngine_() {
     readSheetRecords_('Files'),
     readSheetRecords_('ACL'),
     readSheetRecords_('GroupMembers'),
-    readSheetRecords_('Users')
+    readSheetRecords_('Users'),
+    readSheetRecords_('Groups')
   );
 }
 
@@ -44,9 +45,10 @@ function createAclEngine_() {
  * @param {Object.<string, string>[]} aclRows
  * @param {Object.<string, string>[]} groupMemberRows
  * @param {Object.<string, string>[]=} userRows
+ * @param {Object.<string, string>[]=} groupRows
  * @returns {Object}
  */
-function buildAclEngineFromRows_(treeRows, fileRows, aclRows, groupMemberRows, userRows) {
+function buildAclEngineFromRows_(treeRows, fileRows, aclRows, groupMemberRows, userRows, groupRows) {
   var foldersById = {};
   treeRows.forEach(function (row) {
     foldersById[row.folder_id] = row;
@@ -93,12 +95,22 @@ function buildAclEngineFromRows_(treeRows, fileRows, aclRows, groupMemberRows, u
     userDisplayNameByEmail[email.toLowerCase()] = resolveUserDisplayName_(row);
   });
 
+  var groupNameById = {};
+  (groupRows || []).forEach(function (row) {
+    var groupId = String(row.group_id || '').trim();
+    if (!groupId) {
+      return;
+    }
+    groupNameById[groupId] = String(row.name || '').trim() || groupId;
+  });
+
   return {
     foldersById: foldersById,
     filesByCatalogId: filesByCatalogId,
     aclByObject: aclByObject,
     groupMembers: groupMembers,
-    userDisplayNameByEmail: userDisplayNameByEmail
+    userDisplayNameByEmail: userDisplayNameByEmail,
+    groupNameById: groupNameById
   };
 }
 
@@ -124,8 +136,9 @@ function getEffectiveAclDisplayFromEngine_(engine, objectType, objectId) {
     throw catalogError_('FOLDER_NOT_FOUND', 'Folder not found: ' + objectId);
   }
 
-  var aclRows = resolveInheritedAclRows_(engine, objectType, objectId);
-  return aclRowsToDisplay_(engine, aclRows, approved);
+  // Явный ACL на объекте (без обхода родителей). Группа = один ярлык.
+  var aclRows = engine.aclByObject[objectType + ':' + objectId] || [];
+  return aclRowsToCacheLabels_(engine, aclRows, approved);
 }
 
 /**
@@ -287,7 +300,7 @@ function getEffectivePermissionForUserFromEngine_(engine, objectType, objectId, 
     throw catalogError_('FOLDER_NOT_FOUND', 'Folder not found: ' + objectId);
   }
 
-  var aclRows = resolveInheritedAclRows_(engine, objectType, objectId);
+  var aclRows = engine.aclByObject[objectType + ':' + objectId] || [];
   return resolveUserPermissionFromAclRows_(engine, aclRows, userEmail, approved);
 }
 
@@ -359,7 +372,7 @@ function getEffectivePermissionForGroupFromEngine_(engine, objectType, objectId,
     throw catalogError_('FOLDER_NOT_FOUND', 'Folder not found: ' + objectId);
   }
 
-  var aclRows = resolveInheritedAclRows_(engine, objectType, objectId);
+  var aclRows = engine.aclByObject[objectType + ':' + objectId] || [];
   var normalizedGroupId = String(groupId || '').trim();
   var level = 'none';
 

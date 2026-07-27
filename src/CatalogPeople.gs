@@ -437,6 +437,7 @@ function updateCatalogGroup(input) {
     }
     assertGroupNameUnique_(name, groupId);
     groupsSheet.getRange(rowIndex + 1, nameCol + 1).setValue(name);
+    rebuildAclCacheForGroupPrincipal_(groupId);
   }
 
   if (Object.prototype.hasOwnProperty.call(input, 'memberEmails')) {

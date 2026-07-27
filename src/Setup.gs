@@ -191,7 +191,7 @@ function writeVirtualTreeBootstrap_(virtualRootFolderId, virtualRootName, trashF
   }
 
   sheet.appendRow([virtualRootFolderId, '', virtualRootName, now, false]);
-  sheet.appendRow([trashFolderId, virtualRootFolderId, 'Корзина', now, true]);
+  sheet.appendRow([trashFolderId, virtualRootFolderId, '## Корзина', now, true]);
 }
 
 /**

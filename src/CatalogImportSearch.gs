@@ -466,15 +466,28 @@ function appendImportDriveFolderToJob_(
     if (!parentVirtualId) {
       throw catalogError_('IMPORT_WALK_FAILED', 'Parent virtual folder missing during import.');
     }
-    treeRows.push([virtualId, parentVirtualId, node.name, now, false]);
+    treeRows.push([virtualId, parentVirtualId, node.name, now, false, '', '', '']);
     folderCount++;
   });
   if (treeRows.length) {
-    treeSheet.getRange(treeSheet.getLastRow() + 1, 1, treeRows.length, 5).setValues(treeRows);
+    treeSheet.getRange(treeSheet.getLastRow() + 1, 1, treeRows.length, 8).setValues(treeRows);
   }
 
   var rootVirtualId = driveToVirtual[sourceFolderId];
   applyDriveFolderAclToCatalogFolder_(sourceFolder, rootVirtualId, userEmail);
+
+  var aclEngine = createAclEngine_();
+  walk.folders.forEach(function (node) {
+    if (node.parentDriveFolderId === null) {
+      return;
+    }
+    var virtualId = driveToVirtual[node.driveFolderId];
+    var parentVirtualId = driveToVirtual[node.parentDriveFolderId];
+    if (!virtualId || !parentVirtualId) {
+      return;
+    }
+    copyExplicitAclFromParentFolder_(aclEngine, 'folder', virtualId, parentVirtualId);
+  });
 
   var items = [];
   var fileRows = [];

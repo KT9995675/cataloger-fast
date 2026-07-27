@@ -57,9 +57,15 @@ function createCatalogFolder(input) {
     throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: Tree');
   }
 
-  sheet.appendRow([folderId, parentFolderId, name, now, false]);
-
-  var acl = getEffectiveAclDisplayFromEngine_(engine, 'folder', parentFolderId);
+  sheet.appendRow([folderId, parentFolderId, name, now, false, '', '', '']);
+  engine.foldersById[folderId] = {
+    folder_id: folderId,
+    parent_folder_id: parentFolderId,
+    name: name,
+    is_system: false
+  };
+  copyExplicitAclFromParentFolder_(engine, 'folder', folderId, parentFolderId);
+  var acl = getEffectiveAclDisplayFromEngine_(engine, 'folder', folderId);
 
   return {
     ok: true,

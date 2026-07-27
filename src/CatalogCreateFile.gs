@@ -83,19 +83,13 @@ function createCatalogFile(input) {
     mimeType: mimeType
   });
 
-  appendExplicitUserAclRow_('file', catalogId, userEmail, 'editor');
-
-  var acl = getEffectiveAclDisplayFromEngine_(engine, 'folder', targetFolderId);
-  var editors = (acl.editors || []).slice();
-  if (
-    editors
-      .map(function (e) {
-        return String(e).toLowerCase();
-      })
-      .indexOf(userEmail.toLowerCase()) < 0
-  ) {
-    editors.push(userEmail);
-  }
+  copyExplicitAclFromParentFolder_(engine, 'file', catalogId, targetFolderId);
+  engine.filesByCatalogId[catalogId] = {
+    catalog_id: catalogId,
+    folder_id: targetFolderId,
+    approved: false
+  };
+  var fileAcl = getEffectiveAclDisplayFromEngine_(engine, 'file', catalogId);
 
   return {
     ok: true,
@@ -114,9 +108,9 @@ function createCatalogFile(input) {
       approved: false,
       approvedBy: '',
       isSystem: false,
-      editors: editors,
-      commenters: acl.commenters || [],
-      readers: acl.readers || []
+      editors: fileAcl.editors || [],
+      commenters: fileAcl.commenters || [],
+      readers: fileAcl.readers || []
     }
   };
 }

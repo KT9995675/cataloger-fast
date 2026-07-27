@@ -163,21 +163,13 @@ function applyTargetFolderAclAfterMove_(engine, targetFolderId, movedItems) {
  * @returns {Array<{ principalType: string, principalId: string, permissionLevel: string }>}
  */
 function buildAclEntriesFromObject_(engine, objectType, objectId) {
-  var aclRows = resolveInheritedAclRows_(engine, objectType, objectId);
-  var entries = [];
-  for (var i = 0; i < aclRows.length; i++) {
-    var principalType = String(aclRows[i].principal_type || '').trim();
-    var principalId = String(aclRows[i].principal_id || '').trim();
-    if (!principalType || !principalId) {
-      continue;
-    }
-    entries.push({
-      principalType: principalType,
-      principalId: principalId,
-      permissionLevel: normalizePermissionLevel_(aclRows[i].permission_level)
-    });
+  var key = objectType + ':' + objectId;
+  var aclRows = engine.aclByObject[key] || [];
+  // fallback наследования — только если миграция ещё не догнала объект
+  if (!aclRows.length) {
+    aclRows = resolveInheritedAclRows_(engine, objectType, objectId);
   }
-  return entries;
+  return aclRowsToEntries_(aclRows);
 }
 
 /**

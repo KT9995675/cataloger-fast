@@ -1,5 +1,6 @@
 /** @const {string} Версия схемы листов — §3.11 */
-var SCHEMA_VERSION_ = '0.3';
+var SCHEMA_VERSION_ = '0.4';
+/* <!-- OLD: 0.3 — Users.display_name; 0.2 — Files.mime_type --> */
 
 /**
  * §15.2 п.1 — создаёт листы каталога и строку заголовков (row 1), если отсутствуют.
@@ -66,7 +67,40 @@ function ensureCatalogSchemaUpToDate_() {
     props.setProperty(PROP_SCHEMA_VERSION_, SCHEMA_VERSION_);
   }
   backfillEmptyUserDisplayNames_();
+  ensureTrashFolderDisplayName_();
   return result;
+}
+
+/**
+ * Системная корзина всегда «## Корзина» (сортировка + отображение).
+ */
+function ensureTrashFolderDisplayName_() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Tree');
+  if (!sheet) {
+    return;
+  }
+  var values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    return;
+  }
+  var headers = values[0].map(function (h) {
+    return String(h).trim();
+  });
+  var idCol = headers.indexOf('folder_id');
+  var nameCol = headers.indexOf('name');
+  if (idCol < 0 || nameCol < 0) {
+    return;
+  }
+  var wanted = '## Корзина';
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][idCol] || '') !== '__TRASH__') {
+      continue;
+    }
+    if (String(values[i][nameCol] || '') !== wanted) {
+      sheet.getRange(i + 1, nameCol + 1).setValue(wanted);
+    }
+    return;
+  }
 }
 
 /**
@@ -130,7 +164,16 @@ function areCatalogSheetsPresent_() {
  */
 function getCatalogSheetSchema_() {
   return {
-    Tree: ['folder_id', 'parent_folder_id', 'name', 'folder_created_at', 'is_system'],
+    Tree: [
+      'folder_id',
+      'parent_folder_id',
+      'name',
+      'folder_created_at',
+      'is_system',
+      'acl_editors',
+      'acl_commenters',
+      'acl_readers'
+    ],
     Files: [
       'catalog_id',
       'folder_id',
@@ -144,7 +187,10 @@ function getCatalogSheetSchema_() {
       'status',
       'last_error',
       'source_file_id',
-      'mime_type'
+      'mime_type',
+      'acl_editors',
+      'acl_commenters',
+      'acl_readers'
     ],
     Users: ['email', 'login_role', 'added_at', 'added_by', 'display_name'],
     ACL: [

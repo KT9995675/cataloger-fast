@@ -496,4 +496,6 @@ function replaceAclForObjects_(targetObjects, entries, engine) {
       .getRange(kept.length + 1, 1, lastRow - kept.length, headers.length)
       .clearContent();
   }
+
+  syncAclCacheForObjects_(targetObjects, entries, engine);
 }

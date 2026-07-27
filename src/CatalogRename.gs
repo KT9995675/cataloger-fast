@@ -1,6 +1,6 @@
 /**
  * §13.1 — переименование файла или папки (Shift+F6).
- * Имя меняется в каталоге и на Drive (для файлов).
+ * Папка: только лист Tree (быстрый путь). Файл: Tree/Files + имя на Drive.
  *
  * @param {{
  *   kind: 'folder'|'file',
@@ -10,7 +10,7 @@
  * @returns {{ ok: true, kind: 'folder'|'file', id: string, name: string }}
  */
 function renameCatalogItem(input) {
-  assertCatalogReady_();
+  assertCatalogReadyLight_();
 
   input = input || {};
   var kind = String(input.kind || '').trim();
@@ -35,43 +35,30 @@ function renameCatalogItem(input) {
   var loginRole = getLoginRoleForUser_(userEmail);
   assertCanRunCatalogOperations_(loginRole);
 
-  var engine = createAclEngine_();
-  var virtualRootFolderId = getVirtualRootFolderId_();
-
   if (kind === 'folder') {
-    return renameCatalogFolder_(engine, userEmail, loginRole, id, newName, virtualRootFolderId);
+    return renameCatalogFolderFast_(userEmail, loginRole, id, newName);
   }
+
+  var engine = createAclEngine_();
   return renameCatalogFile_(engine, userEmail, loginRole, id, newName);
 }
 
 /**
- * @param {Object} engine
+ * Быстрый rename папки: без чтения Files; ACL-движок только Tree+ACL+Users+Groups.
+ *
  * @param {string} userEmail
  * @param {'user'|'manager'|'controller'} loginRole
  * @param {string} folderId
  * @param {string} newName
- * @param {string} virtualRootFolderId
  * @returns {{ ok: true, kind: 'folder', id: string, name: string }}
  */
-function renameCatalogFolder_(engine, userEmail, loginRole, folderId, newName, virtualRootFolderId) {
-  var folder = engine.foldersById[folderId];
-  if (!folder) {
-    throw catalogError_('FOLDER_NOT_FOUND', 'Folder not found: ' + folderId);
-  }
+function renameCatalogFolderFast_(userEmail, loginRole, folderId, newName) {
+  var virtualRootFolderId = getVirtualRootFolderId_();
   if (folderId === virtualRootFolderId) {
     throw catalogError_('NOT_ALLOWED', 'Нельзя переименовать корневую папку каталога.');
   }
-  if (folderId === '__TRASH__' || parseBoolean_(folder.is_system)) {
+  if (folderId === '__TRASH__') {
     throw catalogError_('NOT_ALLOWED', 'Нельзя переименовать системную папку.');
-  }
-
-  assertEditorOnFolderForMove_(engine, userEmail, loginRole, folderId);
-  if (folder.parent_folder_id) {
-    assertEditorOnFolderForMove_(engine, userEmail, loginRole, String(folder.parent_folder_id));
-  }
-
-  if (String(folder.name || '') === newName) {
-    return { ok: true, kind: 'folder', id: folderId, name: newName };
   }
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Tree');
@@ -80,23 +67,60 @@ function renameCatalogFolder_(engine, userEmail, loginRole, folderId, newName, v
   }
 
   var values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    throw catalogError_('FOLDER_NOT_FOUND', 'Folder not found: ' + folderId);
+  }
   var headers = values[0].map(function (h) {
     return String(h).trim();
   });
   var folderIdCol = headers.indexOf('folder_id');
+  var parentCol = headers.indexOf('parent_folder_id');
   var nameCol = headers.indexOf('name');
+  var systemCol = headers.indexOf('is_system');
   if (folderIdCol < 0 || nameCol < 0) {
     throw catalogError_('SCHEMA_MISMATCH', 'Tree sheet headers are invalid.');
   }
 
+  var rowIndex = -1;
+  var parentFolderId = '';
+  var isSystem = false;
+  var currentName = '';
   for (var i = 1; i < values.length; i++) {
     if (String(values[i][folderIdCol]) === folderId) {
-      sheet.getRange(i + 1, nameCol + 1).setValue(newName);
-      return { ok: true, kind: 'folder', id: folderId, name: newName };
+      rowIndex = i;
+      parentFolderId = parentCol >= 0 ? String(values[i][parentCol] || '') : '';
+      isSystem = systemCol >= 0 && parseBoolean_(values[i][systemCol]);
+      currentName = String(values[i][nameCol] || '');
+      break;
     }
   }
+  if (rowIndex < 0) {
+    throw catalogError_('FOLDER_NOT_FOUND', 'Folder not found: ' + folderId);
+  }
+  if (isSystem) {
+    throw catalogError_('NOT_ALLOWED', 'Нельзя переименовать системную папку.');
+  }
 
-  throw catalogError_('FOLDER_NOT_FOUND', 'Folder not found: ' + folderId);
+  // Права: лёгкий движок без Files
+  var engine = buildAclEngineFromRows_(
+    readSheetRecords_('Tree'),
+    [],
+    readSheetRecords_('ACL'),
+    readSheetRecords_('GroupMembers'),
+    readSheetRecords_('Users'),
+    readSheetRecords_('Groups')
+  );
+  assertEditorOnFolderForMove_(engine, userEmail, loginRole, folderId);
+  if (parentFolderId) {
+    assertEditorOnFolderForMove_(engine, userEmail, loginRole, parentFolderId);
+  }
+
+  if (currentName === newName) {
+    return { ok: true, kind: 'folder', id: folderId, name: newName };
+  }
+
+  sheet.getRange(rowIndex + 1, nameCol + 1).setValue(newName);
+  return { ok: true, kind: 'folder', id: folderId, name: newName };
 }
 
 /**
@@ -119,51 +143,40 @@ function renameCatalogFile_(engine, userEmail, loginRole, catalogId, newName) {
   }
   assertEditorOnFolderForMove_(engine, userEmail, loginRole, parentFolderId);
 
-  var driveFileId = String(file.file_id || '').trim();
-  if (!driveFileId) {
-    throw catalogError_('INVALID_STATE', 'File has no Drive id.');
+  if (String(file.display_name || '') === newName) {
+    return { ok: true, kind: 'file', id: catalogId, name: newName };
   }
 
-  var driveFile;
-  try {
-    driveFile = DriveApp.getFileById(driveFileId);
-  } catch (e) {
-    throw catalogError_('DRIVE_ERROR', 'Drive file not found or not accessible.');
-  }
-
-  if (String(file.display_name || '') !== newName) {
-    driveFile.setName(newName);
+  var fileId = String(file.file_id || '').trim();
+  if (fileId) {
+    try {
+      DriveApp.getFileById(fileId).setName(newName);
+    } catch (eDrive) {
+      throw catalogError_(
+        'DRIVE_RENAME_FAILED',
+        (eDrive && eDrive.message) || 'Не удалось переименовать файл на Drive.'
+      );
+    }
   }
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Files');
   if (!sheet) {
     throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: Files');
   }
-
   var values = sheet.getDataRange().getValues();
   var headers = values[0].map(function (h) {
     return String(h).trim();
   });
-  var catalogCol = headers.indexOf('catalog_id');
+  var idCol = headers.indexOf('catalog_id');
   var nameCol = headers.indexOf('display_name');
-  var modifiedCol = headers.indexOf('drive_modified_at');
-  if (catalogCol < 0 || nameCol < 0) {
+  if (idCol < 0 || nameCol < 0) {
     throw catalogError_('SCHEMA_MISMATCH', 'Files sheet headers are invalid.');
   }
-
   for (var i = 1; i < values.length; i++) {
-    if (String(values[i][catalogCol]) === catalogId) {
+    if (String(values[i][idCol]) === catalogId) {
       sheet.getRange(i + 1, nameCol + 1).setValue(newName);
-      if (modifiedCol >= 0) {
-        try {
-          sheet.getRange(i + 1, modifiedCol + 1).setValue(driveFile.getLastUpdated());
-        } catch (e2) {
-          // optional column update
-        }
-      }
       return { ok: true, kind: 'file', id: catalogId, name: newName };
     }
   }
-
   throw catalogError_('FILE_NOT_FOUND', 'File not found: ' + catalogId);
 }

@@ -421,7 +421,8 @@ function beginImportDriveWorkContext_(createdBy) {
     createdBy: createdBy || '',
     filesBatch: beginFilesUpdateBatch_(),
     usersBatch: beginUsersEnsureBatch_(),
-    aclBatch: beginAclAppendBatch_()
+    aclBatch: beginAclAppendBatch_(),
+    aclTouchedIds: []
   };
 }
 
@@ -435,6 +436,22 @@ function commitImportDriveWorkContext_(ctx) {
   commitUsersEnsureBatch_(ctx.usersBatch);
   commitAclAppendBatch_(ctx.aclBatch);
   commitFilesUpdateBatch_(ctx.filesBatch);
+  if (ctx.aclTouchedIds && ctx.aclTouchedIds.length) {
+    var engine = createAclEngine_();
+    var seen = {};
+    ctx.aclTouchedIds.forEach(function (catalogId) {
+      if (!catalogId || seen[catalogId]) {
+        return;
+      }
+      seen[catalogId] = true;
+      var entries = buildAclEntriesFromObject_(engine, 'file', catalogId);
+      syncAclCacheForObjects_(
+        [{ objectType: 'file', objectId: catalogId }],
+        entries,
+        engine
+      );
+    });
+  }
 }
 
 /**
@@ -844,6 +861,9 @@ function applyDriveFileAclToCatalogFile_(driveFile, catalogId, addedBy, workCtx)
         addedBy: addedBy || ''
       });
       appendAclInBatch_(workCtx.aclBatch, 'file', catalogId, email, level);
+      if (workCtx.aclTouchedIds) {
+        workCtx.aclTouchedIds.push(String(catalogId));
+      }
       return;
     }
     appendOrEnsureUserRow_({
@@ -854,4 +874,10 @@ function applyDriveFileAclToCatalogFile_(driveFile, catalogId, addedBy, workCtx)
     });
     appendExplicitUserAclRow_('file', catalogId, email, level);
   });
+
+  if (!(workCtx && workCtx.usersBatch)) {
+    var engine = createAclEngine_();
+    var entries = buildAclEntriesFromObject_(engine, 'file', catalogId);
+    syncAclCacheForObjects_([{ objectType: 'file', objectId: catalogId }], entries, engine);
+  }
 }

@@ -245,11 +245,33 @@
       .panel-table tr.selected .file-icon {
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
       }
-      .col-name { width: 28%; }
-      .col-approved { width: 8%; text-align: center; }
+      .col-name { width: 24%; }
+      .col-type { width: 7%; }
+      .col-approved { width: 6%; text-align: center; }
       .col-acl { width: 10%; }
       .col-size { width: 10%; text-align: right; }
-      .col-date { width: 14%; }
+      .col-date { width: 12%; }
+      .panel-table th.th-sort {
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+      }
+      .panel-table th.th-sort:hover {
+        color: var(--text);
+      }
+      .panel-table th.th-sort .sort-ind {
+        display: inline-block;
+        margin-left: 3px;
+        font-size: 10px;
+        opacity: 0.35;
+      }
+      .panel-table th.th-sort.is-active {
+        color: var(--text);
+      }
+      .panel-table th.th-sort.is-active .sort-ind {
+        opacity: 1;
+        color: #9cdcfe;
+      }
       .panel-empty {
         padding: 24px;
         color: var(--muted);
@@ -647,10 +669,14 @@
         margin: 0 6px 6px 0;
         padding: 2px 8px;
         border-radius: 3px;
-        background: #e8f4fc;
-        border: 1px solid #9ec9e8;
-        color: #1a1a1a;
+        background: #1b3a4f;
+        border: 1px solid #3d6f91;
+        color: #e8f4fc;
         max-width: 100%;
+      }
+      .import-picked-chip,
+      .import-picked-chip span {
+        color: #e8f4fc !important;
       }
       .import-picked-chip button {
         border: none;
@@ -659,7 +685,7 @@
         padding: 0 2px;
         font-size: 14px;
         line-height: 1;
-        color: #005a9e;
+        color: #9cdcfe !important;
       }
     </style>
   </head>
@@ -717,12 +743,13 @@
               <table class="panel-table" id="table-left">
                 <thead>
                   <tr>
-                    <th class="col-name">Имя</th>
+                    <th class="col-name th-sort" data-sort="name">Имя<span class="sort-ind"></span></th>
+                    <th class="col-type th-sort" data-sort="type">Тип<span class="sort-ind"></span></th>
                     <th class="col-approved">Утв.</th>
                     <th class="col-acl">Редакторы</th>
                     <th class="col-acl">Корректоры</th>
                     <th class="col-acl">Читатели</th>
-                    <th class="col-size">Размер</th>
+                    <th class="col-size th-sort" data-sort="size">Размер<span class="sort-ind"></span></th>
                     <th class="col-date">Изменён</th>
                   </tr>
                 </thead>
@@ -736,12 +763,13 @@
               <table class="panel-table" id="table-right">
                 <thead>
                   <tr>
-                    <th class="col-name">Имя</th>
+                    <th class="col-name th-sort" data-sort="name">Имя<span class="sort-ind"></span></th>
+                    <th class="col-type th-sort" data-sort="type">Тип<span class="sort-ind"></span></th>
                     <th class="col-approved">Утв.</th>
                     <th class="col-acl">Редакторы</th>
                     <th class="col-acl">Корректоры</th>
                     <th class="col-acl">Читатели</th>
-                    <th class="col-size">Размер</th>
+                    <th class="col-size th-sort" data-sort="size">Размер<span class="sort-ind"></span></th>
                     <th class="col-date">Изменён</th>
                   </tr>
                 </thead>
@@ -1054,7 +1082,9 @@
             items: [],
             selectedIndex: -1,
             selectedMap: {},
-            loading: false
+            loading: false,
+            sortKey: 'name',
+            sortDir: 1
           },
           {
             folderId: null,
@@ -1063,45 +1093,62 @@
             items: [],
             selectedIndex: -1,
             selectedMap: {},
-            loading: false
+            loading: false,
+            sortKey: 'name',
+            sortDir: 1
           }
         ];
         var panelEls = [
           {
             root: document.getElementById('panel-left'),
             header: document.getElementById('header-left'),
-            tbody: document.getElementById('tbody-left')
+            tbody: document.getElementById('tbody-left'),
+            table: document.getElementById('table-left')
           },
           {
             root: document.getElementById('panel-right'),
             header: document.getElementById('header-right'),
-            tbody: document.getElementById('tbody-right')
+            tbody: document.getElementById('tbody-right'),
+            table: document.getElementById('table-right')
           }
         ];
 
         function setStatus(text) {
-          if (flashOperationDone_._timer) {
-            clearTimeout(flashOperationDone_._timer);
-            flashOperationDone_._timer = null;
-          }
           document.getElementById('status-text').textContent = text || 'Готово';
         }
 
         /**
-         * Статус «Операция выполнена» на 2 с (как splash «Открываю»).
+         * Splash на 2 с (Открываю / Начинаю / Завершено).
+         * @param {string} text
          */
-        function flashOperationDone_() {
-          document.getElementById('status-text').textContent = 'Операция выполнена';
-          if (flashOperationDone_._timer) {
-            clearTimeout(flashOperationDone_._timer);
+        function showTimedSplash_(text) {
+          var el = document.getElementById('opening-splash');
+          if (!el) {
+            return;
           }
-          flashOperationDone_._timer = setTimeout(function () {
-            flashOperationDone_._timer = null;
-            var el = document.getElementById('status-text');
-            if (el && el.textContent === 'Операция выполнена') {
-              el.textContent = 'Готово';
-            }
+          el.textContent = text || '';
+          el.classList.remove('hidden');
+          if (showTimedSplash_._timer) {
+            clearTimeout(showTimedSplash_._timer);
+          }
+          showTimedSplash_._timer = setTimeout(function () {
+            el.classList.add('hidden');
+            showTimedSplash_._timer = null;
           }, 2000);
+        }
+
+        function showOpeningSplash_() {
+          showTimedSplash_('Открываю…');
+        }
+
+        function showOpStartSplash_() {
+          showTimedSplash_('Начинаю');
+        }
+
+        /** Финиш потенциально долгой операции. */
+        function flashOperationDone_() {
+          showTimedSplash_('Завершено');
+          document.getElementById('status-text').textContent = 'Готово';
         }
 
         function formatBytes(bytes) {
@@ -1171,6 +1218,7 @@
             upRow.dataset.kind = 'up';
             upRow.innerHTML =
               '<td class="col-name"><span class="col-name-cell"><span class="file-icon file-icon-folder" title="Папка"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="14" height="14" rx="2" fill="#e8b923"/><path d="M3.5 5.2h3.2l1 1.3H12.5v5.3H3.5z" fill="#fff" opacity=".95"/></svg></span><span class="name-text">[..]</span></span></td>' +
+              '<td class="col-type"></td>' +
               '<td class="col-approved"></td>' +
               '<td class="col-acl"></td><td class="col-acl"></td><td class="col-acl"></td>' +
               '<td class="col-size"></td><td class="col-date"></td>';
@@ -1190,7 +1238,7 @@
 
           if (!state.items.length && !state.parentFolderId) {
             var empty = document.createElement('tr');
-            empty.innerHTML = '<td colspan="7" class="panel-empty">Пусто</td>';
+            empty.innerHTML = '<td colspan="8" class="panel-empty">Пусто</td>';
             tbody.appendChild(empty);
             return;
           }
@@ -1233,6 +1281,11 @@
               '<span class="name-text">' +
               escapeHtml(item.name) +
               '</span></span>' +
+              '</td>' +
+              '<td class="col-type" title="' +
+              escapeAttr(icon.title || '') +
+              '">' +
+              escapeHtml(formatItemTypeLabel_(item, icon)) +
               '</td>' +
               '<td class="col-approved">' +
               approvedCell +
@@ -1293,6 +1346,76 @@
               });
             }
             tbody.appendChild(tr);
+          });
+
+          updatePanelSortHeaders_(index);
+        }
+
+        function updatePanelSortHeaders_(panelIndex) {
+          var state = panels[panelIndex];
+          var table = panelEls[panelIndex].table;
+          if (!table || !state) {
+            return;
+          }
+          var key = state.sortKey || 'name';
+          var dir = state.sortDir === -1 ? -1 : 1;
+          var arrow = dir === 1 ? '▲' : '▼';
+          Array.prototype.forEach.call(table.querySelectorAll('th.th-sort'), function (th) {
+            var sortKey = th.getAttribute('data-sort');
+            var ind = th.querySelector('.sort-ind');
+            var active = sortKey === key;
+            th.classList.toggle('is-active', active);
+            if (ind) {
+              ind.textContent = active ? arrow : '';
+            }
+          });
+        }
+
+        function togglePanelSort_(panelIndex, sortKey) {
+          var state = panels[panelIndex];
+          if (!state) {
+            return;
+          }
+          if (state.sortKey === sortKey) {
+            state.sortDir = state.sortDir === 1 ? -1 : 1;
+          } else {
+            state.sortKey = sortKey;
+            state.sortDir = 1;
+          }
+          sortPanelItems_(panelIndex);
+          renderPanel(panelIndex);
+          setActivePanel(panelIndex);
+        }
+
+        function sortPanelItems_(panelIndex) {
+          var state = panels[panelIndex];
+          if (!state || !state.items) {
+            return;
+          }
+          var key = state.sortKey || 'name';
+          var dir = state.sortDir === -1 ? -1 : 1;
+          state.items.sort(function (a, b) {
+            return comparePanelItemsClient_(a, b, key, dir);
+          });
+        }
+
+        function bindPanelSortHeaders_() {
+          panelEls.forEach(function (el, panelIndex) {
+            if (!el.table || el.table._sortBound) {
+              return;
+            }
+            el.table._sortBound = true;
+            el.table.querySelectorAll('th.th-sort').forEach(function (th) {
+              th.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var sortKey = th.getAttribute('data-sort');
+                if (!sortKey) {
+                  return;
+                }
+                togglePanelSort_(panelIndex, sortKey);
+              });
+            });
           });
         }
 
@@ -1598,18 +1721,6 @@
           return confirmOperationWithWeight_('Внимание.', fileCount, totalBytes);
         }
 
-        function showOpeningSplash_() {
-          var el = document.getElementById('opening-splash');
-          el.classList.remove('hidden');
-          if (showOpeningSplash_._timer) {
-            clearTimeout(showOpeningSplash_._timer);
-          }
-          showOpeningSplash_._timer = setTimeout(function () {
-            el.classList.add('hidden');
-            showOpeningSplash_._timer = null;
-          }, 2000);
-        }
-
         function isFolderEqualOrAncestorOf_(ancestorFolderId, folderId) {
           if (!ancestorFolderId || !folderId || !catalogSnapshot) {
             return false;
@@ -1786,6 +1897,7 @@
               return;
             }
             setStatus('Подписание…');
+            showOpStartSplash_();
             google.script.run
               .withSuccessHandler(function (result) {
                 var n = (result && result.approved && result.approved.length) || 0;
@@ -1911,6 +2023,7 @@
               return;
             }
             setStatus('Очистка корзины…');
+            showOpStartSplash_();
             google.script.run
               .withSuccessHandler(function (result) {
                 setStatus('Обновление каталога…');
@@ -1960,6 +2073,7 @@
 
         function runCopyItems(targetFolderId, items, sourceFolderId) {
           setStatus('Копирование…');
+          showOpStartSplash_();
           google.script.run
             .withSuccessHandler(function () {
               reloadCatalogSnapshot_([sourceFolderId, targetFolderId], function () {
@@ -1980,6 +2094,7 @@
         function runMoveItems(targetFolderId, items, sourceFolderId) {
           var movedItems = collectItemsFromFolderView_(sourceFolderId, items);
           setStatus('Перемещение…');
+          showOpStartSplash_();
           google.script.run
             .withSuccessHandler(function () {
               applyLocalMove_(sourceFolderId, targetFolderId, movedItems);
@@ -2069,6 +2184,7 @@
         function closeRenameModal() {
           document.getElementById('rename-modal').classList.add('hidden');
           renameTarget = null;
+          restorePanelKeyboardFocus_();
         }
 
         function showRenameMessage(text, kind) {
@@ -2091,6 +2207,9 @@
           btn.disabled = true;
           showRenameMessage('', '');
           setStatus('Переименование…');
+          if (renameTarget.kind === 'file') {
+            showOpStartSplash_();
+          }
 
           google.script.run
             .withSuccessHandler(function (result) {
@@ -2101,7 +2220,13 @@
               var name = (result && result.name) || newName;
               closeRenameModal();
               applyLocalRename_(kind, id, name, folderId);
-              flashOperationDone_();
+              selectItemInActivePanel_(kind, id);
+              restorePanelKeyboardFocus_();
+              if (kind === 'folder') {
+                setStatus('Готово');
+              } else {
+                flashOperationDone_();
+              }
             })
             .withFailureHandler(function (err) {
               btn.disabled = false;
@@ -2113,6 +2238,42 @@
               id: renameTarget.id,
               newName: newName
             });
+        }
+
+        function selectItemInActivePanel_(kind, id) {
+          var state = panels[activePanelIndex];
+          if (!state || !state.items) {
+            return;
+          }
+          for (var i = 0; i < state.items.length; i++) {
+            if (state.items[i].kind === kind && String(state.items[i].id) === String(id)) {
+              state.selectedIndex = i;
+              state.selectedMap = {};
+              renderPanel(activePanelIndex);
+              return;
+            }
+          }
+        }
+
+        /**
+         * Фокус на панели и первая строка ([..] или первый элемент) — без выделения (selected).
+         */
+        function focusPanelFirstRow_(panelIndex) {
+          var state = panels[panelIndex];
+          if (!state) {
+            return;
+          }
+          state.selectedMap = {};
+          if (state.parentFolderId) {
+            state.selectedIndex = -1;
+          } else if (state.items && state.items.length) {
+            state.selectedIndex = 0;
+          } else {
+            state.selectedIndex = -1;
+          }
+          setActivePanel(panelIndex);
+          renderPanel(panelIndex);
+          restorePanelKeyboardFocus_();
         }
 
         function navigatePanel(panelIndex, folderId) {
@@ -2564,13 +2725,71 @@
         var importSearchLoading_ = false;
         var LOCAL_IMPORT_WARN_BYTES_ = HEAVY_OP_WARN_BYTES_;
 
-        function comparePanelItemsClient_(a, b) {
+        function itemTypeSortKey_(item) {
+          if (!item) {
+            return '';
+          }
+          if (item.kind === 'folder') {
+            return 'folder';
+          }
+          var mime = String(item.mimeType || '').toLowerCase();
+          var name = String(item.name || '').toLowerCase();
+          var ext = '';
+          var dot = name.lastIndexOf('.');
+          if (dot > 0 && dot < name.length - 1) {
+            ext = name.slice(dot + 1);
+          }
+          if (mime.indexOf('vnd.google-apps.') >= 0) {
+            return mime.replace('application/vnd.google-apps.', 'g:');
+          }
+          if (ext) {
+            return ext;
+          }
+          return mime || 'file';
+        }
+
+        function formatItemTypeLabel_(item, icon) {
+          if (!item) {
+            return '';
+          }
+          if (item.kind === 'folder') {
+            return 'Папка';
+          }
+          var name = String(item.name || '');
+          var dot = name.lastIndexOf('.');
+          if (dot > 0 && dot < name.length - 1) {
+            return name.slice(dot + 1).toUpperCase();
+          }
+          if (icon && icon.title) {
+            return String(icon.title);
+          }
+          var mime = String(item.mimeType || '');
+          if (mime.indexOf('vnd.google-apps.') >= 0) {
+            return mime.split('.').pop() || 'Google';
+          }
+          return mime ? mime.split('/').pop() : 'файл';
+        }
+
+        function comparePanelItemsClient_(a, b, sortKey, sortDir) {
           if (a.kind !== b.kind) {
             return a.kind === 'folder' ? -1 : 1;
           }
-          return String(a.name || '').localeCompare(String(b.name || ''), 'ru', {
-            sensitivity: 'base'
-          });
+          var dir = sortDir === -1 ? -1 : 1;
+          var key = sortKey || 'name';
+          var cmp = 0;
+          if (key === 'size') {
+            cmp = (Number(a.sizeBytes) || 0) - (Number(b.sizeBytes) || 0);
+          } else if (key === 'type') {
+            cmp = String(itemTypeSortKey_(a)).localeCompare(String(itemTypeSortKey_(b)), 'ru', {
+              sensitivity: 'base'
+            });
+          }
+          if (!cmp) {
+            cmp = String(a.name || '').localeCompare(String(b.name || ''), 'ru', {
+              sensitivity: 'base'
+            });
+          }
+          return cmp * dir;
         }
 
         function itemKey_(item) {
@@ -2965,9 +3184,10 @@
             .withSuccessHandler(function (data) {
               ingestCatalogSnapshot_(data);
               refreshOpenPanels_(folderIds);
-              setStatus('Готово');
               if (done) {
                 done(null, data);
+              } else {
+                setStatus('Готово');
               }
             })
             .withFailureHandler(function (err) {
@@ -3237,10 +3457,10 @@
                 closeCreateModal();
                 if (result && result.folder) {
                   applyLocalCreateFolder_(result.folder);
-                  flashOperationDone_();
+                  setStatus('Готово');
                 } else {
                   reloadCatalogSnapshot_([state.folderId], function () {
-                    flashOperationDone_();
+                    setStatus('Готово');
                   });
                 }
               })
@@ -3257,6 +3477,7 @@
           }
 
           setStatus('Создание файла…');
+          showOpStartSplash_();
           google.script.run
             .withSuccessHandler(function (result) {
               btn.disabled = false;
@@ -3291,6 +3512,7 @@
           state.items = data.items || [];
           state.loading = false;
           state.selectedMap = {};
+          sortPanelItems_(panelIndex);
           if (state.selectedIndex < 0 && state.items.length) {
             state.selectedIndex = 0;
           }
@@ -3317,6 +3539,7 @@
                 return;
               }
               applyPanelFromSnapshot_(panelIndex, resolvedFolderId);
+              setStatus('Готово');
             });
             return;
           }
@@ -3331,6 +3554,7 @@
                 return;
               }
               applyPanelFromSnapshot_(panelIndex, resolvedFolderId);
+              setStatus('Готово');
             });
             return;
           }
@@ -3350,6 +3574,7 @@
               applyPanelFromSnapshot_(0, folderId);
               applyPanelFromSnapshot_(1, folderId);
               updateEmptyTrashButton_();
+              focusPanelFirstRow_(0);
               setStatus('Готово');
             })
             .withFailureHandler(function (err) {
@@ -3387,6 +3612,7 @@
             !!data.isSpreadsheetOwner;
           applyCommandBarAccess_(data.canRunCatalogOperations);
           updateEmptyTrashButton_();
+          bindPanelSortHeaders_();
 
           document.getElementById('main-user').textContent = data.userEmail
             ? data.userEmail
@@ -3572,6 +3798,7 @@
             var it = importDrivePicked_[id];
             var chip = document.createElement('span');
             chip.className = 'import-picked-chip';
+            chip.style.color = '#e8f4fc';
             chip.title = it.name;
             chip.innerHTML =
               '<span>' +
@@ -3952,6 +4179,7 @@
               btn.disabled = true;
               showImportMessage('', '');
               setStatus('Постановка в очередь…');
+              showOpStartSplash_();
 
               var folderPaths = collectLocalFolderPaths_(localImportEntries_);
               var filesMeta = localImportEntries_.map(function (entry) {
@@ -4020,6 +4248,7 @@
           btn.disabled = true;
           showImportMessage('', '');
           setStatus('Постановка импорта в очередь…');
+          showOpStartSplash_();
 
           google.script.run
             .withSuccessHandler(function (result) {
@@ -4287,6 +4516,7 @@
           saveBtn.disabled = true;
           showAclMessage('', '');
           setStatus('Сохранение прав…');
+          showOpStartSplash_();
 
           google.script.run
             .withSuccessHandler(function () {
