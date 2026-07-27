@@ -150,29 +150,19 @@ function writeFileApprovedFields_(catalogId, approved, approvedBy, approvedAt) {
 }
 
 /**
- * Явные ACL файла: editor → commenter (§7).
+ * После утверждения: editor→commenter в эффективных правах (рантайм + кэш).
+ * Строки ACL не переписываем — дельты хранят исходные уровни; demote при чтении (§7 / §4.4a).
  *
  * @param {Object} engine
  * @param {string} catalogId
  */
 function demoteExplicitEditorsOnFile_(engine, catalogId) {
-  var entries = readExplicitAclEntries_('file', catalogId, engine)
-    .map(function (entry) {
-      var level = entry.permissionLevel;
-      if (level === 'editor') {
-        level = 'commenter';
-      }
-      return {
-        principalType: entry.principalType,
-        principalId: entry.principalId,
-        permissionLevel: level
-      };
-    })
-    .filter(function (entry) {
-      return entry.permissionLevel && entry.permissionLevel !== 'none';
-    });
-
-  replaceAclForObjects_(
+  var entries = effectiveAclMapToEntries_(
+    getEffectiveAclMapFromEngine_(engine, 'file', catalogId)
+  );
+  // map already demotes? No - getEffectiveAclMap doesn't demote, only permission helpers and aclRowsToCacheLabels do with approved flag.
+  // After approve, file.approved is true in engine — syncAclCache uses approved from engine.
+  syncAclCacheForObjects_(
     [{ objectType: 'file', objectId: catalogId }],
     entries,
     engine

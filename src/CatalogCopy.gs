@@ -150,14 +150,14 @@ function assertCopyPermissions_(
  * @returns {{
  *   treeRows: Array<Object>,
  *   fileRows: Array<Object>,
- *   aclList: Array<{ objectType: string, objectId: string, entries: Array }>
+ *   aclCacheList: Array<{ objectType: string, objectId: string, entries: Array }>
  * }}
  */
 function beginCopyWriteContext_() {
   return {
     treeRows: [],
     fileRows: [],
-    aclList: []
+    aclCacheList: []
   };
 }
 
@@ -168,46 +168,50 @@ function beginCopyWriteContext_() {
 function commitCopyWriteContext_(ctx, engine) {
   appendTreeFolderRowsBatch_(ctx.treeRows);
   appendCatalogFileRowsBatch_(ctx.fileRows);
-  appendAclForNewObjectsBatch_(ctx.aclList, engine);
+  // §4.4a — копируемые объекты без отклонений; только кэш эффективных ярлыков.
+  (ctx.aclCacheList || []).forEach(function (item) {
+    if (engine && engine.aclByObject) {
+      engine.aclByObject[item.objectType + ':' + item.objectId] = [];
+    }
+    syncAclCacheForObjects_(
+      [{ objectType: item.objectType, objectId: item.objectId }],
+      item.entries || [],
+      engine
+    );
+  });
 }
 
 /**
+ * Кэш/UI для копии: эффективные права целевой родительской папки (без строк ACL).
+ *
  * @param {Object} engine
- * @param {'folder'|'file'} sourceType
- * @param {string} sourceId
+ * @param {string} parentFolderId
  * @returns {Array<{ principalType: string, principalId: string, permissionLevel: string }>}
  */
-function buildCopyAclEntries_(engine, sourceType, sourceId) {
-  var aclRows = resolveInheritedAclRows_(engine, sourceType, sourceId);
-  var entries = [];
-  for (var i = 0; i < aclRows.length; i++) {
-    entries.push({
-      principalType: String(aclRows[i].principal_type || '').trim(),
-      principalId: String(aclRows[i].principal_id || '').trim(),
-      permissionLevel: normalizePermissionLevel_(aclRows[i].permission_level)
-    });
+function buildCopyAclEntriesFromParent_(engine, parentFolderId) {
+  if (!parentFolderId) {
+    return [];
   }
-  return entries;
+  return effectiveAclMapToEntries_(
+    getEffectiveAclMapFromEngine_(engine, 'folder', parentFolderId)
+  );
 }
 
 /**
  * @param {Object} ctx
  * @param {Object} engine
- * @param {'folder'|'file'} sourceType
- * @param {string} sourceId
+ * @param {string} parentFolderId — родитель нового объекта
  * @param {'folder'|'file'} targetType
  * @param {string} targetId
  * @returns {Array}
  */
-function queueCopyAcl_(ctx, engine, sourceType, sourceId, targetType, targetId) {
-  var entries = buildCopyAclEntries_(engine, sourceType, sourceId);
-  if (entries.length) {
-    ctx.aclList.push({
-      objectType: targetType,
-      objectId: targetId,
-      entries: entries
-    });
-  }
+function queueCopyAcl_(ctx, engine, parentFolderId, targetType, targetId) {
+  var entries = buildCopyAclEntriesFromParent_(engine, parentFolderId);
+  ctx.aclCacheList.push({
+    objectType: targetType,
+    objectId: targetId,
+    entries: entries
+  });
   return entries;
 }
 
@@ -404,7 +408,7 @@ function prepareCopyFileReady_(engine, ctx, sourceCatalogId, targetFolderId, cat
     approved_by: source.approved_by
   };
 
-  var entries = queueCopyAcl_(ctx, engine, 'file', sourceCatalogId, 'file', newCatalogId);
+  var entries = queueCopyAcl_(ctx, engine, targetFolderId, 'file', newCatalogId);
   var acl = uiAclFromCopyEntries_(engine, entries, approved);
 
   return {
@@ -469,7 +473,7 @@ function prepareCopyFilePending_(engine, ctx, sourceCatalogId, targetFolderId) {
     approved_by: source.approved_by
   };
 
-  var entries = queueCopyAcl_(ctx, engine, 'file', sourceCatalogId, 'file', newCatalogId);
+  var entries = queueCopyAcl_(ctx, engine, targetFolderId, 'file', newCatalogId);
   var acl = uiAclFromCopyEntries_(engine, entries, approved);
 
   return {
@@ -649,7 +653,7 @@ function mapCopyFolderTree_(engine, ctx, sourceFolderId, targetParentFolderId) {
       is_system: false
     };
 
-    var entries = queueCopyAcl_(ctx, engine, 'folder', obj.objectId, 'folder', newFolderId);
+    var entries = queueCopyAcl_(ctx, engine, newParentId, 'folder', newFolderId);
     var acl = uiAclFromCopyEntries_(engine, entries, false);
     folders.push({
       id: newFolderId,

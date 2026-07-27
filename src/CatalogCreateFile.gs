@@ -239,16 +239,27 @@ function ensureDriveEditor_(file, email) {
  * @param {'none'|'reader'|'commenter'|'editor'} permissionLevel
  */
 function appendExplicitUserAclRow_(objectType, objectId, email, permissionLevel) {
+  ensureCatalogSchemaUpToDate_();
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ACL');
   if (!sheet) {
     return;
   }
-  sheet.appendRow([
+  var headers = readSheetHeaderRow_(sheet, 7);
+  var deltaCol = headers.indexOf('delta');
+  var row = [
     Utilities.getUuid(),
     objectType,
     objectId,
     'user',
     email,
     permissionLevel
-  ]);
+  ];
+  if (deltaCol >= 0) {
+    // Импорт: добавки поверх матери (§4.4a).
+    while (row.length < deltaCol) {
+      row.push('');
+    }
+    row[deltaCol] = '+';
+  }
+  sheet.appendRow(row);
 }

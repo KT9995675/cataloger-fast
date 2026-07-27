@@ -124,7 +124,7 @@ function assertIsCatalogController_(userEmail) {
   if (isSpreadsheetOwnerEmail_(userEmail)) {
     return;
   }
-  throw catalogError_('NOT_ALLOWED', 'Очистка корзины доступна только Управляющему.');
+  throw catalogError_('NOT_ALLOWED', 'Действие доступно только Управляющему.');
 }
 
 /**

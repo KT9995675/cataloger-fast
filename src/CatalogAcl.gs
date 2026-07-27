@@ -136,34 +136,265 @@ function getEffectiveAclDisplayFromEngine_(engine, objectType, objectId) {
     throw catalogError_('FOLDER_NOT_FOUND', 'Folder not found: ' + objectId);
   }
 
-  // Явный ACL на объекте (без обхода родителей). Группа = один ярлык.
-  var aclRows = engine.aclByObject[objectType + ':' + objectId] || [];
-  return aclRowsToCacheLabels_(engine, aclRows, approved);
+  var rows = effectiveAclMapToRows_(getEffectiveAclMapFromEngine_(engine, objectType, objectId));
+  return aclRowsToCacheLabels_(engine, rows, approved);
+}
+
+/**
+ * §4.4a — эффективная карта principal → уровень (мать ⊕ дельты; корень = база).
+ *
+ * @param {Object} engine
+ * @param {'folder'|'file'} objectType
+ * @param {string} objectId
+ * @param {Object=} memo
+ * @returns {Object.<string, { principalType: string, principalId: string, level: string }>}
+ */
+function getEffectiveAclMapFromEngine_(engine, objectType, objectId, memo) {
+  memo = memo || {};
+  var key = objectType + ':' + objectId;
+  if (memo[key]) {
+    return cloneAclPrincipalMap_(memo[key]);
+  }
+
+  var parent = getAclParentObject_(engine, objectType, objectId);
+  var rows = engine.aclByObject[key] || [];
+  var map = {};
+
+  if (!parent) {
+    rows.forEach(function (row) {
+      var delta = normalizeAclDelta_(row);
+      if (delta === '-') {
+        return;
+      }
+      var level = normalizePermissionLevel_(row.permission_level);
+      if (!level || level === 'none') {
+        return;
+      }
+      var pKey = aclPrincipalMapKey_(row.principal_type, row.principal_id);
+      if (!pKey) {
+        return;
+      }
+      map[pKey] = {
+        principalType: String(row.principal_type || '').trim() === 'group' ? 'group' : 'user',
+        principalId: String(row.principal_id || '').trim(),
+        level: level
+      };
+    });
+  } else {
+    map = getEffectiveAclMapFromEngine_(
+      engine,
+      parent.objectType,
+      parent.objectId,
+      memo
+    );
+    map = cloneAclPrincipalMap_(map);
+
+    var minusKeys = {};
+    rows.forEach(function (row) {
+      if (normalizeAclDelta_(row) !== '-') {
+        return;
+      }
+      var pKey = aclPrincipalMapKey_(row.principal_type, row.principal_id);
+      if (pKey) {
+        minusKeys[pKey] = true;
+        delete map[pKey];
+      }
+    });
+
+    rows.forEach(function (row) {
+      var delta = normalizeAclDelta_(row);
+      if (delta === '-') {
+        return;
+      }
+      var pKey = aclPrincipalMapKey_(row.principal_type, row.principal_id);
+      if (!pKey || minusKeys[pKey]) {
+        return;
+      }
+      var level = normalizePermissionLevel_(row.permission_level);
+      if (!level || level === 'none') {
+        return;
+      }
+      map[pKey] = {
+        principalType: String(row.principal_type || '').trim() === 'group' ? 'group' : 'user',
+        principalId: String(row.principal_id || '').trim(),
+        level: level
+      };
+    });
+  }
+
+  memo[key] = map;
+  return cloneAclPrincipalMap_(map);
+}
+
+/**
+ * @param {Object|string} rowOrDelta
+ * @returns {'+'|'-'|'base'|''}
+ */
+function normalizeAclDelta_(rowOrDelta) {
+  var raw =
+    typeof rowOrDelta === 'string'
+      ? rowOrDelta
+      : rowOrDelta && (rowOrDelta.delta != null ? rowOrDelta.delta : rowOrDelta.Delta);
+  var d = String(raw == null ? '' : raw).trim();
+  if (d === '-' || d === '−' || d === 'minus') {
+    return '-';
+  }
+  if (d === '+' || d === 'plus') {
+    return '+';
+  }
+  if (d === 'base') {
+    return 'base';
+  }
+  return '';
+}
+
+/**
+ * @param {string} principalType
+ * @param {string} principalId
+ * @returns {string}
+ */
+function aclPrincipalMapKey_(principalType, principalId) {
+  var type = String(principalType || '').trim().toLowerCase() === 'group' ? 'group' : 'user';
+  var id = String(principalId || '').trim();
+  if (!id) {
+    return '';
+  }
+  if (type === 'user') {
+    id = id.toLowerCase();
+  }
+  return type + ':' + id;
+}
+
+/**
+ * @param {Object} map
+ * @returns {Object}
+ */
+function cloneAclPrincipalMap_(map) {
+  var out = {};
+  Object.keys(map || {}).forEach(function (k) {
+    var v = map[k];
+    out[k] = {
+      principalType: v.principalType,
+      principalId: v.principalId,
+      level: v.level
+    };
+  });
+  return out;
+}
+
+/**
+ * @param {Object} map
+ * @returns {Array<{ principal_type: string, principal_id: string, permission_level: string }>}
+ */
+function effectiveAclMapToRows_(map) {
+  var rows = [];
+  Object.keys(map || {}).forEach(function (k) {
+    var v = map[k];
+    rows.push({
+      principal_type: v.principalType,
+      principal_id: v.principalId,
+      permission_level: v.level
+    });
+  });
+  return rows;
+}
+
+/**
+ * @param {Object} map
+ * @returns {Array<{ principalType: string, principalId: string, permissionLevel: string }>}
+ */
+function effectiveAclMapToEntries_(map) {
+  return effectiveAclMapToRows_(map).map(function (row) {
+    return {
+      principalType: row.principal_type,
+      principalId: row.principal_id,
+      permissionLevel: row.permission_level
+    };
+  });
+}
+
+/**
+ * Желаемые эффективные entries → дельты относительно карты матери.
+ *
+ * @param {Object} parentMap
+ * @param {Array<{ principalType: string, principalId: string, permissionLevel: string }>} desiredEntries
+ * @returns {Array<{ principalType: string, principalId: string, permissionLevel: string, delta: '+'|'-' }>}
+ */
+function diffAclMapsToDeltas_(parentMap, desiredEntries) {
+  var desiredMap = {};
+  (desiredEntries || []).forEach(function (entry) {
+    var level = normalizePermissionLevel_(entry.permissionLevel);
+    if (!level || level === 'none') {
+      return;
+    }
+    var pKey = aclPrincipalMapKey_(entry.principalType, entry.principalId);
+    if (!pKey) {
+      return;
+    }
+    desiredMap[pKey] = {
+      principalType: entry.principalType === 'group' ? 'group' : 'user',
+      principalId: String(entry.principalId || '').trim(),
+      level: level
+    };
+  });
+
+  var deltas = [];
+  var seen = {};
+  Object.keys(parentMap || {}).forEach(function (k) {
+    seen[k] = true;
+  });
+  Object.keys(desiredMap).forEach(function (k) {
+    seen[k] = true;
+  });
+
+  Object.keys(seen).forEach(function (k) {
+    var parent = parentMap[k];
+    var desired = desiredMap[k];
+    if (!parent && desired) {
+      deltas.push({
+        principalType: desired.principalType,
+        principalId: desired.principalId,
+        permissionLevel: desired.level,
+        delta: '+'
+      });
+      return;
+    }
+    if (parent && !desired) {
+      deltas.push({
+        principalType: parent.principalType,
+        principalId: parent.principalId,
+        permissionLevel: parent.level,
+        delta: '-'
+      });
+      return;
+    }
+    if (parent && desired && parent.level !== desired.level) {
+      deltas.push({
+        principalType: parent.principalType,
+        principalId: parent.principalId,
+        permissionLevel: parent.level,
+        delta: '-'
+      });
+      deltas.push({
+        principalType: desired.principalType,
+        principalId: desired.principalId,
+        permissionLevel: desired.level,
+        delta: '+'
+      });
+    }
+  });
+
+  return deltas;
 }
 
 /**
  * @param {Object} engine
- * @param {'folder'|'file'} objectType
- * @param {string} objectId
+ * @param {'folder'|'file'} sourceType
+ * @param {string} sourceId
  * @returns {Object.<string, string>[]}
  */
-function resolveInheritedAclRows_(engine, objectType, objectId) {
-  var currentType = objectType;
-  var currentId = objectId;
-
-  while (currentType && currentId) {
-    var key = currentType + ':' + currentId;
-    var rows = engine.aclByObject[key] || [];
-    if (rows.length) {
-      return rows;
-    }
-
-    var parent = getAclParentObject_(engine, currentType, currentId);
-    currentType = parent ? parent.objectType : null;
-    currentId = parent ? parent.objectId : null;
-  }
-
-  return [];
+function resolveInheritedAclRows_(engine, sourceType, sourceId) {
+  return effectiveAclMapToRows_(getEffectiveAclMapFromEngine_(engine, sourceType, sourceId));
 }
 
 /**
@@ -300,7 +531,9 @@ function getEffectivePermissionForUserFromEngine_(engine, objectType, objectId, 
     throw catalogError_('FOLDER_NOT_FOUND', 'Folder not found: ' + objectId);
   }
 
-  var aclRows = engine.aclByObject[objectType + ':' + objectId] || [];
+  var aclRows = effectiveAclMapToRows_(
+    getEffectiveAclMapFromEngine_(engine, objectType, objectId)
+  );
   return resolveUserPermissionFromAclRows_(engine, aclRows, userEmail, approved);
 }
 
@@ -372,7 +605,9 @@ function getEffectivePermissionForGroupFromEngine_(engine, objectType, objectId,
     throw catalogError_('FOLDER_NOT_FOUND', 'Folder not found: ' + objectId);
   }
 
-  var aclRows = engine.aclByObject[objectType + ':' + objectId] || [];
+  var aclRows = effectiveAclMapToRows_(
+    getEffectiveAclMapFromEngine_(engine, objectType, objectId)
+  );
   var normalizedGroupId = String(groupId || '').trim();
   var level = 'none';
 

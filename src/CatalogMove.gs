@@ -113,8 +113,8 @@ function moveCatalogItems(input) {
 }
 
 /**
- * §14.7 / §4.4 — после move явные ACL объекта (папка → поддерево) = права целевой папки.
- * У корня ACL нет → entries пустые → права очищаются.
+ * §4.4a / §14.7 — после move: сброс отклонений у перемещённых; кэш = эффективные целевой папки.
+ * У корня нет ACL → entries пустые → права очищаются.
  *
  * @param {Object} engine
  * @param {string} targetFolderId
@@ -125,7 +125,9 @@ function applyTargetFolderAclAfterMove_(engine, targetFolderId, movedItems) {
     return;
   }
 
-  var entries = buildAclEntriesFromObject_(engine, 'folder', targetFolderId);
+  var entries = effectiveAclMapToEntries_(
+    getEffectiveAclMapFromEngine_(engine, 'folder', targetFolderId)
+  );
   var targetKeys = {};
   var targets = [];
 
@@ -152,11 +154,12 @@ function applyTargetFolderAclAfterMove_(engine, targetFolderId, movedItems) {
     return;
   }
 
-  replaceAclForObjects_(targets, entries, engine);
+  clearAclRowsForObjects_(targets, engine);
+  syncAclCacheForObjects_(targets, entries, engine);
 }
 
 /**
- * Явные/унаследованные ACL объекта → entries для replaceAclForObjects_.
+ * Эффективные ACL объекта → entries для кэша / UI.
  *
  * @param {Object} engine
  * @param {'folder'|'file'} objectType
@@ -164,13 +167,9 @@ function applyTargetFolderAclAfterMove_(engine, targetFolderId, movedItems) {
  * @returns {Array<{ principalType: string, principalId: string, permissionLevel: string }>}
  */
 function buildAclEntriesFromObject_(engine, objectType, objectId) {
-  var key = objectType + ':' + objectId;
-  var aclRows = engine.aclByObject[key] || [];
-  // fallback наследования — только если миграция ещё не догнала объект
-  if (!aclRows.length) {
-    aclRows = resolveInheritedAclRows_(engine, objectType, objectId);
-  }
-  return aclRowsToEntries_(aclRows);
+  return effectiveAclMapToEntries_(
+    getEffectiveAclMapFromEngine_(engine, objectType, objectId)
+  );
 }
 
 /**

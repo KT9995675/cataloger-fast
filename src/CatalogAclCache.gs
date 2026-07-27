@@ -1,10 +1,10 @@
 /**
- * §4 — явный ACL на каждом объекте + кэш колонок acl_* в Tree/Files.
- * Наследование только при миграции «сирота → явные строки» и при копировании с родителя.
+ * §4.4a — отклонения в ACL + кэш эффективных ярлыков acl_* в Tree/Files.
+ * Пустой ACL у не-корня = наследование без отклонений (материализация копий не нужна).
  */
 
 /**
- * Миграция при старте/snapshot: сиротам — явный ACL с родителя; пустой кэш — заполнить.
+ * При старте/snapshot: заполнить пустой кэш acl_* из эффективных прав.
  *
  * @param {Object} engine
  * @param {Object.<string, string>[]} treeRows
@@ -22,73 +22,14 @@ function ensureExplicitAclAndCache_(engine, treeRows, fileRows) {
 }
 
 /**
- * Объекты без своих ACL-строк, но с наследованием от предка → копируем явно.
+ * §4.4a — сироты (нет строк ACL) допустимы: наследуют мать без дельт.
+ * Раньше копировали явный ACL с родителя; больше не делаем.
  *
  * @param {Object} engine
- * @returns {number} сколько объектов получили ACL
+ * @returns {number}
  */
 function materializeOrphanExplicitAcls_(engine) {
-  var newRows = [];
-  var objectCount = 0;
-
-  function copyInherited(objectType, objectId) {
-    var key = objectType + ':' + objectId;
-    if ((engine.aclByObject[key] || []).length) {
-      return;
-    }
-    var inherited = resolveInheritedAclRows_(engine, objectType, objectId);
-    if (!inherited.length) {
-      return;
-    }
-    objectCount++;
-    if (!engine.aclByObject[key]) {
-      engine.aclByObject[key] = [];
-    }
-    inherited.forEach(function (row) {
-      var principalType = String(row.principal_type || '').trim();
-      var principalId = String(row.principal_id || '').trim();
-      if (!principalType || !principalId) {
-        return;
-      }
-      var level = normalizePermissionLevel_(row.permission_level);
-      var newRow = {
-        acl_id: Utilities.getUuid(),
-        object_type: objectType,
-        object_id: objectId,
-        principal_type: principalType,
-        principal_id: principalId,
-        permission_level: level
-      };
-      engine.aclByObject[key].push(newRow);
-      newRows.push([
-        newRow.acl_id,
-        objectType,
-        objectId,
-        principalType,
-        principalId,
-        level
-      ]);
-    });
-  }
-
-  Object.keys(engine.foldersById || {}).forEach(function (folderId) {
-    copyInherited('folder', folderId);
-  });
-  Object.keys(engine.filesByCatalogId || {}).forEach(function (catalogId) {
-    copyInherited('file', catalogId);
-  });
-
-  if (!newRows.length) {
-    return 0;
-  }
-
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ACL');
-  if (!sheet) {
-    throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: ACL');
-  }
-  var start = sheet.getLastRow() + 1;
-  sheet.getRange(start, 1, newRows.length, 6).setValues(newRows);
-  return objectCount;
+  return 0;
 }
 
 /**
@@ -113,7 +54,7 @@ function aclRowsToEntries_(aclRows) {
 }
 
 /**
- * Заполняет пустые acl_* из явного ACL (группа = один ярлык #Имя).
+ * Заполняет пустые acl_* из эффективных прав (§4.4a).
  *
  * @param {Object} engine
  * @param {Object.<string, string>[]} treeRows
@@ -121,6 +62,7 @@ function aclRowsToEntries_(aclRows) {
  * @returns {number}
  */
 function fillEmptyAclCacheColumns_(engine, treeRows, fileRows) {
+  var memo = {};
   var treeUpdates = [];
   (treeRows || []).forEach(function (row) {
     if (!aclCacheFieldsEmpty_(row)) {
@@ -132,7 +74,7 @@ function fillEmptyAclCacheColumns_(engine, treeRows, fileRows) {
     }
     var labels = aclRowsToCacheLabels_(
       engine,
-      engine.aclByObject['folder:' + folderId] || [],
+      effectiveAclMapToRows_(getEffectiveAclMapFromEngine_(engine, 'folder', folderId, memo)),
       false
     );
     if (!labels.editors.length && !labels.commenters.length && !labels.readers.length) {
@@ -161,7 +103,7 @@ function fillEmptyAclCacheColumns_(engine, treeRows, fileRows) {
     var approved = parseBoolean_(row.approved);
     var labels = aclRowsToCacheLabels_(
       engine,
-      engine.aclByObject['file:' + catalogId] || [],
+      effectiveAclMapToRows_(getEffectiveAclMapFromEngine_(engine, 'file', catalogId, memo)),
       approved
     );
     if (!labels.editors.length && !labels.commenters.length && !labels.readers.length) {
@@ -295,7 +237,7 @@ function parseAclCacheField_(value) {
 }
 
 /**
- * Копирует явный ACL родителя на объект + пишет кэш.
+ * §4.4a — новый объект без отклонений: ACL-строк нет, кэш = эффективные родителя.
  *
  * @param {Object} engine
  * @param {'folder'|'file'} objectType
@@ -303,24 +245,17 @@ function parseAclCacheField_(value) {
  * @param {string} parentFolderId
  */
 function copyExplicitAclFromParentFolder_(engine, objectType, objectId, parentFolderId) {
-  var entries = buildAclEntriesFromObject_(engine, 'folder', parentFolderId);
-  replaceAclForObjects_(
+  if (engine && engine.aclByObject) {
+    engine.aclByObject[objectType + ':' + objectId] = [];
+  }
+  var entries = effectiveAclMapToEntries_(
+    getEffectiveAclMapFromEngine_(engine, 'folder', parentFolderId)
+  );
+  syncAclCacheForObjects_(
     [{ objectType: objectType, objectId: objectId }],
     entries,
     engine
   );
-  if (engine && engine.aclByObject) {
-    engine.aclByObject[objectType + ':' + objectId] = (entries || []).map(function (e) {
-      return {
-        acl_id: '',
-        object_type: objectType,
-        object_id: objectId,
-        principal_type: e.principalType,
-        principal_id: e.principalId,
-        permission_level: e.permissionLevel
-      };
-    });
-  }
 }
 
 /**
@@ -412,7 +347,9 @@ function rebuildAclCacheForGroupPrincipal_(groupId) {
   });
 
   targets.forEach(function (obj) {
-    var entries = buildAclEntriesFromObject_(engine, obj.objectType, obj.objectId);
+    var entries = effectiveAclMapToEntries_(
+      getEffectiveAclMapFromEngine_(engine, obj.objectType, obj.objectId)
+    );
     syncAclCacheForObjects_([obj], entries, engine);
   });
 }

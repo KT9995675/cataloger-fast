@@ -941,7 +941,8 @@ function appendAclInBatch_(batch, objectType, objectId, email, permissionLevel) 
     objectId,
     'user',
     email,
-    permissionLevel
+    permissionLevel,
+    '+'
   ]);
 }
 
@@ -952,12 +953,22 @@ function commitAclAppendBatch_(batch) {
   if (!batch || !batch.rows.length) {
     return;
   }
+  ensureCatalogSchemaUpToDate_();
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ACL');
   if (!sheet) {
     return;
   }
+  var headers = readSheetHeaderRow_(sheet, 7);
+  var width = Math.max(headers.length, 7);
   var start = sheet.getLastRow() + 1;
-  sheet.getRange(start, 1, batch.rows.length, 6).setValues(batch.rows);
+  var rows = batch.rows.map(function (r) {
+    var line = r.slice();
+    while (line.length < width) {
+      line.push('');
+    }
+    return line.slice(0, width);
+  });
+  sheet.getRange(start, 1, rows.length, width).setValues(rows);
 }
 
 /**

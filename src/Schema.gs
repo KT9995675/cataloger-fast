@@ -1,6 +1,6 @@
 /** @const {string} Версия схемы листов — §3.11 */
-var SCHEMA_VERSION_ = '0.4';
-/* <!-- OLD: 0.3 — Users.display_name; 0.2 — Files.mime_type --> */
+var SCHEMA_VERSION_ = '0.5';
+/* <!-- OLD: 0.4 — Tree/Files acl_* cache; 0.3 — Users.display_name; 0.2 — Files.mime_type --> */
 
 /**
  * §15.2 п.1 — создаёт листы каталога и строку заголовков (row 1), если отсутствуют.
@@ -199,7 +199,8 @@ function getCatalogSheetSchema_() {
       'object_id',
       'principal_type',
       'principal_id',
-      'permission_level'
+      'permission_level',
+      'delta'
     ],
     Groups: ['group_id', 'name', 'created_at', 'created_by'],
     GroupMembers: ['group_id', 'email', 'added_at'],
