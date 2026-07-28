@@ -184,6 +184,7 @@
         background: rgba(255, 255, 255, 0.04);
       }
       /* OLD: selected = синий фон + белый текст; focused = оранжевая рамка на любой панели */
+      /* OLD: focused = светло-голубой outline; selected = зелёный текст */
       .panel-table tr.selected {
         color: #3ddc84;
       }
@@ -191,8 +192,18 @@
         color: #5ee9a0;
       }
       .panel-table tr.focused {
-        outline: 2px solid #7ec8e8;
-        outline-offset: -2px;
+        background: var(--accent);
+        outline: none;
+      }
+      .panel-table tr.focused:hover {
+        background: var(--accent-hover);
+      }
+      .panel-table tr.focused:not(.selected) {
+        color: #fff;
+      }
+      .panel-table.rmb-selecting {
+        user-select: none;
+        -webkit-user-select: none;
       }
       .panel-table tr.drag-over {
         background: rgba(14, 99, 156, 0.35);
@@ -1583,15 +1594,22 @@
                 selectRow(index, rowIndex, { mode: 'focus' });
               }
             });
+            tr.addEventListener('mousedown', function (e) {
+              if (e.button !== 2) {
+                return;
+              }
+              e.preventDefault();
+              e.stopPropagation();
+              beginRmbSelect_(index, rowIndex, e);
+            });
+            tr.addEventListener('mouseenter', function () {
+              if (rmbPaint_) {
+                paintRmbSelectRow_(index, rowIndex);
+              }
+            });
             tr.addEventListener('contextmenu', function (e) {
               e.preventDefault();
               e.stopPropagation();
-              setActivePanel(index);
-              if (e.shiftKey) {
-                toggleRowsFromFocusTo_(index, rowIndex);
-              } else {
-                selectRow(index, rowIndex, { mode: 'toggle' });
-              }
             });
             tr.addEventListener('dblclick', function () {
               selectRow(index, rowIndex, { mode: 'focus' });
@@ -1731,6 +1749,129 @@
           var state = panels[panelIndex];
           state.selectedMap = {};
         }
+
+        /** @type {{ panelIndex: number, selectOn: boolean, painted: Object<string, boolean> }|null} */
+        var rmbPaint_ = null;
+
+        function syncPanelRowClasses_(panelIndex) {
+          var state = panels[panelIndex];
+          var tbody = panelEls[panelIndex] && panelEls[panelIndex].tbody;
+          if (!tbody) {
+            return;
+          }
+          var isActive = panelIndex === activePanelIndex;
+          var rows = tbody.querySelectorAll('tr');
+          for (var i = 0; i < rows.length; i++) {
+            var tr = rows[i];
+            if (tr.dataset.kind === 'up') {
+              tr.classList.toggle('focused', isActive && state.selectedIndex === -1);
+              tr.classList.remove('selected');
+              continue;
+            }
+            if (tr.dataset.rowIndex == null) {
+              continue;
+            }
+            var rowIndex = Number(tr.dataset.rowIndex);
+            tr.classList.toggle('selected', isRowSelected_(state, rowIndex));
+            tr.classList.toggle('focused', isActive && rowIndex === state.selectedIndex);
+          }
+        }
+
+        function setRmbSelectingUi_(on) {
+          for (var i = 0; i < panelEls.length; i++) {
+            var table = panelEls[i].tbody && panelEls[i].tbody.parentElement;
+            if (table) {
+              table.classList.toggle('rmb-selecting', !!on);
+            }
+          }
+        }
+
+        function endRmbPaint_() {
+          if (!rmbPaint_) {
+            return;
+          }
+          var panelIndex = rmbPaint_.panelIndex;
+          rmbPaint_ = null;
+          setRmbSelectingUi_(false);
+          if (panelIndex === activePanelIndex) {
+            updateSelectionStatus_(panelIndex);
+          }
+        }
+
+        /**
+         * ПКМ-кисть как в TC: первая строка задаёт selectOn, дальше красим новые строки.
+         * Без полного renderPanel — иначе жест обрывается при пересоздании DOM.
+         */
+        function paintRmbSelectRow_(panelIndex, rowIndex) {
+          if (!rmbPaint_ || rmbPaint_.panelIndex !== panelIndex) {
+            return;
+          }
+          if (rowIndex < 0 || rowIndex >= panels[panelIndex].items.length) {
+            return;
+          }
+          var key = String(rowIndex);
+          if (rmbPaint_.painted[key]) {
+            return;
+          }
+          rmbPaint_.painted[key] = true;
+          var state = panels[panelIndex];
+          setRowSelected_(state, rowIndex, rmbPaint_.selectOn);
+          state.selectedIndex = rowIndex;
+          syncPanelRowClasses_(panelIndex);
+          if (panelIndex === activePanelIndex) {
+            updateSelectionStatus_(panelIndex);
+          }
+        }
+
+        function beginRmbSelect_(panelIndex, rowIndex, e) {
+          setActivePanel(panelIndex);
+          if (e.shiftKey) {
+            toggleRowsFromFocusTo_(panelIndex, rowIndex);
+            return;
+          }
+          if (rowIndex < 0 || rowIndex >= panels[panelIndex].items.length) {
+            return;
+          }
+          var state = panels[panelIndex];
+          var selectOn = !isRowSelected_(state, rowIndex);
+          rmbPaint_ = {
+            panelIndex: panelIndex,
+            selectOn: selectOn,
+            painted: {}
+          };
+          setRmbSelectingUi_(true);
+          paintRmbSelectRow_(panelIndex, rowIndex);
+        }
+
+        function onDocumentRmbPaintMove_(e) {
+          if (!rmbPaint_) {
+            return;
+          }
+          var el = document.elementFromPoint(e.clientX, e.clientY);
+          while (el && el !== document.body) {
+            if (el.tagName === 'TR' && el.dataset.rowIndex != null) {
+              var tbody = el.parentElement;
+              for (var i = 0; i < panelEls.length; i++) {
+                if (panelEls[i].tbody === tbody) {
+                  if (i === rmbPaint_.panelIndex) {
+                    paintRmbSelectRow_(i, Number(el.dataset.rowIndex));
+                  }
+                  return;
+                }
+              }
+              return;
+            }
+            el = el.parentElement;
+          }
+        }
+
+        document.addEventListener('mouseup', function () {
+          endRmbPaint_();
+        });
+        document.addEventListener('mousemove', onDocumentRmbPaintMove_);
+        document.addEventListener('blur', function () {
+          endRmbPaint_();
+        });
 
         function isRowSelected_(state, rowIndex) {
           return Object.prototype.hasOwnProperty.call(state.selectedMap || {}, String(rowIndex));
@@ -2749,6 +2890,11 @@
             return;
           }
 
+          // §2.3.1 — drop «туда же» / на себя: без confirm, без операции.
+          if (isDndDropNoOp_(items, sourceFolderId, targetFolderId)) {
+            return;
+          }
+
           var weight = estimateItemsWeight_(items);
           var refs = items.map(function (it) {
             return { kind: it.kind, id: it.id };
@@ -2786,10 +2932,6 @@
                   return;
                 }
                 if (mode === 'move') {
-                  if (String(sourceFolderId) === String(targetFolderId)) {
-                    setStatus('Готово');
-                    return;
-                  }
                   runMoveItems(targetFolderId, refs, sourceFolderId);
                 } else {
                   runCopyItems(targetFolderId, refs, sourceFolderId);
@@ -2797,6 +2939,23 @@
               }
             );
           });
+        }
+
+        /** Цель = родитель источника или одна из перетаскиваемых папок. */
+        function isDndDropNoOp_(items, sourceFolderId, targetFolderId) {
+          if (!targetFolderId) {
+            return true;
+          }
+          if (sourceFolderId && String(sourceFolderId) === String(targetFolderId)) {
+            return true;
+          }
+          for (var i = 0; i < (items || []).length; i++) {
+            var it = items[i];
+            if (it && it.kind === 'folder' && String(it.id) === String(targetFolderId)) {
+              return true;
+            }
+          }
+          return false;
         }
 
         function countFilesInSnapshotSubtree_(rootFolderId) {
@@ -3019,6 +3178,76 @@
           }
           return false;
         }
+
+        /**
+         * §2.3.2 — Esc = отмена верхнего модала.
+         * first-launch без кнопки отмены — не закрываем.
+         * @returns {boolean} true, если закрыли модал
+         */
+        function dismissTopModalWithEsc_() {
+          var modals = document.querySelectorAll('.modal-backdrop');
+          var modal = null;
+          for (var i = modals.length - 1; i >= 0; i--) {
+            if (!modals[i].classList.contains('hidden')) {
+              modal = modals[i];
+              break;
+            }
+          }
+          if (!modal) {
+            return false;
+          }
+          var id = modal.id || '';
+          if (id === 'first-launch-modal') {
+            return false;
+          }
+          if (id === 'confirm-modal') {
+            finishAppConfirm_(false);
+            return true;
+          }
+          if (id === 'rename-modal') {
+            closeRenameModal();
+            return true;
+          }
+          if (id === 'create-modal') {
+            closeCreateModal();
+            restorePanelKeyboardFocus_();
+            return true;
+          }
+          if (id === 'import-modal') {
+            closeImportModal();
+            restorePanelKeyboardFocus_();
+            return true;
+          }
+          if (id === 'acl-modal') {
+            closeAclModal();
+            restorePanelKeyboardFocus_();
+            return true;
+          }
+          if (id === 'people-modal') {
+            closePeopleModal();
+            restorePanelKeyboardFocus_();
+            return true;
+          }
+          if (id === 'repair-modal') {
+            closeRepairModal_();
+            return true;
+          }
+          modal.classList.add('hidden');
+          restorePanelKeyboardFocus_();
+          return true;
+        }
+
+        function onDocumentEscapeKeydown_(e) {
+          if (e.key !== 'Escape' || e.repeat) {
+            return;
+          }
+          if (dismissTopModalWithEsc_()) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+
+        document.addEventListener('keydown', onDocumentEscapeKeydown_);
 
         function isFocusInsidePanel_(panelIndex) {
           var root = panelEls[panelIndex] && panelEls[panelIndex].root;
@@ -4622,6 +4851,9 @@
           panelEls.forEach(function (el, index) {
             el.root.addEventListener('mousedown', function () {
               setActivePanel(index);
+            });
+            el.root.addEventListener('contextmenu', function (e) {
+              e.preventDefault();
             });
             el.root.addEventListener('keydown', onPanelKeydown);
             el.root.addEventListener('dragover', function (e) {
