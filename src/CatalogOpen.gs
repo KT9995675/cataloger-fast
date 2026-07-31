@@ -35,6 +35,20 @@ function openCatalogFile(catalogId) {
     throw catalogError_('FILE_NOT_FOUND', 'File not found: ' + catalogId);
   }
 
+  var driveShortcutId = String(file.shortcut_of_drive_file_id || '').trim();
+  if (driveShortcutId) {
+    return openExternalFileShortcut_(catalogId, file, driveShortcutId);
+  }
+
+  var blueShortcut = String(file.shortcut_of_catalog_id || '').trim();
+  if (blueShortcut) {
+    catalogId = resolveFileShortcutTargetCatalogId_(engine.filesByCatalogId, catalogId);
+    file = engine.filesByCatalogId[catalogId];
+    if (!file) {
+      throw catalogError_('FILE_NOT_FOUND', 'Файл-цель ярлыка не найден.');
+    }
+  }
+
   var driveFileId = String(file.file_id || '').trim();
   if (!driveFileId) {
     throw catalogError_('FILE_NOT_READY', 'Файл ещё не загружен на Drive.');
@@ -102,6 +116,64 @@ function openCatalogFile(catalogId) {
     displayName: displayName,
     mimeType: mimeType || '',
     permissionLevel: permission
+  };
+}
+
+/**
+ * §22 — открытие красного ярлыка файла (Drive OAuth пользователя).
+ *
+ * @param {string} shortcutCatalogId
+ * @param {Object} fileRow
+ * @param {string} driveFileId
+ * @returns {Object}
+ */
+function openExternalFileShortcut_(shortcutCatalogId, fileRow, driveFileId) {
+  var token = ScriptApp.getOAuthToken();
+  var response = UrlFetchApp.fetch(
+    'https://www.googleapis.com/drive/v3/files/' +
+      encodeURIComponent(driveFileId) +
+      '?fields=' +
+      encodeURIComponent('id,name,mimeType,webViewLink') +
+      '&supportsAllDrives=true',
+    {
+      method: 'get',
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    }
+  );
+  var code = response.getResponseCode();
+  var body = {};
+  try {
+    body = JSON.parse(response.getContentText() || '{}');
+  } catch (eParse) {
+    body = {};
+  }
+  if (code === 404) {
+    deleteCatalogFileShortcutRows_([shortcutCatalogId]);
+    bumpCatalogRev_();
+    return {
+      ok: false,
+      code: 'GONE',
+      message: 'Больше нет такого файла, удаляю ярлык',
+      deletedShortcutId: shortcutCatalogId,
+      parentFolderId: fileRow.folder_id ? String(fileRow.folder_id) : null
+    };
+  }
+  if (code === 401 || code === 403 || code < 200 || code >= 300) {
+    return {
+      ok: false,
+      code: 'NO_ACCESS',
+      message: 'Нет доступа',
+      editors: []
+    };
+  }
+  var mimeType = String(body.mimeType || fileRow.mime_type || '');
+  return {
+    ok: true,
+    url: buildCatalogFileOpenUrl_(driveFileId, mimeType, body.webViewLink || ''),
+    displayName: String(body.name || fileRow.display_name || driveFileId),
+    mimeType: mimeType,
+    permissionLevel: 'reader'
   };
 }
 

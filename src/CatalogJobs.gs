@@ -7,11 +7,20 @@
 /** @const {string} */
 var JOBS_PROCESS_HANDLER_ = 'processCatalogJobs';
 
-/** @const {number} Файлов за один прогон воркера (acl+copy за один проход). */
-var JOBS_CHUNK_SIZE_ = 20;
+/** @const {number} Файлов за один прогон воркера (= размер одной job import_drive). */
+var JOBS_CHUNK_SIZE_ = 50;
 
-/** @const {number} Жёсткий потолок файлов в одном импорте Drive (payload). */
-var IMPORT_DRIVE_JOB_MAX_FILES_ = 500;
+/** @const {number} Максимум файлов в payload одной job import_drive (= JOBS_CHUNK_SIZE_). */
+var IMPORT_DRIVE_JOB_MAX_FILES_ = 50;
+
+/** @const {number} Максимум файлов за одну операцию импорта Drive (цепочка Jobs). */
+var IMPORT_DRIVE_OPERATION_MAX_FILES_ = 5000;
+
+/** @const {number} Оценка: секунд на файл (оверхед ACL/учёт/чанк). */
+var IMPORT_ETA_SEC_PER_FILE_ = 3;
+
+/** @const {number} Оценка: байт на 1 с доп. времени копирования содержимого. */
+var IMPORT_ETA_BYTES_PER_SEC_ = 2 * 1024 * 1024;
 
 /**
  * Статус очереди для UI (poll).
@@ -33,9 +42,28 @@ function getCatalogJobsStatus() {
       busy: false,
       activeJob: null,
       progress: 100,
-      progressMessage: ''
+      progressMessage: '',
+      canCancel: false,
+      remaining: 0,
+      chainTotal: 0,
+      estimateRemainingLabel: ''
     };
   }
+  var payload = parseJobPayload_(active);
+  var chainTotal =
+    Number(payload.chainTotalFiles) ||
+    ((payload.items && payload.items.length) || 0);
+  var chainBefore = Number(payload.chainDoneBefore) || 0;
+  var items = payload.items || [];
+  var doneInJob = 0;
+  items.forEach(function (it) {
+    if (it && it.copyDone) {
+      doneInJob++;
+    }
+  });
+  var globalDone = chainBefore + doneInJob;
+  var remaining = Math.max(0, chainTotal - globalDone);
+  var eta = estimateImportDriveTimes_(remaining, 0);
   return {
     ok: true,
     busy: true,
@@ -45,10 +73,17 @@ function getCatalogJobsStatus() {
       status: active.status,
       progress: parseNumber_(active.progress),
       progressMessage: String(active.progress_message || ''),
-      lastError: String(active.last_error || '')
+      lastError: String(active.last_error || ''),
+      chainId: String(payload.chainId || ''),
+      mode: String(payload.mode || '')
     },
     progress: parseNumber_(active.progress),
-    progressMessage: String(active.progress_message || '')
+    progressMessage: String(active.progress_message || ''),
+    canCancel: true,
+    remaining: remaining,
+    chainTotal: chainTotal,
+    done: globalDone,
+    estimateRemainingLabel: eta.estimateCopyLabel
   };
 }
 
@@ -68,12 +103,20 @@ function processCatalogJobs() {
   try {
     var job = findActiveCatalogJob_();
     if (!job) {
-      job = findNextPendingCatalogJob_();
-      if (!job) {
-        return { ok: true, processed: 0, done: true, busy: false };
-      }
+      return { ok: true, processed: 0, done: true, busy: false };
+    }
+    if (String(job.status || '').toLowerCase() === 'pending') {
       markCatalogJobRunning_(job.job_id);
       job = getCatalogJobById_(job.job_id) || job;
+    }
+    if (String(job.status || '').toLowerCase() === 'cancelled') {
+      var anyLeftAfterCancel = !!findActiveCatalogJob_();
+      return {
+        ok: true,
+        processed: 0,
+        done: !anyLeftAfterCancel,
+        busy: anyLeftAfterCancel
+      };
     }
 
     var processed = 0;
@@ -93,13 +136,13 @@ function processCatalogJobs() {
     }
 
     job = getCatalogJobById_(job.job_id);
-    var stillActive = job && (job.status === 'running' || job.status === 'pending');
     // Дальше подхватит минутный триггер; kick только при enqueue (иначе лимит one-shot triggers).
+    var anyLeft = !!findActiveCatalogJob_();
     return {
       ok: true,
       processed: processed,
-      done: !stillActive,
-      busy: !!stillActive
+      done: !anyLeft,
+      busy: anyLeft
     };
   } finally {
     lock.releaseLock();
@@ -201,7 +244,127 @@ function buildInitialJobProgressMessage_(jobType, payload) {
   if (t === 'copy_catalog') {
     return 'Копирование: 0/' + n;
   }
+  if (t === 'import_drive') {
+    var chainTotal = Number(payload && payload.chainTotalFiles) || n;
+    var chainBefore = Number(payload && payload.chainDoneBefore) || 0;
+    return 'Импорт: ' + chainBefore + '/' + chainTotal;
+  }
   return 'Импорт: 0/' + n;
+}
+
+/**
+ * Оценка времени импорта Drive (§9.6a).
+ *
+ * @param {number} fileCount
+ * @param {number} totalBytes
+ * @returns {{
+ *   estimateCopySeconds: number,
+ *   estimateMoveSeconds: number,
+ *   estimateCopyLabel: string,
+ *   estimateMoveLabel: string,
+ *   jobParts: number
+ * }}
+ */
+function estimateImportDriveTimes_(fileCount, totalBytes) {
+  var files = Math.max(0, Math.floor(Number(fileCount) || 0));
+  var bytes = Math.max(0, Number(totalBytes) || 0);
+  var bytesTerm = bytes > 0 ? Math.ceil(bytes / IMPORT_ETA_BYTES_PER_SEC_) : 0;
+  var copySec = Math.round(files * IMPORT_ETA_SEC_PER_FILE_ + bytesTerm);
+  var moveSec = Math.round(files * (IMPORT_ETA_SEC_PER_FILE_ * 0.5) + bytesTerm * 0.3);
+  return {
+    estimateCopySeconds: copySec,
+    estimateMoveSeconds: moveSec,
+    estimateCopyLabel: formatImportEtaLabel_(copySec),
+    estimateMoveLabel: formatImportEtaLabel_(moveSec),
+    jobParts: files ? Math.ceil(files / IMPORT_DRIVE_JOB_MAX_FILES_) : 0
+  };
+}
+
+/**
+ * @param {number} seconds
+ * @returns {string}
+ */
+function formatImportEtaLabel_(seconds) {
+  var sec = Math.max(0, Number(seconds) || 0);
+  if (sec < 60) {
+    return '<1 мин';
+  }
+  var min = Math.round(sec / 60);
+  if (min < 1) {
+    min = 1;
+  }
+  return '~' + min + ' мин';
+}
+
+/**
+ * Ставит одну или несколько Jobs import_drive (нарезка по 500).
+ *
+ * @param {string} mode
+ * @param {string} targetFolderId
+ * @param {Array} jobItems
+ * @param {string} userEmail
+ * @param {string=} scenario
+ * @returns {{ jobId: string, chainId: string, fileCount: number, jobParts: number }}
+ */
+/**
+ * Ставит одну или несколько Jobs import_drive (нарезка по IMPORT_DRIVE_JOB_MAX_FILES_).
+ *
+ * @param {string} mode
+ * @param {string} targetFolderId
+ * @param {Array} jobItems
+ * @param {string} userEmail
+ * @param {string=} scenario
+ * @param {string=} chainIdOpt заранее сгенерированный chainId (для Files.import_chain_id)
+ * @returns {{ jobId: string, chainId: string, fileCount: number, jobParts: number }}
+ */
+function enqueueImportDriveJobsChain_(mode, targetFolderId, jobItems, userEmail, scenario, chainIdOpt) {
+  var items = jobItems || [];
+  var total = items.length;
+  if (!total) {
+    throw catalogError_('INVALID_INPUT', 'Нечего импортировать.');
+  }
+  if (total > IMPORT_DRIVE_OPERATION_MAX_FILES_) {
+    throw catalogError_(
+      'IMPORT_TOO_LARGE',
+      'Слишком много файлов (' +
+        total +
+        '). Максимум за одну операцию: ' +
+        IMPORT_DRIVE_OPERATION_MAX_FILES_ +
+        '.'
+    );
+  }
+  var chainId = String(chainIdOpt || '').trim() || Utilities.getUuid();
+  var parts = Math.ceil(total / IMPORT_DRIVE_JOB_MAX_FILES_);
+  var firstJobId = '';
+  for (var p = 0; p < parts; p++) {
+    var start = p * IMPORT_DRIVE_JOB_MAX_FILES_;
+    var chunk = items.slice(start, start + IMPORT_DRIVE_JOB_MAX_FILES_);
+    var jobId = enqueueCatalogJob_(
+      'import_drive',
+      {
+        scenario: scenario || 'drive',
+        mode: mode,
+        targetFolderId: targetFolderId,
+        phase: 'work',
+        chainId: chainId,
+        chainIndex: p,
+        chainParts: parts,
+        chainTotalFiles: total,
+        chainDoneBefore: start,
+        items: chunk
+      },
+      userEmail
+    );
+    if (!firstJobId) {
+      firstJobId = jobId;
+    }
+  }
+  return {
+    jobId: firstJobId,
+    chainId: chainId,
+    fileCount: total,
+    jobParts: parts
+  };
 }
 
 /**
@@ -495,6 +658,11 @@ function processEmptyTrashJobChunk_(job) {
  * @returns {number} processed items
  */
 function processImportDriveJobChunk_(job) {
+  var fresh = getCatalogJobById_(job.job_id);
+  if (fresh && String(fresh.status || '').toLowerCase() === 'cancelled') {
+    return 0;
+  }
+
   var payload = parseJobPayload_(job);
   var items = payload.items || [];
   if (!items.length) {
@@ -509,8 +677,11 @@ function processImportDriveJobChunk_(job) {
   payload.phase = 'work';
 
   var workCtx = beginImportDriveWorkContext_(createdBy);
+  var copiedForAcl = [];
   var processed = 0;
   var i = 0;
+
+  // Фаза 1: только Drive copy/move (без ACL).
   while (i < items.length && processed < JOBS_CHUNK_SIZE_) {
     var item = items[i];
     if (item.copyDone) {
@@ -518,21 +689,31 @@ function processImportDriveJobChunk_(job) {
       continue;
     }
     try {
-      processImportDriveItemOnce_(
-        item,
+      var sourceFile = DriveApp.getFileById(String(item.sourceFileId));
+      var appliedMode = resolveDriveImportPlaceMode_(
         payload.mode || 'copy',
-        controllerEmail,
-        catalogRootFolder,
-        workCtx
+        sourceFile,
+        controllerEmail
       );
-      item.aclDone = true;
+      var catalogFile = placeFileInCatalogRoot_(sourceFile, catalogRootFolder, appliedMode);
+      patchFilesBatchRow_(workCtx.filesBatch, item.catalogId, {
+        fileId: catalogFile.getId(),
+        sizeBytes: catalogFile.getSize(),
+        driveModifiedAt: catalogFile.getLastUpdated(),
+        mimeType: getDriveFileMimeType_(catalogFile),
+        sourceFileId: appliedMode === 'copy' ? String(item.sourceFileId) : '',
+        status: 'ready',
+        lastError: ''
+      });
+      item.appliedMode = appliedMode;
       item.copyDone = true;
-      if (!item.error) {
-        item.error = '';
+      item.error = '';
+      if (!item.aclDone) {
+        copiedForAcl.push({ item: item, sourceFile: sourceFile });
       }
     } catch (eWork) {
-      item.aclDone = true;
       item.copyDone = true;
+      item.aclDone = true;
       item.error = (eWork && eWork.message) || String(eWork);
       patchFilesBatchRow_(workCtx.filesBatch, item.catalogId, {
         status: 'failed',
@@ -542,6 +723,30 @@ function processImportDriveJobChunk_(job) {
     processed++;
     i++;
   }
+
+  // Фаза 2: batch Files.
+  commitFilesUpdateBatch_(workCtx.filesBatch);
+  workCtx.filesBatch = beginFilesUpdateBatch_();
+
+  // Фаза 3: ACL батчем по скопированным в этом чанке.
+  for (var a = 0; a < copiedForAcl.length; a++) {
+    var pair = copiedForAcl[a];
+    try {
+      applyDriveFileAclToCatalogFile_(
+        pair.sourceFile,
+        String(pair.item.catalogId),
+        createdBy,
+        workCtx
+      );
+      pair.item.aclDone = true;
+    } catch (eAcl) {
+      pair.item.aclDone = true;
+      if (!pair.item.error) {
+        pair.item.error = (eAcl && eAcl.message) || String(eAcl);
+      }
+    }
+  }
+
   commitImportDriveWorkContext_(workCtx);
 
   var left = 0;
@@ -560,19 +765,49 @@ function processImportDriveJobChunk_(job) {
 
   payload.items = items;
   var total = items.length;
-  var progress = total ? Math.round((done / total) * 100) : 100;
+  var chainTotal = Number(payload.chainTotalFiles) || total;
+  var chainBefore = Number(payload.chainDoneBefore) || 0;
+  var globalDone = chainBefore + done;
+  var progress = chainTotal ? Math.round((globalDone / chainTotal) * 100) : 100;
+
+  fresh = getCatalogJobById_(job.job_id);
+  if (fresh && String(fresh.status || '').toLowerCase() === 'cancelled') {
+    saveJobPayloadProgress_(
+      job.job_id,
+      payload,
+      progress,
+      'Импорт прерван: ' + globalDone + '/' + chainTotal,
+      false
+    );
+    patchCatalogJobRow_(job.job_id, {
+      status: 'cancelled',
+      completed_at: new Date(),
+      progress_message: 'Импорт прерван: ' + globalDone + '/' + chainTotal
+    });
+    bumpCatalogRev_();
+    return processed;
+  }
+
   if (left === 0) {
-    var msg =
-      failed > 0
-        ? 'Импорт завершён с ошибками: ' + failed + ' из ' + total
-        : 'Импорт завершён: ' + total + ' файл.';
-    saveJobPayloadProgress_(job.job_id, payload, 100, msg, true);
+    var isLastPart =
+      !payload.chainParts ||
+      Number(payload.chainIndex) >= Number(payload.chainParts) - 1;
+    var msg;
+    if (isLastPart) {
+      msg =
+        failed > 0
+          ? 'Импорт завершён с ошибками: ' + failed + ' из ' + total
+          : 'Импорт завершён: ' + chainTotal + ' файл.';
+    } else {
+      msg = 'Импорт: ' + globalDone + '/' + chainTotal;
+    }
+    saveJobPayloadProgress_(job.job_id, payload, isLastPart ? 100 : progress, msg, true);
   } else {
     saveJobPayloadProgress_(
       job.job_id,
       payload,
       progress,
-      'Импорт: ' + done + '/' + total
+      'Импорт: ' + globalDone + '/' + chainTotal
     );
   }
   return processed;
@@ -606,18 +841,34 @@ function commitImportDriveWorkContext_(ctx) {
   if (ctx.aclTouchedIds && ctx.aclTouchedIds.length) {
     var engine = createAclEngine_();
     var seen = {};
+    var fileUpdates = [];
     ctx.aclTouchedIds.forEach(function (catalogId) {
       if (!catalogId || seen[catalogId]) {
         return;
       }
       seen[catalogId] = true;
       var entries = buildAclEntriesFromObject_(engine, 'file', catalogId);
-      syncAclCacheForObjects_(
-        [{ objectType: 'file', objectId: catalogId }],
-        entries,
-        engine
+      var file = engine.filesByCatalogId[catalogId];
+      var approved = file && parseBoolean_(file.approved);
+      var labels = aclRowsToCacheLabels_(
+        engine,
+        (entries || []).map(function (e) {
+          return {
+            principal_type: e.principalType,
+            principal_id: e.principalId,
+            permission_level: e.permissionLevel
+          };
+        }),
+        approved
       );
+      fileUpdates.push({
+        catalogId: catalogId,
+        aclEditors: formatAclCacheField_(labels.editors),
+        aclCommenters: formatAclCacheField_(labels.commenters),
+        aclReaders: formatAclCacheField_(labels.readers)
+      });
     });
+    writeFilesAclCacheBatch_(fileUpdates);
   }
 }
 
@@ -1058,4 +1309,263 @@ function applyDriveFileAclToCatalogFile_(driveFile, catalogId, addedBy, workCtx)
     var entries = buildAclEntriesFromObject_(engine, 'file', catalogId);
     syncAclCacheForObjects_([{ objectType: 'file', objectId: catalogId }], entries, engine);
   }
+}
+
+/**
+ * Отмена активной очереди Jobs (§9.6a).
+ * import_drive + mode=copy: ready → корзина; pending без file_id → удалить строки.
+ *
+ * @returns {{
+ *   ok: true,
+ *   cancelled: boolean,
+ *   jobType: string,
+ *   mode: string,
+ *   chainId: string,
+ *   trashed: number,
+ *   removedPending: number,
+ *   done: number,
+ *   chainTotal: number
+ * }}
+ */
+function cancelActiveCatalogJobs() {
+  assertCatalogReady_();
+  var userEmail = Session.getActiveUser().getEmail();
+  if (!userEmail) {
+    throw catalogError_('AUTH_REQUIRED', 'Google account email is required.');
+  }
+  var loginRole = getLoginRoleForUser_(userEmail);
+  assertCanRunCatalogOperations_(loginRole);
+
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) {
+    throw catalogError_(
+      'JOBS_BUSY',
+      'Сейчас идёт обработка чанка. Повторите отмену через несколько секунд.'
+    );
+  }
+
+  try {
+    var active = findActiveCatalogJob_();
+    if (!active) {
+      return {
+        ok: true,
+        cancelled: false,
+        jobType: '',
+        mode: '',
+        chainId: '',
+        trashed: 0,
+        removedPending: 0,
+        done: 0,
+        chainTotal: 0
+      };
+    }
+
+    var payload = parseJobPayload_(active);
+    var chainId = String(payload.chainId || '').trim();
+    var mode = String(payload.mode || 'copy');
+    var jobType = String(active.job_type || '');
+    var chainTotal =
+      Number(payload.chainTotalFiles) ||
+      ((payload.items && payload.items.length) || 0);
+    var chainBefore = Number(payload.chainDoneBefore) || 0;
+    var doneInJob = 0;
+    (payload.items || []).forEach(function (it) {
+      if (it && it.copyDone) {
+        doneInJob++;
+      }
+    });
+    var done = chainBefore + doneInJob;
+
+    cancelJobsByChainOrId_(chainId, String(active.job_id));
+
+    var trashed = 0;
+    var removedPending = 0;
+    if (jobType === 'import_drive' && chainId) {
+      if (mode !== 'move') {
+        trashed = trashReadyFilesByImportChain_(chainId);
+      }
+      removedPending = deleteIncompleteFilesByImportChain_(chainId);
+    }
+
+    bumpCatalogRev_();
+    return {
+      ok: true,
+      cancelled: true,
+      jobType: jobType,
+      mode: mode,
+      chainId: chainId,
+      trashed: trashed,
+      removedPending: removedPending,
+      done: done,
+      chainTotal: chainTotal
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * @param {string} chainId
+ * @param {string} fallbackJobId
+ */
+function cancelJobsByChainOrId_(chainId, fallbackJobId) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Jobs');
+  if (!sheet) {
+    return;
+  }
+  var values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    return;
+  }
+  var headers = values[0].map(function (h) {
+    return String(h).trim();
+  });
+  var idCol = headers.indexOf('job_id');
+  var statusCol = headers.indexOf('status');
+  var typeCol = headers.indexOf('job_type');
+  var payloadCol = headers.indexOf('payload_json');
+  var msgCol = headers.indexOf('progress_message');
+  var completedCol = headers.indexOf('completed_at');
+  if (idCol < 0 || statusCol < 0) {
+    return;
+  }
+
+  var now = new Date();
+  for (var r = 1; r < values.length; r++) {
+    var st = String(values[r][statusCol] || '').toLowerCase();
+    if (st !== 'pending' && st !== 'running') {
+      continue;
+    }
+    var match = false;
+    if (chainId && payloadCol >= 0) {
+      try {
+        var pl = JSON.parse(String(values[r][payloadCol] || '{}'));
+        if (pl && String(pl.chainId || '') === chainId) {
+          match = true;
+        }
+      } catch (eParse) {
+        // ignore
+      }
+    }
+    if (!match && fallbackJobId && String(values[r][idCol]) === String(fallbackJobId)) {
+      match = true;
+    }
+    if (!match && !chainId && fallbackJobId && String(values[r][idCol]) === String(fallbackJobId)) {
+      match = true;
+    }
+    if (!match) {
+      continue;
+    }
+    values[r][statusCol] = 'cancelled';
+    if (completedCol >= 0) {
+      values[r][completedCol] = now;
+    }
+    if (msgCol >= 0) {
+      values[r][msgCol] = 'Прервано';
+    }
+  }
+  sheet.getRange(1, 1, values.length, headers.length).setValues(values);
+}
+
+/**
+ * Ready-файлы цепочки → `__TRASH__` (без тяжёлого ACL-пересчёта).
+ * @param {string} chainId
+ * @returns {number}
+ */
+function trashReadyFilesByImportChain_(chainId) {
+  chainId = String(chainId || '').trim();
+  if (!chainId) {
+    return 0;
+  }
+  ensureCatalogSchemaUpToDate_();
+  var rows = readSheetRecords_('Files');
+  var updates = [];
+  rows.forEach(function (row) {
+    if (String(row.import_chain_id || '') !== chainId) {
+      return;
+    }
+    if (String(row.status || '').toLowerCase() !== 'ready') {
+      return;
+    }
+    if (!String(row.file_id || '').trim()) {
+      return;
+    }
+    if (String(row.folder_id || '') === '__TRASH__') {
+      return;
+    }
+    updates.push({
+      catalogId: String(row.catalog_id),
+      folderId: '__TRASH__'
+    });
+  });
+  if (!updates.length) {
+    return 0;
+  }
+  applyFileFolderUpdates_(updates, []);
+  return updates.length;
+}
+
+/**
+ * Удаляет pending/failed строки цепочки без готового file_id.
+ * @param {string} chainId
+ * @returns {number}
+ */
+function deleteIncompleteFilesByImportChain_(chainId) {
+  chainId = String(chainId || '').trim();
+  if (!chainId) {
+    return 0;
+  }
+  ensureCatalogSchemaUpToDate_();
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Files');
+  if (!sheet) {
+    return 0;
+  }
+  var values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    return 0;
+  }
+  var headers = values[0].map(function (h) {
+    return String(h).trim();
+  });
+  var idCol = headers.indexOf('catalog_id');
+  var chainCol = headers.indexOf('import_chain_id');
+  var statusCol = headers.indexOf('status');
+  var fileIdCol = headers.indexOf('file_id');
+  if (idCol < 0 || chainCol < 0) {
+    return 0;
+  }
+
+  var keep = [values[0]];
+  var removed = 0;
+  var removedIds = [];
+  for (var r = 1; r < values.length; r++) {
+    var rowChain = String(values[r][chainCol] || '');
+    if (rowChain !== chainId) {
+      keep.push(values[r]);
+      continue;
+    }
+    var st = String(statusCol >= 0 ? values[r][statusCol] : '').toLowerCase();
+    var fileId = String(fileIdCol >= 0 ? values[r][fileIdCol] : '').trim();
+    if (st === 'ready' && fileId) {
+      keep.push(values[r]);
+      continue;
+    }
+    removed++;
+    removedIds.push(String(values[r][idCol] || ''));
+  }
+  if (!removed) {
+    return 0;
+  }
+  sheet.clearContents();
+  if (keep.length) {
+    sheet.getRange(1, 1, keep.length, headers.length).setValues(keep);
+  }
+  if (removedIds.length) {
+    clearAclRowsForObjects_(
+      removedIds.map(function (id) {
+        return { objectType: 'file', objectId: id };
+      })
+    );
+  }
+  return removed;
 }

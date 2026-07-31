@@ -834,7 +834,7 @@ function replaceAclForObjects_(targetObjects, entries, engine, options) {
 
   targetObjects.forEach(function (obj) {
     var approved = false;
-    if (obj.objectType === 'file') {
+    if (obj.objectType === 'file' && engine && engine.filesByCatalogId) {
       var file = engine.filesByCatalogId[obj.objectId];
       approved = file && parseBoolean_(file.approved);
     }
@@ -962,7 +962,7 @@ function appendAclForNewObjectsBatch_(objectAclList, engine) {
 
   objectAclList.forEach(function (item) {
     var approved = false;
-    if (item.objectType === 'file') {
+    if (item.objectType === 'file' && engine && engine.filesByCatalogId) {
       var file = engine.filesByCatalogId[item.objectId];
       approved = file && parseBoolean_(file.approved);
     }

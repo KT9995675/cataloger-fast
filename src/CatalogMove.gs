@@ -47,6 +47,13 @@ function moveCatalogItems(input) {
       if (!file) {
         throw catalogError_('FILE_NOT_FOUND', 'File not found: ' + item.id);
       }
+      if (isFileShortcutRow_(file)) {
+        // Ярлык: только удаление ссылки — право редактора на родителя.
+        if (file.folder_id) {
+          requiredFolders[String(file.folder_id)] = true;
+        }
+        return;
+      }
       requiredFolders[String(file.folder_id)] = true;
       return;
     }
@@ -64,6 +71,13 @@ function moveCatalogItems(input) {
     if (parseBoolean_(folder.is_system)) {
       throw catalogError_('NOT_ALLOWED', 'Cannot move a system folder.');
     }
+    if (isMirrorFolderRow_(folder)) {
+      // Зеркало: только удаление ссылки — право редактора на родителя.
+      if (folder.parent_folder_id) {
+        requiredFolders[String(folder.parent_folder_id)] = true;
+      }
+      return;
+    }
     if (isFolderInside_(engine, item.id, targetFolderId)) {
       throw catalogError_('INVALID_MOVE', 'Cannot move a folder into itself or its subfolder.');
     }
@@ -80,35 +94,83 @@ function moveCatalogItems(input) {
   var fileUpdates = [];
   var folderUpdates = [];
   var moved = [];
+  var mirrorsToDelete = [];
+  var fileShortcutsToDelete = [];
+  var foldersMovedToTrash = [];
+  var filesMovedToTrash = [];
 
   normalizedItems.forEach(function (item) {
     if (item.kind === 'file') {
       var fileRow = engine.filesByCatalogId[item.id];
+      if (isFileShortcutRow_(fileRow)) {
+        // §22: ярлык файла — только жёсткое удаление (как зеркало папки).
+        fileShortcutsToDelete.push(item.id);
+        moved.push(item);
+        return;
+      }
       if (String(fileRow.folder_id) === targetFolderId) {
         moved.push(item);
         return;
       }
       fileUpdates.push({ catalogId: item.id, folderId: targetFolderId });
       moved.push(item);
+      if (targetFolderId === TRASH_FOLDER_ID_) {
+        filesMovedToTrash.push(item.id);
+      }
       return;
     }
 
     var treeFolder = engine.foldersById[item.id];
+    if (isMirrorFolderRow_(treeFolder)) {
+      mirrorsToDelete.push(item.id);
+      moved.push(item);
+      return;
+    }
+
     if (String(treeFolder.parent_folder_id || '') === targetFolderId) {
       moved.push(item);
       return;
     }
     folderUpdates.push({ folderId: item.id, parentFolderId: targetFolderId });
     moved.push(item);
+    if (targetFolderId === TRASH_FOLDER_ID_) {
+      foldersMovedToTrash.push(item.id);
+    }
   });
 
+  if (mirrorsToDelete.length) {
+    deleteCatalogMirrorFolderRows_(mirrorsToDelete);
+  }
+  if (fileShortcutsToDelete.length) {
+    deleteCatalogFileShortcutRows_(fileShortcutsToDelete);
+  }
   applyFileFolderUpdates_(fileUpdates, folderUpdates);
-  applyTargetFolderAclAfterMove_(engine, targetFolderId, moved);
+  if (foldersMovedToTrash.length || filesMovedToTrash.length) {
+    var trashCascadeTargets = filesMovedToTrash.slice();
+    foldersMovedToTrash.forEach(function (fid) {
+      trashCascadeTargets.push(fid);
+      collectFolderSubtreeObjects_(engine, fid).forEach(function (obj) {
+        if (obj.objectType === 'folder') {
+          trashCascadeTargets.push(obj.objectId);
+        }
+        if (obj.objectType === 'file') {
+          filesMovedToTrash.push(obj.objectId);
+        }
+      });
+    });
+    deleteMirrorsPointingToFolders_(trashCascadeTargets);
+    deleteFileShortcutsPointingToCatalogIds_(filesMovedToTrash);
+  }
+  applyTargetFolderAclAfterMove_(engine, targetFolderId, moved.filter(function (m) {
+    return mirrorsToDelete.indexOf(m.id) < 0 && fileShortcutsToDelete.indexOf(m.id) < 0;
+  }));
   bumpCatalogRev_();
 
   return {
     ok: true,
-    moved: moved
+    moved: moved,
+    deletedMirrors: mirrorsToDelete,
+    deletedFileShortcuts: fileShortcutsToDelete
   };
 }
 
@@ -304,22 +366,31 @@ function applyFileFolderUpdates_(fileUpdates, folderUpdates) {
       fileUpdateMap[update.catalogId] = update.folderId;
     });
 
-    var folderColData = [];
-    var changed = false;
+    var filePatches = [];
     for (var i = 1; i < fileValues.length; i++) {
       var catalogId = String(fileValues[i][catalogCol]);
-      var value = fileValues[i][folderCol];
       if (fileUpdateMap.hasOwnProperty(catalogId)) {
-        value = fileUpdateMap[catalogId];
-        changed = true;
+        filePatches.push({ row: i + 1, value: fileUpdateMap[catalogId] });
       }
-      folderColData.push([value]);
     }
-    if (changed) {
-      // getRange(row, column, numRows, numColumns) — 3-й/4-й аргументы = размеры, не lastRow/lastCol
-      filesSheet
-        .getRange(2, folderCol + 1, folderColData.length, 1)
-        .setValues(folderColData);
+    if (filePatches.length) {
+      if (filePatches.length > 50) {
+        // Батч-путь: пишем весь столбец одним вызовом (быстрее для массовых обновлений).
+        var folderColData = [];
+        for (var fi = 1; fi < fileValues.length; fi++) {
+          var cId = String(fileValues[fi][catalogCol]);
+          folderColData.push([fileUpdateMap.hasOwnProperty(cId) ? fileUpdateMap[cId] : fileValues[fi][folderCol]]);
+        }
+        // getRange(row, column, numRows, numColumns) — 3-й/4-й аргументы = размеры, не lastRow/lastCol
+        filesSheet
+          .getRange(2, folderCol + 1, folderColData.length, 1)
+          .setValues(folderColData);
+      } else {
+        // Точечный путь: setValue только для изменившихся строк.
+        filePatches.forEach(function (p) {
+          filesSheet.getRange(p.row, folderCol + 1).setValue(p.value);
+        });
+      }
     }
   }
 
@@ -346,21 +417,30 @@ function applyFileFolderUpdates_(fileUpdates, folderUpdates) {
       folderUpdateMap[update.folderId] = update.parentFolderId;
     });
 
-    var parentColData = [];
-    var parentChanged = false;
+    var treePatches = [];
     for (var j = 1; j < treeValues.length; j++) {
       var folderId = String(treeValues[j][folderIdCol]);
-      var parentValue = treeValues[j][parentCol];
       if (folderUpdateMap.hasOwnProperty(folderId)) {
-        parentValue = folderUpdateMap[folderId];
-        parentChanged = true;
+        treePatches.push({ row: j + 1, value: folderUpdateMap[folderId] });
       }
-      parentColData.push([parentValue]);
     }
-    if (parentChanged) {
-      treeSheet
-        .getRange(2, parentCol + 1, parentColData.length, 1)
-        .setValues(parentColData);
+    if (treePatches.length) {
+      if (treePatches.length > 50) {
+        // Батч-путь: весь столбец одним вызовом.
+        var parentColData = [];
+        for (var ti = 1; ti < treeValues.length; ti++) {
+          var fId = String(treeValues[ti][folderIdCol]);
+          parentColData.push([folderUpdateMap.hasOwnProperty(fId) ? folderUpdateMap[fId] : treeValues[ti][parentCol]]);
+        }
+        treeSheet
+          .getRange(2, parentCol + 1, parentColData.length, 1)
+          .setValues(parentColData);
+      } else {
+        // Точечный путь: setValue только для изменившихся строк.
+        treePatches.forEach(function (p) {
+          treeSheet.getRange(p.row, parentCol + 1).setValue(p.value);
+        });
+      }
     }
   }
 }

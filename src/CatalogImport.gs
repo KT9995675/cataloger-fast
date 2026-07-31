@@ -117,13 +117,13 @@ function importDriveFiles(input) {
   if (!urls.length) {
     throw catalogError_('INVALID_INPUT', 'Укажите хотя бы одну ссылку на файл.');
   }
-  if (urls.length > IMPORT_DRIVE_JOB_MAX_FILES_) {
+  if (urls.length > IMPORT_DRIVE_OPERATION_MAX_FILES_) {
     throw catalogError_(
       'IMPORT_TOO_LARGE',
       'Слишком много файлов (' +
         urls.length +
-        '). Максимум за одну очередь: ' +
-        IMPORT_DRIVE_JOB_MAX_FILES_ +
+        '). Максимум за одну операцию: ' +
+        IMPORT_DRIVE_OPERATION_MAX_FILES_ +
         '.'
     );
   }
@@ -165,18 +165,19 @@ function importDriveFiles(input) {
     items.push(built.item);
     fileRows.push(built.row);
   }
+  var chainIdFiles = Utilities.getUuid();
+  fileRows.forEach(function (row) {
+    row.importChainId = chainIdFiles;
+  });
   appendCatalogFileRowsBatch_(fileRows);
 
-  var jobId = enqueueCatalogJob_(
-    'import_drive',
-    {
-      scenario: 'files',
-      mode: mode,
-      targetFolderId: targetFolderId,
-      phase: 'work',
-      items: items
-    },
-    userEmail
+  var queuedFiles = enqueueImportDriveJobsChain_(
+    mode,
+    targetFolderId,
+    items,
+    userEmail,
+    'files',
+    chainIdFiles
   );
   ensureCatalogJobsTrigger_();
   kickCatalogJobsProcessing_();
@@ -186,10 +187,15 @@ function importDriveFiles(input) {
     ok: true,
     queued: true,
     kind: 'files',
-    jobId: jobId,
-    fileCount: items.length,
+    jobId: queuedFiles.jobId,
+    chainId: queuedFiles.chainId,
+    fileCount: queuedFiles.fileCount,
+    jobParts: queuedFiles.jobParts,
     mode: mode,
-    displayName: items.length === 1 ? items[0].displayName : items.length + ' файл(ов)'
+    displayName:
+      queuedFiles.fileCount === 1
+        ? items[0].displayName
+        : queuedFiles.fileCount + ' файл(ов)'
   };
 }
 
@@ -280,14 +286,14 @@ function importDriveFolder(input) {
     throw catalogError_('INVALID_FOLDER', 'Drive folder not found or not accessible.');
   }
 
-  var walk = walkDriveFolderForImport_(sourceFolder, IMPORT_DRIVE_JOB_MAX_FILES_);
-  if (walk.fileCount > IMPORT_DRIVE_JOB_MAX_FILES_) {
+  var walk = walkDriveFolderForImport_(sourceFolder, IMPORT_DRIVE_OPERATION_MAX_FILES_);
+  if (walk.fileCount > IMPORT_DRIVE_OPERATION_MAX_FILES_) {
     throw catalogError_(
       'IMPORT_TOO_LARGE',
       'Слишком много файлов в папке (' +
         walk.fileCount +
-        '). Максимум за одну очередь: ' +
-        IMPORT_DRIVE_JOB_MAX_FILES_ +
+        '). Максимум за одну операцию: ' +
+        IMPORT_DRIVE_OPERATION_MAX_FILES_ +
         '.'
     );
   }
@@ -350,19 +356,19 @@ function importDriveFolder(input) {
     items.push(built.item);
     fileRows.push(built.row);
   });
+  var chainIdFolder = Utilities.getUuid();
+  fileRows.forEach(function (row) {
+    row.importChainId = chainIdFolder;
+  });
   appendCatalogFileRowsBatch_(fileRows);
 
-  var jobId = enqueueCatalogJob_(
-    'import_drive',
-    {
-      scenario: 'folder',
-      mode: mode,
-      targetFolderId: targetFolderId,
-      rootFolderId: rootVirtualId,
-      phase: 'work',
-      items: items
-    },
-    userEmail
+  var queuedFolder = enqueueImportDriveJobsChain_(
+    mode,
+    targetFolderId,
+    items,
+    userEmail,
+    'folder',
+    chainIdFolder
   );
   ensureCatalogJobsTrigger_();
   kickCatalogJobsProcessing_();
@@ -372,11 +378,13 @@ function importDriveFolder(input) {
     ok: true,
     queued: true,
     kind: 'folder',
-    jobId: jobId,
+    jobId: queuedFolder.jobId,
+    chainId: queuedFolder.chainId,
     rootFolderId: rootVirtualId,
     displayName: sourceFolder.getName(),
     folderCount: folderCount,
-    fileCount: items.length,
+    fileCount: queuedFolder.fileCount,
+    jobParts: queuedFolder.jobParts,
     skippedShortcuts: walk.skippedShortcuts,
     mode: mode
   };
@@ -823,7 +831,10 @@ function appendCatalogFileRowsBatch_(rows) {
       mime_type: row.mimeType || '',
       acl_editors: row.aclEditors || '',
       acl_commenters: row.aclCommenters || '',
-      acl_readers: row.aclReaders || ''
+      acl_readers: row.aclReaders || '',
+      import_chain_id: row.importChainId || '',
+      shortcut_of_catalog_id: row.shortcutOfCatalogId || '',
+      shortcut_of_drive_file_id: row.shortcutOfDriveFileId || ''
     };
     var line = [];
     for (var c = 0; c < headers.length; c++) {
@@ -886,7 +897,9 @@ function appendTreeFolderRowsBatch_(rows) {
       is_system: row.isSystem === true,
       acl_editors: row.aclEditors || '',
       acl_commenters: row.aclCommenters || '',
-      acl_readers: row.aclReaders || ''
+      acl_readers: row.aclReaders || '',
+      mirror_of_folder_id: row.mirrorOfFolderId || '',
+      mirror_of_drive_folder_id: row.mirrorOfDriveFolderId || ''
     };
     var line = [];
     for (var c = 0; c < headers.length; c++) {

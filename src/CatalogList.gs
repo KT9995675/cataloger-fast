@@ -81,42 +81,56 @@ function getCatalogSnapshot() {
   ensureExplicitAclAndCache_(engine, treeRows, fileRows);
 
   backfillMissingMimeTypes_(fileRows);
-  var folderSizes = buildFolderSizeIndex_(treeRows, fileRows);
+  var folderStats = buildFolderStatsIndex_(treeRows, fileRows);
+  var folderSizes = folderStats.sizes;
+  var folderFileCounts = folderStats.fileCounts;
 
   function approvedByNameFor_(email) {
     return resolveUserLabelFromEngine_(engine, email);
   }
 
   var folders = treeRows.map(function (row) {
+    var mirrorOf = String(row.mirror_of_folder_id || '').trim();
+    var mirrorOfDrive = String(row.mirror_of_drive_folder_id || '').trim();
+    var isExternalMirror = !!mirrorOfDrive;
+    var isMirror = !!mirrorOf || isExternalMirror;
+    var displayId = mirrorOf ? mirrorOf : row.folder_id;
+    var aclRow = mirrorOf
+      ? treeRows.filter(function (r) {
+          return String(r.folder_id) === mirrorOf;
+        })[0] || row
+      : row;
+    var editors = isExternalMirror ? [] : parseAclCacheField_(aclRow.acl_editors);
+    var commenters = isExternalMirror ? [] : parseAclCacheField_(aclRow.acl_commenters);
+    var readers = isExternalMirror ? [] : parseAclCacheField_(aclRow.acl_readers);
+    if (mirrorOf && !isExternalMirror) {
+      var targetDisp = getEffectiveAclDisplayFromEngine_(engine, 'folder', mirrorOf);
+      editors = targetDisp.editors || editors;
+      commenters = targetDisp.commenters || commenters;
+      readers = targetDisp.readers || readers;
+    }
     return {
       id: row.folder_id,
       parentFolderId: row.parent_folder_id ? String(row.parent_folder_id) : null,
       name: row.name,
-      sizeBytes: folderSizes[row.folder_id] || 0,
+      sizeBytes: isExternalMirror ? 0 : folderSizes[displayId] || folderSizes[row.folder_id] || 0,
+      fileCount: isExternalMirror
+        ? 0
+        : folderFileCounts[displayId] || folderFileCounts[row.folder_id] || 0,
       modifiedAt: formatCatalogDate_(row.folder_created_at),
       isSystem: parseBoolean_(row.is_system),
-      editors: parseAclCacheField_(row.acl_editors),
-      commenters: parseAclCacheField_(row.acl_commenters),
-      readers: parseAclCacheField_(row.acl_readers)
+      isMirror: isMirror,
+      isExternalMirror: isExternalMirror,
+      mirrorOfFolderId: mirrorOf,
+      mirrorOfDriveFolderId: mirrorOfDrive,
+      editors: editors,
+      commenters: commenters,
+      readers: readers
     };
   });
 
   var files = fileRows.map(function (row) {
-    var approvedBy = row.approved_by || '';
-    return {
-      id: row.catalog_id,
-      folderId: String(row.folder_id || ''),
-      name: row.display_name,
-      mimeType: row.mime_type || '',
-      sizeBytes: parseNumber_(row.size_bytes),
-      modifiedAt: formatCatalogDate_(row.drive_modified_at),
-      approved: parseBoolean_(row.approved),
-      approvedBy: approvedBy,
-      approvedByName: approvedBy ? approvedByNameFor_(approvedBy) : '',
-      editors: parseAclCacheField_(row.acl_editors),
-      commenters: parseAclCacheField_(row.acl_commenters),
-      readers: parseAclCacheField_(row.acl_readers)
-    };
+    return buildCatalogFileListItem_(row, engine, approvedByNameFor_);
   });
 
   return {
@@ -142,7 +156,9 @@ function listFolderContentsBatch(folderIds) {
   var treeRows = readSheetRecords_('Tree');
   var fileRows = readSheetRecords_('Files');
   var folderById = indexTreeFolders_(treeRows);
-  var folderSizes = buildFolderSizeIndex_(treeRows, fileRows);
+  var folderStats = buildFolderStatsIndex_(treeRows, fileRows);
+  var folderSizes = folderStats.sizes;
+  var folderFileCounts = folderStats.fileCounts;
   var engine = buildAclEngineFromRows_(
     treeRows,
     fileRows,
@@ -169,19 +185,38 @@ function listFolderContentsBatch(folderIds) {
       if (row.parent_folder_id !== resolvedFolderId) {
         return;
       }
+      var mirrorOf = String(row.mirror_of_folder_id || '').trim();
+      var mirrorOfDrive = String(row.mirror_of_drive_folder_id || '').trim();
+      var isExternalMirror = !!mirrorOfDrive;
+      var isMirror = !!mirrorOf || isExternalMirror;
+      var sizeId = mirrorOf ? mirrorOf : row.folder_id;
+      var editors = isExternalMirror ? [] : parseAclCacheField_(row.acl_editors);
+      var commenters = isExternalMirror ? [] : parseAclCacheField_(row.acl_commenters);
+      var readers = isExternalMirror ? [] : parseAclCacheField_(row.acl_readers);
+      if (mirrorOf && !isExternalMirror) {
+        var targetDisp = getEffectiveAclDisplayFromEngine_(engine, 'folder', mirrorOf);
+        editors = targetDisp.editors || editors;
+        commenters = targetDisp.commenters || commenters;
+        readers = targetDisp.readers || readers;
+      }
       items.push({
         kind: 'folder',
         id: row.folder_id,
         name: row.name,
-        sizeBytes: folderSizes[row.folder_id] || 0,
+        sizeBytes: isExternalMirror ? 0 : folderSizes[sizeId] || 0,
+        fileCount: isExternalMirror ? 0 : folderFileCounts[sizeId] || 0,
         modifiedAt: formatCatalogDate_(row.folder_created_at),
         approved: false,
         approvedBy: '',
         approvedByName: '',
         isSystem: parseBoolean_(row.is_system),
-        editors: parseAclCacheField_(row.acl_editors),
-        commenters: parseAclCacheField_(row.acl_commenters),
-        readers: parseAclCacheField_(row.acl_readers)
+        isMirror: isMirror,
+        isExternalMirror: isExternalMirror,
+        mirrorOfFolderId: mirrorOf,
+        mirrorOfDriveFolderId: mirrorOfDrive,
+        editors: editors,
+        commenters: commenters,
+        readers: readers
       });
     });
 
@@ -189,22 +224,10 @@ function listFolderContentsBatch(folderIds) {
       if (row.folder_id !== resolvedFolderId) {
         return;
       }
-      var approvedBy = row.approved_by || '';
-      items.push({
-        kind: 'file',
-        id: row.catalog_id,
-        name: row.display_name,
-        mimeType: row.mime_type || '',
-        sizeBytes: parseNumber_(row.size_bytes),
-        modifiedAt: formatCatalogDate_(row.drive_modified_at),
-        approved: parseBoolean_(row.approved),
-        approvedBy: approvedBy,
-        approvedByName: approvedBy ? approvedByNameFor_(approvedBy) : '',
-        isSystem: false,
-        editors: parseAclCacheField_(row.acl_editors),
-        commenters: parseAclCacheField_(row.acl_commenters),
-        readers: parseAclCacheField_(row.acl_readers)
-      });
+      var fileItem = buildCatalogFileListItem_(row, engine, approvedByNameFor_);
+      fileItem.kind = 'file';
+      fileItem.isSystem = false;
+      items.push(fileItem);
     });
 
     items.sort(comparePanelItems_);
@@ -223,6 +246,76 @@ function assertCatalogReadyLight_() {
   if (!props.getProperty(PROP_SCHEMA_VERSION_) || !props.getProperty(PROP_CATALOG_ROOT_FOLDER_ID_)) {
     throw catalogError_('CATALOG_NOT_INITIALIZED', 'Catalog is not initialized.');
   }
+}
+
+/**
+ * Элемент файла для snapshot / listFolderContentsBatch (§22 ярлыки).
+ *
+ * @param {Object} row
+ * @param {Object} engine
+ * @param {function(string): string} approvedByNameFor_
+ * @returns {Object}
+ */
+function buildCatalogFileListItem_(row, engine, approvedByNameFor_) {
+  var shortcutOf = String(row.shortcut_of_catalog_id || '').trim();
+  var shortcutOfDrive = String(row.shortcut_of_drive_file_id || '').trim();
+  var isExternalShortcut = !!shortcutOfDrive;
+  var isShortcut = !!shortcutOf || isExternalShortcut;
+
+  var display = row;
+  var editors = parseAclCacheField_(row.acl_editors);
+  var commenters = parseAclCacheField_(row.acl_commenters);
+  var readers = parseAclCacheField_(row.acl_readers);
+  var approvedBy = row.approved_by || '';
+  var approved = parseBoolean_(row.approved);
+
+  if (isExternalShortcut) {
+    editors = [];
+    commenters = [];
+    readers = [];
+    approved = false;
+    approvedBy = '';
+  } else if (shortcutOf && engine && engine.filesByCatalogId) {
+    var targetId = shortcutOf;
+    try {
+      targetId = resolveFileShortcutTargetCatalogId_(engine.filesByCatalogId, String(row.catalog_id));
+    } catch (eResolve) {
+      targetId = shortcutOf;
+    }
+    var target = engine.filesByCatalogId[targetId];
+    if (target) {
+      display = target;
+      approvedBy = target.approved_by || '';
+      approved = parseBoolean_(target.approved);
+      var targetAcl = getEffectiveAclDisplayFromEngine_(engine, 'file', targetId);
+      editors = targetAcl.editors || [];
+      commenters = targetAcl.commenters || [];
+      readers = targetAcl.readers || [];
+    }
+  }
+
+  return {
+    id: row.catalog_id,
+    folderId: String(row.folder_id || ''),
+    name: row.display_name,
+    mimeType: display.mime_type || row.mime_type || '',
+    sizeBytes: parseNumber_(display.size_bytes != null ? display.size_bytes : row.size_bytes),
+    modifiedAt: formatCatalogDate_(display.drive_modified_at || row.drive_modified_at),
+    approved: approved,
+    approvedBy: approvedBy,
+    approvedByName: approvedBy ? approvedByNameFor_(approvedBy) : '',
+    status: String(display.status || row.status || 'ready').toLowerCase() || 'ready',
+    isShortcut: isShortcut,
+    isExternalShortcut: isExternalShortcut,
+    shortcutOfCatalogId: shortcutOf,
+    shortcutOfDriveFileId: shortcutOfDrive,
+    openUrl: isExternalShortcut
+      ? buildCatalogFileOpenUrl_(shortcutOfDrive, row.mime_type || '', '')
+      : '',
+    editors: editors,
+    commenters: commenters,
+    readers: readers
+  };
 }
 
 /**
@@ -400,11 +493,15 @@ function indexTreeFolders_(treeRows) {
 }
 
 /**
+ * Рекурсивные размер и число файлов по каждой папке Tree (из листа Files).
+ * Зеркала не разворачиваются: у узла-зеркала в индексе — свои прямые дети (обычно 0);
+ * UI берёт stats цели через mirror_of_folder_id.
+ *
  * @param {Object.<string, string>[]} treeRows
  * @param {Object.<string, string>[]} fileRows
- * @returns {Object.<string, number>}
+ * @returns {{ sizes: Object.<string, number>, fileCounts: Object.<string, number> }}
  */
-function buildFolderSizeIndex_(treeRows, fileRows) {
+function buildFolderStatsIndex_(treeRows, fileRows) {
   var childrenByParent = {};
   treeRows.forEach(function (row) {
     var parentId = String(row.parent_folder_id || '');
@@ -415,30 +512,45 @@ function buildFolderSizeIndex_(treeRows, fileRows) {
   });
 
   var directFileSize = {};
+  var directFileCount = {};
   fileRows.forEach(function (row) {
     var folderId = String(row.folder_id || '');
     var size = parseNumber_(row.size_bytes) || 0;
     directFileSize[folderId] = (directFileSize[folderId] || 0) + size;
+    directFileCount[folderId] = (directFileCount[folderId] || 0) + 1;
   });
 
-  var memo = {};
-  function sizeOf(folderId) {
-    if (memo[folderId] !== undefined) {
-      return memo[folderId];
+  var memoBytes = {};
+  var memoCounts = {};
+  function statsOf(folderId) {
+    if (memoBytes[folderId] !== undefined) {
+      return;
     }
-    var total = directFileSize[folderId] || 0;
+    var totalBytes = directFileSize[folderId] || 0;
+    var totalCount = directFileCount[folderId] || 0;
     var children = childrenByParent[folderId] || [];
     for (var i = 0; i < children.length; i++) {
-      total += sizeOf(children[i]);
+      statsOf(children[i]);
+      totalBytes += memoBytes[children[i]] || 0;
+      totalCount += memoCounts[children[i]] || 0;
     }
-    memo[folderId] = total;
-    return total;
+    memoBytes[folderId] = totalBytes;
+    memoCounts[folderId] = totalCount;
   }
 
   treeRows.forEach(function (row) {
-    sizeOf(row.folder_id);
+    statsOf(row.folder_id);
   });
-  return memo;
+  return { sizes: memoBytes, fileCounts: memoCounts };
+}
+
+/**
+ * @param {Object.<string, string>[]} treeRows
+ * @param {Object.<string, string>[]} fileRows
+ * @returns {Object.<string, number>}
+ */
+function buildFolderSizeIndex_(treeRows, fileRows) {
+  return buildFolderStatsIndex_(treeRows, fileRows).sizes;
 }
 
 /**

@@ -140,13 +140,68 @@
         border-color: var(--accent);
       }
       .panel-header {
-        padding: 6px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 8px 4px 6px;
         font-size: 12px;
         background: var(--bg);
         border-bottom: 1px solid var(--border);
+        min-height: 28px;
+      }
+      .panel-hist {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        flex-shrink: 0;
+      }
+      .panel-hist-btn {
+        width: 24px;
+        height: 22px;
+        padding: 0;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background: var(--panel);
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .panel-hist-btn:hover:not(:disabled) {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .panel-hist-btn:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .panel-path {
+        flex: 1;
+        min-width: 0;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+      .panel-path .path-sep {
+        opacity: 0.55;
+        user-select: none;
+      }
+      .panel-path .path-crumb {
+        color: inherit;
+        cursor: pointer;
+        border-radius: 2px;
+      }
+      .panel-path .path-crumb:hover {
+        color: var(--accent);
+        text-decoration: underline;
+      }
+      .panel-path .path-crumb.is-current {
+        cursor: default;
+        font-weight: 600;
+      }
+      .panel-path .path-crumb.is-current:hover {
+        color: inherit;
+        text-decoration: none;
       }
       .panel-list-wrap {
         flex: 1;
@@ -215,6 +270,52 @@
       .panel-table tr.row-folder td.col-name {
         font-weight: 700;
       }
+      /* §22: ярлыки каталога — синие имена; внешние — красные; иконки обычные */
+      .panel-table tr.row-mirror:not(.row-mirror-external) .name-text,
+      .panel-table tr.row-shortcut:not(.row-shortcut-external) .name-text {
+        color: #64b5f6;
+      }
+      .panel-table tr.row-mirror:not(.row-mirror-external).selected .name-text,
+      .panel-table tr.row-mirror:not(.row-mirror-external).focused .name-text,
+      .panel-table tr.row-shortcut:not(.row-shortcut-external).selected .name-text,
+      .panel-table tr.row-shortcut:not(.row-shortcut-external).focused .name-text {
+        color: #90caf9;
+      }
+      .panel.panel-external .panel-header {
+        color: #f28b82;
+      }
+      .panel.panel-external .panel-header::before {
+        content: 'Drive ';
+        font-weight: 700;
+        margin-right: 4px;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(197, 34, 31, 0.35);
+        color: #f8d7d5;
+        font-size: 12px;
+      }
+      /* §20.1 / §22: внешняя зона и красные ярлыки — красные имена */
+      .panel.panel-external .panel-table tr .name-text,
+      .panel-table tr.row-external .name-text,
+      .panel-table tr.row-mirror-external .name-text,
+      .panel-table tr.row-shortcut-external .name-text {
+        color: #e57373;
+      }
+      .panel.panel-external .panel-table tr.selected .name-text,
+      .panel.panel-external .panel-table tr.focused .name-text,
+      .panel-table tr.row-external.selected .name-text,
+      .panel-table tr.row-external.focused .name-text,
+      .panel-table tr.row-shortcut-external.selected .name-text,
+      .panel-table tr.row-shortcut-external.focused .name-text {
+        color: #ffcdd2;
+      }
+      .panel-table tr.row-pending {
+        opacity: 0.55;
+      }
+      .panel-table tr.row-pending .name-text::after {
+        content: ' …';
+        opacity: 0.8;
+      }
       .opening-splash {
         position: fixed;
         left: 50%;
@@ -267,7 +368,7 @@
       .col-type { width: 7%; }
       .col-approved { width: 6%; text-align: center; }
       .col-acl { width: 10%; }
-      .col-size { width: 10%; text-align: right; }
+      .col-size { width: 12%; text-align: right; white-space: nowrap; }
       .col-date { width: 12%; }
       .panel-table th.th-sort {
         cursor: pointer;
@@ -343,6 +444,53 @@
       .command-buttons .cmd-btn-icon svg {
         display: block;
       }
+      .cmd-service-wrap {
+        position: relative;
+        flex-shrink: 0;
+      }
+      .cmd-service-menu {
+        position: absolute;
+        left: 0;
+        bottom: calc(100% + 4px);
+        min-width: 176px;
+        padding: 4px 0;
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.22);
+        border-radius: 4px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+        z-index: 80;
+        display: flex;
+        flex-direction: column;
+      }
+      .command-bar .cmd-service-menu .cmd-menu-item {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 6px 12px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: #1a1a1a;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: left;
+        cursor: pointer;
+        box-shadow: none;
+      }
+      .command-bar .cmd-service-menu .cmd-menu-item:hover:not(:disabled) {
+        background: #e8f4fc;
+        color: #005a9e;
+      }
+      .command-bar .cmd-service-menu .cmd-menu-item:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .cmd-service-menu .cmd-menu-sep {
+        height: 1px;
+        margin: 4px 0;
+        background: rgba(0, 0, 0, 0.12);
+      }
       .hotkey-hints {
         display: flex;
         align-items: center;
@@ -369,6 +517,11 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+      .status-bar #status-text.status-jobs-busy {
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 2px;
       }
       .status-bar .user-tag {
         opacity: 0.85;
@@ -448,6 +601,24 @@
         border: 1px solid var(--border);
       }
       .modal-card.wide { max-width: 720px; max-height: 90vh; display: flex; flex-direction: column; }
+      #people-modal .modal-card.wide {
+        max-height: min(90vh, 640px);
+        overflow: hidden;
+        padding: 16px 20px;
+      }
+      #people-modal .modal-card.wide > h2,
+      #people-modal .modal-card.wide > .sub,
+      #people-modal .modal-card.wide > .people-tabs,
+      #people-modal .modal-card.wide > #people-msg,
+      #people-modal .modal-card.wide > .modal-actions {
+        flex-shrink: 0;
+      }
+      #people-modal .modal-card.wide > .sub {
+        margin-bottom: 10px;
+      }
+      #people-modal .modal-card.wide > .modal-actions {
+        margin-top: 10px;
+      }
       .import-modal-card {
         max-height: min(90vh, 680px);
         overflow: hidden;
@@ -545,24 +716,34 @@
         border-color: var(--accent);
         color: #fff;
       }
-      .people-pane { display: none; min-height: 280px; }
-      .people-pane.active { display: block; }
+      .people-pane {
+        display: none;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+      }
+      .people-pane.active {
+        display: flex;
+        flex-direction: column;
+      }
       .people-toolbar {
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 8px;
         margin-bottom: 8px;
+        flex-shrink: 0;
       }
       .people-toolbar .hint {
         color: var(--muted);
         font-size: 12px;
       }
       .people-list-wrap {
+        flex: 1 1 auto;
+        min-height: 80px;
         overflow: auto;
         border: 1px solid var(--border);
         border-radius: 4px;
-        max-height: 48vh;
       }
       .people-table {
         width: 100%;
@@ -581,6 +762,7 @@
         position: sticky;
         top: 0;
         background: var(--panel);
+        z-index: 1;
       }
       .people-table tr.selected {
         background: rgba(14, 99, 156, 0.35);
@@ -591,11 +773,11 @@
         font-size: 11px;
       }
       .people-members {
-        margin-top: 10px;
+        margin-top: 8px;
         border: 1px solid var(--border);
         border-radius: 4px;
         padding: 8px 10px;
-        max-height: 28vh;
+        max-height: min(22vh, 160px);
         overflow: auto;
       }
       .people-members label {
@@ -609,6 +791,9 @@
         margin-top: 10px;
         border-top: 1px solid var(--border);
         padding-top: 10px;
+        flex-shrink: 0;
+        max-height: 42%;
+        overflow-y: auto;
       }
       .people-form label {
         display: block;
@@ -743,6 +928,44 @@
       }
       #import-search-results:empty {
         display: none;
+      }
+      .catalog-search-results {
+        max-height: min(40vh, 320px);
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        margin-top: 8px;
+        background: var(--bg);
+      }
+      .catalog-search-results:empty::before {
+        content: 'Введите текст для поиска.';
+        display: block;
+        padding: 10px;
+        font-size: 13px;
+        opacity: 0.7;
+      }
+      .catalog-search-item {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .catalog-search-item:last-child {
+        border-bottom: none;
+      }
+      .catalog-search-item:hover,
+      .catalog-search-item.focused {
+        background: rgba(0, 90, 158, 0.14);
+      }
+      .catalog-search-item .kind {
+        font-size: 11px;
+        opacity: 0.7;
+        margin-right: 6px;
+      }
+      .catalog-search-item .path {
+        font-size: 12px;
+        opacity: 0.75;
+        margin-top: 2px;
       }
       .import-nav {
         border: 1px solid var(--border);
@@ -933,7 +1156,33 @@
       <div class="app-shell">
         <div class="panels">
           <div class="panel panel-active" id="panel-left" tabindex="0" data-panel-index="0">
-            <div class="panel-header" id="header-left">…</div>
+            <div class="panel-header" id="header-left">
+              <div class="panel-hist" role="group" aria-label="История панели">
+                <button
+                  type="button"
+                  class="panel-hist-btn"
+                  data-panel="0"
+                  data-hist="back"
+                  title="Назад"
+                  aria-label="Назад"
+                  disabled
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  class="panel-hist-btn"
+                  data-panel="0"
+                  data-hist="forward"
+                  title="Вперёд"
+                  aria-label="Вперёд"
+                  disabled
+                >
+                  →
+                </button>
+              </div>
+              <div class="panel-path" id="path-left">…</div>
+            </div>
             <div class="panel-list-wrap">
               <table class="panel-table" id="table-left">
                 <thead>
@@ -953,7 +1202,33 @@
             </div>
           </div>
           <div class="panel" id="panel-right" tabindex="0" data-panel-index="1">
-            <div class="panel-header" id="header-right">…</div>
+            <div class="panel-header" id="header-right">
+              <div class="panel-hist" role="group" aria-label="История панели">
+                <button
+                  type="button"
+                  class="panel-hist-btn"
+                  data-panel="1"
+                  data-hist="back"
+                  title="Назад"
+                  aria-label="Назад"
+                  disabled
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  class="panel-hist-btn"
+                  data-panel="1"
+                  data-hist="forward"
+                  title="Вперёд"
+                  aria-label="Вперёд"
+                  disabled
+                >
+                  →
+                </button>
+              </div>
+              <div class="panel-path" id="path-right">…</div>
+            </div>
             <div class="panel-list-wrap">
               <table class="panel-table" id="table-right">
                 <thead>
@@ -980,50 +1255,82 @@
               <button type="button" id="btn-move" class="cmd-btn hidden">F6 Перем.</button>
               <button type="button" id="btn-create" class="cmd-btn">F7 Создать</button>
               <button type="button" id="btn-delete" class="cmd-btn hidden">F8 Удал.</button>
-              <button type="button" id="btn-approve" class="cmd-btn" title="Утвердить выделенные файлы">Подписать</button>
-              <button type="button" id="btn-users" class="cmd-btn hidden">Пользователи</button>
-              <button type="button" id="btn-acl" class="cmd-btn hidden" title="Права на выделенные объекты">Доступ</button>
-              <button type="button" id="btn-import" class="cmd-btn hidden">Импорт</button>
               <button type="button" id="btn-refresh" class="cmd-btn" title="Обновить снимок каталога с сервера">Обновить</button>
               <button
                 type="button"
-                id="btn-export-structure"
-                class="cmd-btn hidden"
-                title="Выгрузить структуру каталога в Google Таблицу"
+                id="btn-catalog-search"
+                class="cmd-btn"
+                title="Поиск по каталогу (Alt+F7)"
               >
-                Выгрузка
+                Поиск
               </button>
-              <button
-                type="button"
-                id="btn-repair"
-                class="cmd-btn hidden"
-                title="Проверка и ремонт целостности каталога"
-              >
-                Ремонт
-              </button>
-              <button
-                type="button"
-                id="btn-empty-trash"
-                class="cmd-btn cmd-btn-icon hidden"
-                title="Очистить корзину"
-                aria-label="Очистить корзину"
-              >
-                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                  <path
-                    fill="currentColor"
-                    d="M5.2 2.2h5.6l.4 1.1H14v1.2H2V3.3h2.8l.4-1.1zm.6 3.2h1.1v6.2H5.8V5.4zm3.2 0h1.1v6.2H9V5.4zm-4.9 8.1c0 .7.5 1.2 1.2 1.2h4.4c.7 0 1.2-.5 1.2-1.2V5.2H4.1v8.3z"
-                  />
-                  <line
-                    x1="2.2"
-                    y1="13.8"
-                    x2="13.8"
-                    y2="2.2"
-                    stroke="#c62828"
-                    stroke-width="1.9"
-                    stroke-linecap="round"
-                  />
-                </svg>
-              </button>
+              <div class="cmd-service-wrap">
+                <button
+                  type="button"
+                  id="btn-service"
+                  class="cmd-btn"
+                  title="Сервис"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                  aria-controls="service-menu"
+                >
+                  Сервис ▾
+                </button>
+                <div id="service-menu" class="cmd-service-menu hidden" role="menu">
+                  <button
+                    type="button"
+                    id="btn-approve"
+                    class="cmd-menu-item"
+                    role="menuitem"
+                    title="Утвердить выделенные файлы"
+                  >
+                    Подписать
+                  </button>
+                  <button type="button" id="btn-users" class="cmd-menu-item hidden" role="menuitem">
+                    Пользователи
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-acl"
+                    class="cmd-menu-item hidden"
+                    role="menuitem"
+                    title="Права на выделенные объекты"
+                  >
+                    Доступ
+                  </button>
+                  <button type="button" id="btn-import" class="cmd-menu-item hidden" role="menuitem">
+                    Импорт
+                  </button>
+                  <div class="cmd-menu-sep hidden" id="service-menu-sep-admin"></div>
+                  <button
+                    type="button"
+                    id="btn-export-structure"
+                    class="cmd-menu-item hidden"
+                    role="menuitem"
+                    title="Выгрузить структуру каталога в Google Таблицу"
+                  >
+                    Выгрузка
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-repair"
+                    class="cmd-menu-item hidden"
+                    role="menuitem"
+                    title="Проверка и ремонт целостности каталога"
+                  >
+                    Ремонт
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-empty-trash"
+                    class="cmd-menu-item hidden"
+                    role="menuitem"
+                    title="Очистить корзину"
+                  >
+                    Очистить корзину
+                  </button>
+                </div>
+              </div>
             </div>
             <div class="hotkey-hints">
               <span>Shift+F6 Имя</span>
@@ -1100,7 +1407,7 @@
                     placeholder="https://drive.google.com/file/d/…&#10;https://drive.google.com/drive/folders/…"
                   ></textarea>
                   <p class="sub">
-                    Одна очередь (фон, до 500 файлов). Структура папок сохранится в каталоге.
+                    Одна очередь в фоне (большие папки — автонарезка до 50 файлов на порцию, до 5000 за операцию). Структура папок сохранится.
                   </p>
                 </details>
               </div>
@@ -1139,6 +1446,10 @@
         <label for="create-kind">Что создать</label>
         <select id="create-kind" style="width:100%;margin-bottom:16px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);">
           <option value="folder">Папку</option>
+          <option value="mirror">Ярлык папки</option>
+          <option value="external_mirror">Ярлык внешней папки</option>
+          <option value="file_shortcut">Ярлык файла</option>
+          <option value="external_file_shortcut">Ярлык внешнего файла</option>
           <option value="document">Google Документ</option>
           <option value="spreadsheet">Google Таблица</option>
           <option value="presentation">Google Презентация</option>
@@ -1152,12 +1463,78 @@
         <p id="create-owner-hint" class="sub" style="margin-top:-8px;display:none;">
           Файл на Drive будет принадлежать Управляющему каталога.
         </p>
-        <label for="create-name">Имя</label>
-        <input type="text" id="create-name" autocomplete="off" placeholder="Имя" />
+        <div id="create-mirror-block" class="hidden" style="margin-bottom:16px;">
+          <label>Папка-оригинал</label>
+          <div class="import-search-row" style="margin-top:6px;">
+            <input type="text" id="create-mirror-search" autocomplete="off" placeholder="Поиск…" />
+          </div>
+          <div id="create-mirror-tree" class="create-mirror-tree" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:4px;padding:6px 8px;margin-top:6px;background:var(--bg);"></div>
+          <p class="sub" id="create-mirror-picked" style="margin:8px 0 0;">Не выбрано</p>
+        </div>
+        <div id="create-file-shortcut-block" class="hidden" style="margin-bottom:16px;">
+          <label>Файл-оригинал</label>
+          <div class="import-search-row" style="margin-top:6px;">
+            <input type="text" id="create-file-shortcut-search" autocomplete="off" placeholder="Поиск…" />
+          </div>
+          <div id="create-file-shortcut-tree" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:4px;padding:6px 8px;margin-top:6px;background:var(--bg);"></div>
+          <p class="sub" id="create-file-shortcut-picked" style="margin:8px 0 0;">Не выбрано</p>
+        </div>
+        <div id="create-external-mirror-block" class="hidden" style="margin-bottom:16px;">
+          <div class="mode-row" style="margin-bottom:8px;">
+            <label><input type="radio" name="create-ext-scope" value="mydrive" checked /> Мой диск</label>
+            <label><input type="radio" name="create-ext-scope" value="shared" /> Доступные мне</label>
+            <label><input type="radio" name="create-ext-scope" value="shared_drives" /> Shared drives</label>
+          </div>
+          <div class="import-search-row">
+            <input type="text" id="create-ext-search-query" autocomplete="off" placeholder="Поиск на Drive…" />
+            <button type="button" class="secondary" id="create-ext-search-btn">Найти</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:6px;">
+            <button type="button" class="secondary" id="create-ext-up" disabled>↑ Вверх</button>
+            <span class="sub" id="create-ext-path" style="align-self:center;">Мой диск</span>
+          </div>
+          <div id="create-ext-list" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:4px;padding:4px;background:var(--bg);"></div>
+          <button type="button" class="secondary" id="create-ext-more" style="margin-top:6px;display:none;">Ещё</button>
+          <p class="sub" id="create-ext-picked" style="margin:8px 0 0;">Не выбрано</p>
+        </div>
+        <div id="create-name-wrap">
+          <label for="create-name">Имя</label>
+          <input type="text" id="create-name" autocomplete="off" placeholder="Имя" />
+        </div>
         <div id="create-msg" class="msg"></div>
         <div class="modal-actions">
           <button type="button" id="create-submit">Создать</button>
           <button type="button" class="secondary" id="create-cancel">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="catalog-search-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <h2>Поиск по каталогу</h2>
+        <div class="mode-row" style="margin-bottom:10px;">
+          <label
+            ><input type="radio" name="catalog-search-scope" value="subtree" checked /> В
+            текущей папке</label
+          >
+          <label
+            ><input type="radio" name="catalog-search-scope" value="global" /> По всему
+            каталогу</label
+          >
+        </div>
+        <p class="sub" id="catalog-search-scope-hint" style="margin-top:-4px;"></p>
+        <div class="import-search-row">
+          <input
+            type="text"
+            id="catalog-search-query"
+            autocomplete="off"
+            placeholder="Имя файла или папки…"
+          />
+        </div>
+        <div id="catalog-search-results" class="catalog-search-results"></div>
+        <p class="sub" id="catalog-search-meta" style="margin:8px 0 0;"></p>
+        <div class="modal-actions">
+          <button type="button" class="secondary" id="catalog-search-cancel">Закрыть</button>
         </div>
       </div>
     </div>
@@ -1349,7 +1726,10 @@
             selectedMap: {},
             loading: false,
             sortKey: 'name',
-            sortDir: 1
+            sortDir: 1,
+            mode: 'catalog',
+            external: null,
+            hist: { stack: [], index: -1 }
           },
           {
             folderId: null,
@@ -1360,27 +1740,63 @@
             selectedMap: {},
             loading: false,
             sortKey: 'name',
-            sortDir: 1
+            sortDir: 1,
+            mode: 'catalog',
+            external: null,
+            hist: { stack: [], index: -1 }
           }
         ];
         var panelEls = [
           {
             root: document.getElementById('panel-left'),
             header: document.getElementById('header-left'),
+            path: document.getElementById('path-left'),
             tbody: document.getElementById('tbody-left'),
             table: document.getElementById('table-left')
           },
           {
             root: document.getElementById('panel-right'),
             header: document.getElementById('header-right'),
+            path: document.getElementById('path-right'),
             tbody: document.getElementById('tbody-right'),
             table: document.getElementById('table-right')
           }
         ];
+        var PANEL_HIST_MAX_ = 30;
+        var suppressPanelHistory_ = false;
 
         function setStatus(text) {
-          document.getElementById('status-text').textContent = text || 'Готово';
+          var el = document.getElementById('status-text');
+          el.textContent = text || 'Готово';
+          if (!jobsPollTimer_) {
+            el.classList.remove('status-jobs-busy');
+          }
         }
+
+        function setJobsBusyStatusUi_(busy) {
+          var el = document.getElementById('status-text');
+          if (!el) {
+            return;
+          }
+          if (busy) {
+            el.classList.add('status-jobs-busy');
+          } else {
+            el.classList.remove('status-jobs-busy');
+          }
+        }
+
+        (function bindStatusCancelClick_() {
+          var el = document.getElementById('status-text');
+          if (!el) {
+            return;
+          }
+          el.addEventListener('click', function () {
+            if (!el.classList.contains('status-jobs-busy')) {
+              return;
+            }
+            promptCancelActiveJobs_();
+          });
+        })();
 
         /**
          * Splash на 2 с (Открываю / Начинаю / Завершено).
@@ -1413,6 +1829,7 @@
         /** Финиш потенциально долгой операции. */
         function flashOperationDone_() {
           showTimedSplash_('Завершено');
+          setJobsBusyStatusUi_(false);
           document.getElementById('status-text').textContent = 'Готово';
         }
 
@@ -1422,6 +1839,22 @@
           if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
           if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
           return (n / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+        }
+
+        /** Папка: «N · размер»; файл — только размер (§2.2.2 / §17 п.8). */
+        function formatSizeCell_(item) {
+          if (!item) {
+            return '—';
+          }
+          if (item.kind === 'folder') {
+            var count = item.fileCount != null ? Number(item.fileCount) || 0 : 0;
+            var bytes = item.sizeBytes != null ? Number(item.sizeBytes) || 0 : 0;
+            return String(count) + ' · ' + formatBytes(bytes);
+          }
+          if (item.sizeBytes != null) {
+            return formatBytes(item.sizeBytes);
+          }
+          return '—';
         }
 
         /** Порог предупреждения «займёт время» (байт). */
@@ -1445,6 +1878,117 @@
           return list.join(', ');
         }
 
+        /** §21 — не писать prefs во время первичного restore. */
+        var suppressPanelStateSave_ = false;
+        var panelStateSaveTimer_ = null;
+
+        function buildPanelLocForSave_(state) {
+          if (!state) {
+            return null;
+          }
+          if (state.mode === 'external' && state.external && state.external.mirrorCatalogId) {
+            return {
+              mode: 'external',
+              mirrorCatalogId: String(state.external.mirrorCatalogId),
+              driveFolderId: String(state.external.driveFolderId || '')
+            };
+          }
+          if (state.folderId) {
+            return {
+              mode: 'catalog',
+              folderId: String(state.folderId)
+            };
+          }
+          return null;
+        }
+
+        function scheduleSaveUserPanelState_() {
+          if (suppressPanelStateSave_) {
+            return;
+          }
+          if (panelStateSaveTimer_) {
+            clearTimeout(panelStateSaveTimer_);
+          }
+          panelStateSaveTimer_ = setTimeout(function () {
+            panelStateSaveTimer_ = null;
+            saveUserPanelStateNow_();
+          }, 400);
+        }
+
+        function saveUserPanelStateNow_() {
+          if (suppressPanelStateSave_) {
+            return;
+          }
+          google.script.run
+            .withFailureHandler(function () {
+              /* ignore */
+            })
+            .saveUserPanelState({
+              left: buildPanelLocForSave_(panels[0]),
+              right: buildPanelLocForSave_(panels[1]),
+              activePanelIndex: activePanelIndex
+            });
+        }
+
+        function resolveCatalogFolderIdFromPref_(loc, fallbackId) {
+          if (!loc || loc.mode === 'external' || !loc.folderId) {
+            return fallbackId;
+          }
+          if (catalogSnapshot && catalogSnapshot.foldersById[String(loc.folderId)]) {
+            return String(loc.folderId);
+          }
+          return fallbackId;
+        }
+
+        /**
+         * @param {number} panelIndex
+         * @param {Object|null} loc
+         * @param {string} fallbackId
+         * @param {function=} done
+         */
+        function restorePanelFromPref_(panelIndex, loc, fallbackId, done) {
+          var finish = function () {
+            if (done) {
+              done();
+            }
+          };
+          if (
+            loc &&
+            loc.mode === 'external' &&
+            loc.mirrorCatalogId &&
+            catalogSnapshot &&
+            catalogSnapshot.foldersById[String(loc.mirrorCatalogId)] &&
+            catalogSnapshot.foldersById[String(loc.mirrorCatalogId)].isExternalMirror
+          ) {
+            var mirror = catalogSnapshot.foldersById[String(loc.mirrorCatalogId)];
+            loadExternalMirrorPanel_(panelIndex, {
+              mirrorCatalogId: String(loc.mirrorCatalogId),
+              driveFolderId:
+                String(loc.driveFolderId || '') ||
+                String(mirror.mirrorOfDriveFolderId || ''),
+              append: false,
+              onDone: function (result) {
+                if (result && result.ok) {
+                  finish();
+                  return;
+                }
+                if (result && result.code === 'GONE') {
+                  finish();
+                  return;
+                }
+                applyPanelFromSnapshot_(panelIndex, fallbackId);
+                finish();
+              }
+            });
+            return;
+          }
+          applyPanelFromSnapshot_(
+            panelIndex,
+            resolveCatalogFolderIdFromPref_(loc, fallbackId)
+          );
+          finish();
+        }
+
         function setActivePanel(index) {
           var prev = activePanelIndex;
           activePanelIndex = index;
@@ -1454,21 +1998,267 @@
           if (prev !== index) {
             renderPanel(0);
             renderPanel(1);
+            scheduleSaveUserPanelState_();
           }
           updateEmptyTrashButton_();
           panelEls[index].root.focus();
         }
 
+        function buildFolderPathParts_(folderId) {
+          if (!catalogSnapshot || !folderId) {
+            return [];
+          }
+          var parts = [];
+          var seen = {};
+          var id = String(folderId);
+          while (id && !seen[id]) {
+            seen[id] = true;
+            var f = catalogSnapshot.foldersById[id];
+            if (!f) {
+              break;
+            }
+            parts.unshift({
+              id: id,
+              name: String(f.name || id)
+            });
+            id = f.parentFolderId ? String(f.parentFolderId) : '';
+          }
+          return parts;
+        }
+
+        function buildFolderPathLabel_(folderId) {
+          var parts = buildFolderPathParts_(folderId);
+          return parts.length
+            ? '\\' +
+                parts
+                  .map(function (p) {
+                    return p.name;
+                  })
+                  .join('\\')
+            : '…';
+        }
+
+        function samePanelLoc_(a, b) {
+          if (!a || !b) {
+            return false;
+          }
+          if (a.mode !== b.mode) {
+            return false;
+          }
+          if (a.mode === 'external') {
+            return (
+              String(a.mirrorCatalogId || '') === String(b.mirrorCatalogId || '') &&
+              String(a.driveFolderId || '') === String(b.driveFolderId || '')
+            );
+          }
+          return String(a.folderId || '') === String(b.folderId || '');
+        }
+
+        function updateHistButtons_(panelIndex) {
+          var state = panels[panelIndex];
+          var h = state && state.hist;
+          var canBack = !!(h && h.index > 0);
+          var canFwd = !!(h && h.index >= 0 && h.index < h.stack.length - 1);
+          var root = panelEls[panelIndex] && panelEls[panelIndex].header;
+          if (!root) {
+            return;
+          }
+          var backBtn = root.querySelector('.panel-hist-btn[data-hist="back"]');
+          var fwdBtn = root.querySelector('.panel-hist-btn[data-hist="forward"]');
+          if (backBtn) {
+            backBtn.disabled = !canBack;
+          }
+          if (fwdBtn) {
+            fwdBtn.disabled = !canFwd;
+          }
+        }
+
+        function notePanelHistory_(panelIndex) {
+          if (suppressPanelHistory_ || suppressPanelStateSave_) {
+            updateHistButtons_(panelIndex);
+            return;
+          }
+          var state = panels[panelIndex];
+          if (!state || state.loading) {
+            return;
+          }
+          var loc = buildPanelLocForSave_(state);
+          if (!loc) {
+            return;
+          }
+          var h = state.hist;
+          if (!h) {
+            state.hist = { stack: [], index: -1 };
+            h = state.hist;
+          }
+          if (h.index >= 0 && samePanelLoc_(h.stack[h.index], loc)) {
+            updateHistButtons_(panelIndex);
+            return;
+          }
+          if (h.index < h.stack.length - 1) {
+            h.stack = h.stack.slice(0, h.index + 1);
+          }
+          h.stack.push(loc);
+          while (h.stack.length > PANEL_HIST_MAX_) {
+            h.stack.shift();
+          }
+          h.index = h.stack.length - 1;
+          updateHistButtons_(panelIndex);
+        }
+
+        function applyHistoryLoc_(panelIndex, loc, onDone) {
+          if (!loc) {
+            if (typeof onDone === 'function') {
+              onDone();
+            }
+            return;
+          }
+          if (loc.mode === 'external' && loc.mirrorCatalogId) {
+            loadExternalMirrorPanel_(panelIndex, {
+              mirrorCatalogId: String(loc.mirrorCatalogId),
+              driveFolderId: String(loc.driveFolderId || ''),
+              append: false,
+              onDone: function () {
+                if (typeof onDone === 'function') {
+                  onDone();
+                }
+              }
+            });
+            return;
+          }
+          clearExternalPanelMode_(panelIndex);
+          loadPanelContents(panelIndex, loc.folderId);
+          if (typeof onDone === 'function') {
+            onDone();
+          }
+        }
+
+        function goPanelHistory_(panelIndex, delta) {
+          var state = panels[panelIndex];
+          if (!state || !state.hist) {
+            return;
+          }
+          var h = state.hist;
+          var next = h.index + delta;
+          if (next < 0 || next >= h.stack.length) {
+            return;
+          }
+          setActivePanel(panelIndex);
+          h.index = next;
+          suppressPanelHistory_ = true;
+          applyHistoryLoc_(panelIndex, h.stack[next], function () {
+            suppressPanelHistory_ = false;
+            updateHistButtons_(panelIndex);
+          });
+        }
+
+        function renderPanelPathHeader_(panelIndex, pathLabelPlain) {
+          var state = panels[panelIndex];
+          var el = panelEls[panelIndex];
+          var pathEl = el.path || el.header;
+          pathEl.innerHTML = '';
+          pathEl.title = pathLabelPlain || '';
+          pathEl.onclick = function () {
+            setActivePanel(panelIndex);
+          };
+          updateHistButtons_(panelIndex);
+
+          if (state.loading || pathLabelPlain === 'Загрузка…' || pathLabelPlain === '…') {
+            pathEl.textContent = pathLabelPlain;
+            return;
+          }
+
+          var crumbs = [];
+          var currentId = '';
+          if (state.mode === 'external' && state.external) {
+            var names = state.external.pathNames || [];
+            var ids = state.external.pathIds || [];
+            currentId = String(state.external.driveFolderId || '');
+            for (var ei = 0; ei < names.length; ei++) {
+              crumbs.push({
+                id: ids[ei] ? String(ids[ei]) : '',
+                name: String(names[ei] || '')
+              });
+            }
+          } else {
+            crumbs = buildFolderPathParts_(state.folderId);
+            currentId = String(state.folderId || '');
+          }
+
+          if (!crumbs.length) {
+            pathEl.textContent = pathLabelPlain || '…';
+            return;
+          }
+
+          function appendSep_() {
+            var sep = document.createElement('span');
+            sep.className = 'path-sep';
+            sep.textContent = '\\';
+            pathEl.appendChild(sep);
+          }
+
+          appendSep_();
+          crumbs.forEach(function (crumb, i) {
+            if (i > 0) {
+              appendSep_();
+            }
+            var span = document.createElement('span');
+            var isCurrent = crumb.id && String(crumb.id) === currentId;
+            if (!crumb.id && i === crumbs.length - 1) {
+              isCurrent = true;
+            }
+            span.className = 'path-crumb' + (isCurrent ? ' is-current' : '');
+            span.textContent = crumb.name;
+            span.title = crumb.name;
+            if (!isCurrent && crumb.id) {
+              span.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                setActivePanel(panelIndex);
+                if (state.mode === 'external') {
+                  enterExternalMirrorFolder_(panelIndex, crumb.id);
+                } else {
+                  navigatePanel(panelIndex, crumb.id);
+                }
+              });
+            }
+            pathEl.appendChild(span);
+          });
+        }
+
+        function resolveMirrorNavId_(folderOrItemId) {
+          if (!catalogSnapshot) {
+            return folderOrItemId;
+          }
+          var id = String(folderOrItemId || '');
+          var seen = {};
+          while (id && catalogSnapshot.foldersById[id] && !seen[id]) {
+            seen[id] = true;
+            var f = catalogSnapshot.foldersById[id];
+            var mirrorOf = String(f.mirrorOfFolderId || '').trim();
+            if (!mirrorOf) {
+              return id;
+            }
+            id = mirrorOf;
+          }
+          return id;
+        }
+
         function renderPanel(index) {
           var state = panels[index];
           var el = panelEls[index];
-          var pathLabel = state.folderName || '…';
-          if (state.parentFolderId === null && state.folderId === virtualRootFolderId) {
-            pathLabel = '\\' + pathLabel;
-          } else if (state.parentFolderId) {
-            pathLabel = '\\' + pathLabel;
+          el.root.classList.toggle('panel-external', state.mode === 'external');
+          var pathLabel;
+          if (state.loading) {
+            pathLabel = 'Загрузка…';
+          } else if (state.mode === 'external' && state.external) {
+            var parts = state.external.pathNames || [];
+            pathLabel = parts.length ? '\\' + parts.join('\\') : state.folderName || '…';
+          } else {
+            pathLabel = buildFolderPathLabel_(state.folderId) || state.folderName || '…';
           }
-          el.header.textContent = state.loading ? 'Загрузка…' : pathLabel;
+          el.header.title = pathLabel;
+          renderPanelPathHeader_(index, pathLabel);
 
           var tbody = el.tbody;
           tbody.innerHTML = '';
@@ -1477,9 +2267,13 @@
             return;
           }
 
-          if (state.parentFolderId) {
+          var showUp =
+            state.mode === 'external'
+              ? true
+              : !!state.parentFolderId;
+          if (showUp) {
             var upRow = document.createElement('tr');
-            upRow.className = 'row-folder';
+            upRow.className = 'row-folder' + (state.mode === 'external' ? ' row-external' : '');
             upRow.dataset.kind = 'up';
             upRow.innerHTML =
               '<td class="col-name"><span class="col-name-cell"><span class="file-icon file-icon-folder" title="Папка"><img src="https://drive-thirdparty.googleusercontent.com/16/type/application/vnd.google-apps.folder" width="16" height="16" alt="" decoding="async" /></span><span class="name-text">[..]</span></span></td>' +
@@ -1488,7 +2282,11 @@
               '<td class="col-acl"></td><td class="col-acl"></td><td class="col-acl"></td>' +
               '<td class="col-size"></td><td class="col-date"></td>';
             upRow.addEventListener('dblclick', function () {
-              navigatePanel(index, state.parentFolderId);
+              if (state.mode === 'external') {
+                navigateExternalUp_(index);
+              } else {
+                navigatePanel(index, state.parentFolderId);
+              }
             });
             upRow.addEventListener('click', function (e) {
               e.stopPropagation();
@@ -1501,7 +2299,7 @@
             tbody.appendChild(upRow);
           }
 
-          if (!state.items.length && !state.parentFolderId) {
+          if (!state.items.length && !showUp) {
             var empty = document.createElement('tr');
             empty.innerHTML = '<td colspan="8" class="panel-empty">Пусто</td>';
             tbody.appendChild(empty);
@@ -1516,13 +2314,33 @@
             if (item.kind === 'folder') {
               tr.classList.add('row-folder');
             }
+            if (state.mode === 'external' || item.isExternalItem) {
+              tr.classList.add('row-external');
+            }
+            if (item.kind === 'folder' && item.isMirror && item.isExternalMirror) {
+              tr.classList.add('row-mirror', 'row-mirror-external');
+            } else if (item.kind === 'folder' && item.isMirror) {
+              tr.classList.add('row-mirror');
+            }
+            if (item.kind === 'file' && item.isShortcut && item.isExternalShortcut) {
+              tr.classList.add('row-shortcut', 'row-shortcut-external');
+            } else if (item.kind === 'file' && item.isShortcut) {
+              tr.classList.add('row-shortcut');
+            }
+            if (
+              item.kind === 'file' &&
+              item.status &&
+              String(item.status).toLowerCase() === 'pending'
+            ) {
+              tr.classList.add('row-pending');
+            }
             if (isRowSelected_(state, rowIndex)) {
               tr.classList.add('selected');
             }
             if (rowIndex === state.selectedIndex && index === activePanelIndex) {
               tr.classList.add('focused');
             }
-            if (canRunCatalogOperations) {
+            if (canRunCatalogOperations && state.mode !== 'external') {
               tr.draggable = true;
             }
 
@@ -1579,7 +2397,7 @@
               escapeHtml(formatAclList(item.readers)) +
               '</td>' +
               '<td class="col-size">' +
-              (item.sizeBytes != null ? formatBytes(item.sizeBytes) : '—') +
+              formatSizeCell_(item) +
               '</td>' +
               '<td class="col-date">' +
               formatDate(item.modifiedAt) +
@@ -1615,7 +2433,7 @@
               selectRow(index, rowIndex, { mode: 'focus' });
               activateFocusedPanelItem_(index);
             });
-            if (canRunCatalogOperations) {
+            if (canRunCatalogOperations && state.mode !== 'external') {
               tr.addEventListener('dragstart', function (e) {
                 beginCatalogDrag_(e, index, rowIndex, item);
               });
@@ -1641,7 +2459,11 @@
                 tr.classList.remove('drag-over');
                 panelEls[index].root.classList.remove('drag-over');
                 if (item.kind === 'folder') {
-                  handleCatalogDrop_(index, item.id, item.name);
+                  handleCatalogDrop_(
+                    index,
+                    resolveMirrorNavId_(item.id),
+                    item.name
+                  );
                 } else {
                   var panelState = panels[index];
                   handleCatalogDrop_(
@@ -1663,6 +2485,7 @@
           });
 
           updatePanelSortHeaders_(index);
+          bindExternalPanelScroll_(index);
         }
 
         function updatePanelSortHeaders_(panelIndex) {
@@ -2046,6 +2869,15 @@
           if (!source || !source.folderId || source.loading) {
             return;
           }
+          if (source.mode === 'external' && source.external) {
+            loadExternalMirrorPanel_(targetIndex, {
+              mirrorCatalogId: source.external.mirrorCatalogId,
+              driveFolderId: source.external.driveFolderId,
+              append: false
+            });
+            setActivePanel(targetIndex);
+            return;
+          }
           var target = panels[targetIndex];
           if (target && target.folderId === source.folderId && !target.loading) {
             setActivePanel(targetIndex);
@@ -2272,13 +3104,50 @@
           });
         }
 
+        function selectionContainsMirror_(items) {
+          for (var i = 0; i < (items || []).length; i++) {
+            if (items[i].kind === 'folder' && items[i].isMirror) {
+              return true;
+            }
+            if (items[i].kind === 'file' && items[i].isShortcut) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        function isShortcutLikeItem_(it) {
+          return (
+            (it && it.kind === 'folder' && it.isMirror) ||
+            (it && it.kind === 'file' && it.isShortcut)
+          );
+        }
+
+        function assertNotInExternalZone_(actionLabel) {
+          var state = panels[activePanelIndex];
+          if (state && state.mode === 'external') {
+            setStatus(
+              (actionLabel || 'Операция') + ' недоступна во внешней зоне Drive.'
+            );
+            return true;
+          }
+          return false;
+        }
+
         function copySelectedToInactivePanel() {
+          if (assertNotInExternalZone_('Копирование')) {
+            return;
+          }
           var sourceIndex = activePanelIndex;
           var targetIndex = sourceIndex === 0 ? 1 : 0;
           var source = panels[sourceIndex];
           var target = panels[targetIndex];
           var items = getSelectedPanelItems_(sourceIndex);
           if (!items.length || source.loading || target.loading || !target.folderId) {
+            return;
+          }
+          if (selectionContainsMirror_(items)) {
+            setStatus('Ярлык нельзя копировать — только удалить.');
             return;
           }
           assertNoSelfNesting_(items, target.folderId, 'копировать').then(function (okNest) {
@@ -2310,12 +3179,19 @@
         }
 
         function moveSelectedToInactivePanel() {
+          if (assertNotInExternalZone_('Перемещение')) {
+            return;
+          }
           var sourceIndex = activePanelIndex;
           var targetIndex = sourceIndex === 0 ? 1 : 0;
           var source = panels[sourceIndex];
           var target = panels[targetIndex];
           var items = getSelectedPanelItems_(sourceIndex);
           if (!items.length || source.loading || target.loading || !target.folderId) {
+            return;
+          }
+          if (selectionContainsMirror_(items)) {
+            setStatus('Ярлык нельзя перемещать — только удалить.');
             return;
           }
           assertNoSelfNesting_(items, target.folderId, 'переместить').then(function (okNest) {
@@ -2347,29 +3223,40 @@
         }
 
         function moveSelectedToTrash() {
+          if (assertNotInExternalZone_('Удаление')) {
+            return;
+          }
           var sourceIndex = activePanelIndex;
           var source = panels[sourceIndex];
           var items = getSelectedPanelItems_(sourceIndex);
           if (!items.length || source.loading) {
             return;
           }
-          var weight = estimateItemsWeight_(items);
-          confirmOperationWithWeight_(
-            'Удалить ' + formatSelectedNames_(items) + ' в корзину.',
-            weight.fileCount,
-            weight.bytes
-          ).then(function (ok) {
-            if (!ok) {
-              return;
-            }
-            runMoveItems(
-              '__TRASH__',
-              items.map(function (it) {
-                return { kind: it.kind, id: it.id };
-              }),
-              source.folderId
-            );
+          var onlyShortcuts = items.every(function (it) {
+            return isShortcutLikeItem_(it);
           });
+          var weight = estimateItemsWeight_(items);
+          var confirmText = onlyShortcuts
+            ? 'Удалить ' + formatSelectedNames_(items) + ' (ярлык, без корзины).'
+            : selectionContainsMirror_(items)
+              ? 'Удалить ' +
+                formatSelectedNames_(items) +
+                ': ярлыки снимутся сразу, остальное — в корзину.'
+              : 'Удалить ' + formatSelectedNames_(items) + ' в корзину.';
+          confirmOperationWithWeight_(confirmText, weight.fileCount, weight.bytes).then(
+            function (ok) {
+              if (!ok) {
+                return;
+              }
+              runMoveItems(
+                '__TRASH__',
+                items.map(function (it) {
+                  return { kind: it.kind, id: it.id };
+                }),
+                source.folderId
+              );
+            }
+          );
         }
 
         function approveSelectedFiles() {
@@ -2381,7 +3268,7 @@
           }
           var fileIds = [];
           (items || []).forEach(function (it) {
-            if (it.kind === 'file' && !it.approved) {
+            if (it.kind === 'file' && !it.approved && !it.isShortcut) {
               fileIds.push(it.id);
             }
           });
@@ -2485,6 +3372,32 @@
           return false;
         }
 
+        function closeServiceMenu_() {
+          var menu = document.getElementById('service-menu');
+          var btn = document.getElementById('btn-service');
+          if (menu) {
+            menu.classList.add('hidden');
+          }
+          if (btn) {
+            btn.setAttribute('aria-expanded', 'false');
+          }
+        }
+
+        function toggleServiceMenu_() {
+          var menu = document.getElementById('service-menu');
+          var btn = document.getElementById('btn-service');
+          if (!menu || !btn) {
+            return;
+          }
+          var open = menu.classList.contains('hidden');
+          if (open) {
+            menu.classList.remove('hidden');
+            btn.setAttribute('aria-expanded', 'true');
+          } else {
+            closeServiceMenu_();
+          }
+        }
+
         function updateEmptyTrashButton_() {
           var exportBtn = document.getElementById('btn-export-structure');
           if (exportBtn) {
@@ -2497,17 +3410,21 @@
             repairBtn.disabled = !canEmptyTrash;
           }
           var btn = document.getElementById('btn-empty-trash');
-          if (!btn) {
-            return;
+          var show = false;
+          if (btn) {
+            var active = panels[activePanelIndex];
+            show =
+              canEmptyTrash &&
+              active &&
+              !active.loading &&
+              isFolderInTrashSubtree_(active.folderId);
+            btn.classList.toggle('hidden', !show);
+            btn.disabled = !show;
           }
-          var active = panels[activePanelIndex];
-          var show =
-            canEmptyTrash &&
-            active &&
-            !active.loading &&
-            isFolderInTrashSubtree_(active.folderId);
-          btn.classList.toggle('hidden', !show);
-          btn.disabled = !show;
+          var sep = document.getElementById('service-menu-sep-admin');
+          if (sep) {
+            sep.classList.toggle('hidden', !canEmptyTrash);
+          }
         }
 
         function openRepairModal_() {
@@ -2802,14 +3719,50 @@
 
         function runMoveItems(targetFolderId, items, sourceFolderId) {
           var movedItems = collectItemsFromFolderView_(sourceFolderId, items);
-          setStatus('Перемещение…');
-          showOpStartSplash_();
+          var mirrorIds = [];
+          var fileShortcutIds = [];
+          var normalItems = [];
+          movedItems.forEach(function (item) {
+            if (item.kind === 'folder' && item.isMirror) {
+              mirrorIds.push(item.id);
+            } else if (item.kind === 'file' && item.isShortcut) {
+              fileShortcutIds.push(item.id);
+            } else {
+              normalItems.push(item);
+            }
+          });
+          var snapshot = saveMoveSnapshot_(movedItems);
+          if (catalogSnapshot) {
+            mirrorIds.forEach(function (id) {
+              delete catalogSnapshot.foldersById[id];
+            });
+            fileShortcutIds.forEach(function (id) {
+              delete catalogSnapshot.filesById[id];
+            });
+          }
+          applyLocalMove_(sourceFolderId, targetFolderId, normalItems);
+          var onlyShortcuts =
+            (mirrorIds.length || fileShortcutIds.length) && !normalItems.length;
+          setStatus(onlyShortcuts ? 'Удаление ярлыка…' : 'Перемещение…');
           google.script.run
-            .withSuccessHandler(function () {
-              applyLocalMove_(sourceFolderId, targetFolderId, movedItems);
+            .withSuccessHandler(function (result) {
+              var needReload =
+                String(targetFolderId) === '__TRASH__' ||
+                (result && result.deletedMirrors && result.deletedMirrors.length) ||
+                (result && result.deletedFileShortcuts && result.deletedFileShortcuts.length);
+              if (needReload) {
+                reloadCatalogSnapshot_([sourceFolderId, targetFolderId], function () {
+                  flashOperationDone_();
+                }, { quiet: true });
+                return;
+              }
               flashOperationDone_();
             })
             .withFailureHandler(function (err) {
+              restoreMoveSnapshot_(snapshot, sourceFolderId, targetFolderId);
+              if (mirrorIds.length) {
+                reloadCatalogSnapshot_([sourceFolderId, targetFolderId], null, { quiet: true });
+              }
               var msg = formatCatalogOpError_(err);
               setStatus(msg);
               showAppConfirm_(msg);
@@ -2818,6 +3771,65 @@
               targetFolderId: targetFolderId,
               items: items
             });
+        }
+
+        /**
+         * Сохраняет folderId/parentFolderId + ACL для перемещаемых объектов,
+         * чтобы можно было откатить оптимистичное изменение при ошибке сервера.
+         */
+        function saveMoveSnapshot_(movedItems) {
+          var files = {};
+          var folders = {};
+          if (!catalogSnapshot || !movedItems) {
+            return { files: files, folders: folders };
+          }
+          movedItems.forEach(function (item) {
+            if (item.kind === 'file' && catalogSnapshot.filesById[item.id]) {
+              var f = catalogSnapshot.filesById[item.id];
+              files[item.id] = {
+                folderId: f.folderId,
+                editors: (f.editors || []).slice(),
+                commenters: (f.commenters || []).slice(),
+                readers: (f.readers || []).slice()
+              };
+            } else if (item.kind === 'folder' && catalogSnapshot.foldersById[item.id]) {
+              var d = catalogSnapshot.foldersById[item.id];
+              folders[item.id] = {
+                parentFolderId: d.parentFolderId,
+                editors: (d.editors || []).slice(),
+                commenters: (d.commenters || []).slice(),
+                readers: (d.readers || []).slice()
+              };
+            }
+          });
+          return { files: files, folders: folders };
+        }
+
+        /** Откатывает оптимистичное перемещение по сохранённому снимку. */
+        function restoreMoveSnapshot_(snapshot, sourceFolderId, targetFolderId) {
+          if (!catalogSnapshot || !snapshot) {
+            return;
+          }
+          Object.keys(snapshot.files).forEach(function (id) {
+            if (catalogSnapshot.filesById[id]) {
+              var s = snapshot.files[id];
+              catalogSnapshot.filesById[id].folderId = s.folderId;
+              catalogSnapshot.filesById[id].editors = s.editors.slice();
+              catalogSnapshot.filesById[id].commenters = s.commenters.slice();
+              catalogSnapshot.filesById[id].readers = s.readers.slice();
+            }
+          });
+          Object.keys(snapshot.folders).forEach(function (id) {
+            if (catalogSnapshot.foldersById[id]) {
+              var s = snapshot.folders[id];
+              catalogSnapshot.foldersById[id].parentFolderId = s.parentFolderId;
+              catalogSnapshot.foldersById[id].editors = s.editors.slice();
+              catalogSnapshot.foldersById[id].commenters = s.commenters.slice();
+              catalogSnapshot.foldersById[id].readers = s.readers.slice();
+            }
+          });
+          refreshOpenPanels_([sourceFolderId, targetFolderId]);
+          noteLocalCatalogMutation_();
         }
 
         var dndPayload_ = null;
@@ -2875,6 +3887,12 @@
           if (!dndPayload_ || !canRunCatalogOperations) {
             return;
           }
+          if (panels[targetPanelIndex] && panels[targetPanelIndex].mode === 'external') {
+            setStatus('Во внешнюю зону Drive нельзя перетаскивать.');
+            dndPayload_ = null;
+            clearCatalogDragOver_();
+            return;
+          }
           var payload = dndPayload_;
           dndPayload_ = null;
           clearCatalogDragOver_();
@@ -2882,6 +3900,10 @@
           var items = payload.items || [];
           var sourceFolderId = payload.sourceFolderId;
           if (!items.length || !targetFolderId) {
+            return;
+          }
+          if (selectionContainsMirror_(items)) {
+            setStatus('Ярлык нельзя перетаскивать — только удалить (F8).');
             return;
           }
 
@@ -3004,6 +4026,9 @@
         var renameTarget = null;
 
         function openRenameModal() {
+          if (assertNotInExternalZone_('Переименование')) {
+            return;
+          }
           var state = panels[activePanelIndex];
           var item = state && state.items[state.selectedIndex];
           if (!item || state.loading) {
@@ -3011,6 +4036,14 @@
           }
           if (item.kind === 'folder' && item.isSystem) {
             setStatus('Системную папку нельзя переименовать.');
+            return;
+          }
+          if (item.kind === 'folder' && item.isMirror) {
+            setStatus('Ярлык нельзя переименовать — только удалить.');
+            return;
+          }
+          if (item.kind === 'file' && item.isShortcut) {
+            setStatus('Ярлык нельзя переименовать — только удалить.');
             return;
           }
           renameTarget = {
@@ -3096,10 +4129,244 @@
             if (state.items[i].kind === kind && String(state.items[i].id) === String(id)) {
               state.selectedIndex = i;
               state.selectedMap = {};
+              state.selectedMap[itemKey_(state.items[i])] = true;
               renderPanel(activePanelIndex);
               return;
             }
           }
+        }
+
+        /** §23 — поиск по каталогу */
+        var catalogSearchScopePref_ = 'subtree';
+        var catalogSearchHits_ = [];
+        var catalogSearchFocusIndex_ = -1;
+        var CATALOG_SEARCH_LIMIT_ = 200;
+
+        function openCatalogSearchModal_() {
+          if (!catalogSnapshot) {
+            setStatus('Снимок каталога ещё не загружен.');
+            return;
+          }
+          var modal = document.getElementById('catalog-search-modal');
+          var queryEl = document.getElementById('catalog-search-query');
+          var external = panels[activePanelIndex] && panels[activePanelIndex].mode === 'external';
+          var canSubtree =
+            !external &&
+            panels[activePanelIndex] &&
+            panels[activePanelIndex].folderId &&
+            !panels[activePanelIndex].loading;
+          var scope = catalogSearchScopePref_ === 'global' ? 'global' : 'subtree';
+          if (!canSubtree) {
+            scope = 'global';
+          }
+          setCatalogSearchScopeUi_(scope, canSubtree, external);
+          queryEl.value = '';
+          catalogSearchHits_ = [];
+          catalogSearchFocusIndex_ = -1;
+          document.getElementById('catalog-search-results').innerHTML = '';
+          document.getElementById('catalog-search-meta').textContent = '';
+          modal.classList.remove('hidden');
+          queryEl.focus();
+        }
+
+        function closeCatalogSearchModal_() {
+          document.getElementById('catalog-search-modal').classList.add('hidden');
+          restorePanelKeyboardFocus_();
+        }
+
+        function setCatalogSearchScopeUi_(scope, canSubtree, external) {
+          var radios = document.querySelectorAll('input[name="catalog-search-scope"]');
+          Array.prototype.forEach.call(radios, function (radio) {
+            radio.disabled = radio.value === 'subtree' && !canSubtree;
+            radio.checked = radio.value === scope;
+          });
+          var hint = document.getElementById('catalog-search-scope-hint');
+          if (external) {
+            hint.textContent = 'Во внешней зоне Drive доступен только поиск по всему каталогу.';
+          } else if (!canSubtree) {
+            hint.textContent = 'Нет текущей папки каталога — только глобальный поиск.';
+          } else {
+            var state = panels[activePanelIndex];
+            hint.textContent =
+              scope === 'subtree'
+                ? 'Ищем в «' + (state.folderName || 'папке') + '» и вложенных.'
+                : 'Ищем по всему каталогу, включая корзину.';
+          }
+        }
+
+        function getCatalogSearchScope_() {
+          var el = document.querySelector('input[name="catalog-search-scope"]:checked');
+          return el && el.value === 'global' ? 'global' : 'subtree';
+        }
+
+        function collectSubtreeFolderIds_(rootFolderId) {
+          var set = {};
+          var root = String(rootFolderId || '');
+          if (!root || !catalogSnapshot) {
+            return set;
+          }
+          var queue = [root];
+          set[root] = true;
+          while (queue.length) {
+            var current = queue.shift();
+            Object.keys(catalogSnapshot.foldersById).forEach(function (cid) {
+              var child = catalogSnapshot.foldersById[cid];
+              if (String(child.parentFolderId || '') !== current) {
+                return;
+              }
+              if (set[cid]) {
+                return;
+              }
+              set[cid] = true;
+              if (!child.isMirror) {
+                queue.push(cid);
+              }
+            });
+          }
+          return set;
+        }
+
+        function runCatalogSearchFilter_() {
+          var query = String(document.getElementById('catalog-search-query').value || '')
+            .trim()
+            .toLowerCase();
+          var box = document.getElementById('catalog-search-results');
+          var meta = document.getElementById('catalog-search-meta');
+          catalogSearchHits_ = [];
+          catalogSearchFocusIndex_ = -1;
+          box.innerHTML = '';
+          if (!query) {
+            meta.textContent = '';
+            return;
+          }
+          if (!catalogSnapshot) {
+            meta.textContent = 'Нет снимка каталога.';
+            return;
+          }
+
+          var scope = getCatalogSearchScope_();
+          catalogSearchScopePref_ = scope;
+          var rootId =
+            panels[activePanelIndex] && panels[activePanelIndex].folderId
+              ? String(panels[activePanelIndex].folderId)
+              : '';
+          var folderSet = scope === 'subtree' ? collectSubtreeFolderIds_(rootId) : null;
+
+          Object.keys(catalogSnapshot.foldersById || {}).forEach(function (fid) {
+            var folder = catalogSnapshot.foldersById[fid];
+            if (!folder) {
+              return;
+            }
+            if (folderSet) {
+              if (!folderSet[fid] || fid === rootId) {
+                return;
+              }
+            }
+            if (!nameMatchesQuery_(folder.name, query)) {
+              return;
+            }
+            catalogSearchHits_.push({
+              kind: 'folder',
+              id: fid,
+              name: folder.name || fid,
+              parentFolderId: folder.parentFolderId || catalogSnapshot.virtualRootFolderId,
+              path: catalogFolderPathLabel_(fid)
+            });
+          });
+
+          Object.keys(catalogSnapshot.filesById || {}).forEach(function (fid) {
+            var file = catalogSnapshot.filesById[fid];
+            if (!file) {
+              return;
+            }
+            var parentId = String(file.folderId || '');
+            if (folderSet && !folderSet[parentId]) {
+              return;
+            }
+            if (!nameMatchesQuery_(file.name, query)) {
+              return;
+            }
+            catalogSearchHits_.push({
+              kind: 'file',
+              id: fid,
+              name: file.name || fid,
+              parentFolderId: parentId || catalogSnapshot.virtualRootFolderId,
+              path: catalogFolderPathLabel_(parentId)
+            });
+          });
+
+          catalogSearchHits_.sort(function (a, b) {
+            var byName = String(a.name || '').localeCompare(String(b.name || ''), 'ru', {
+              sensitivity: 'base'
+            });
+            if (byName) {
+              return byName;
+            }
+            return a.kind === b.kind ? 0 : a.kind === 'folder' ? -1 : 1;
+          });
+
+          var total = catalogSearchHits_.length;
+          var shown = catalogSearchHits_.slice(0, CATALOG_SEARCH_LIMIT_);
+          if (!shown.length) {
+            var empty = document.createElement('div');
+            empty.className = 'catalog-search-item';
+            empty.style.cursor = 'default';
+            empty.textContent = 'Ничего не найдено.';
+            box.appendChild(empty);
+            meta.textContent = '';
+            return;
+          }
+          shown.forEach(function (hit, index) {
+            var row = document.createElement('div');
+            row.className = 'catalog-search-item';
+            row.dataset.index = String(index);
+            row.innerHTML =
+              '<span class="kind">' +
+              escapeHtml(hit.kind === 'folder' ? 'папка' : 'файл') +
+              '</span><span class="name">' +
+              escapeHtml(hit.name) +
+              '</span>' +
+              (hit.path
+                ? '<div class="path">' + escapeHtml(hit.path) + '</div>'
+                : '');
+            row.addEventListener('click', function () {
+              goToCatalogSearchHit_(hit);
+            });
+            box.appendChild(row);
+          });
+          meta.textContent =
+            total > CATALOG_SEARCH_LIMIT_
+              ? 'Показано ' + CATALOG_SEARCH_LIMIT_ + ' из ' + total + ' (уточните запрос).'
+              : 'Найдено: ' + total;
+          catalogSearchFocusIndex_ = 0;
+          highlightCatalogSearchFocus_();
+        }
+
+        function highlightCatalogSearchFocus_() {
+          var rows = document.querySelectorAll('#catalog-search-results .catalog-search-item');
+          Array.prototype.forEach.call(rows, function (row, i) {
+            row.classList.toggle('focused', i === catalogSearchFocusIndex_);
+          });
+          if (catalogSearchFocusIndex_ >= 0 && rows[catalogSearchFocusIndex_]) {
+            rows[catalogSearchFocusIndex_].scrollIntoView({ block: 'nearest' });
+          }
+        }
+
+        function goToCatalogSearchHit_(hit) {
+          if (!hit || !catalogSnapshot) {
+            return;
+          }
+          closeCatalogSearchModal_();
+          var panelIndex = activePanelIndex;
+          clearExternalPanelMode_(panelIndex);
+          var parentId =
+            hit.parentFolderId ||
+            catalogSnapshot.virtualRootFolderId ||
+            virtualRootFolderId;
+          applyPanelFromSnapshot_(panelIndex, parentId);
+          selectItemInActivePanel_(hit.kind, hit.id);
+          restorePanelKeyboardFocus_();
+          setStatus('Найдено: ' + (hit.name || hit.id));
         }
 
         /**
@@ -3136,12 +4403,14 @@
           if (!state || state.loading) {
             return;
           }
-          if (!state.items.length && !state.parentFolderId) {
+          if (!state.items.length && state.mode !== 'external' && !state.parentFolderId) {
             return;
           }
 
           if (state.selectedIndex < 0) {
-            if (state.parentFolderId) {
+            if (state.mode === 'external') {
+              navigateExternalUp_(panelIndex);
+            } else if (state.parentFolderId) {
               navigatePanel(panelIndex, state.parentFolderId);
             }
             return;
@@ -3151,11 +4420,238 @@
           if (!item) {
             return;
           }
+          if (state.mode === 'external') {
+            if (item.kind === 'folder') {
+              enterExternalMirrorFolder_(panelIndex, item.id);
+            } else {
+              openExternalDriveItem_(item);
+            }
+            return;
+          }
           if (item.kind === 'folder') {
-            navigatePanel(panelIndex, item.id);
+            if (item.isExternalMirror) {
+              enterExternalMirrorRoot_(panelIndex, item);
+              return;
+            }
+            navigatePanel(panelIndex, resolveMirrorNavId_(item.id));
           } else {
             openCatalogItem(item.id, panelIndex);
           }
+        }
+
+        function openExternalDriveItem_(item) {
+          if (!item) {
+            return;
+          }
+          var url =
+            item.openUrl ||
+            'https://drive.google.com/file/d/' + encodeURIComponent(item.id) + '/view';
+          showOpeningSplash_();
+          window.open(url, '_blank');
+        }
+
+        function clearExternalPanelMode_(panelIndex) {
+          var state = panels[panelIndex];
+          state.mode = 'catalog';
+          state.external = null;
+        }
+
+        function enterExternalMirrorRoot_(panelIndex, item) {
+          if (!item || !item.isExternalMirror) {
+            return;
+          }
+          loadExternalMirrorPanel_(panelIndex, {
+            mirrorCatalogId: item.id,
+            driveFolderId: item.mirrorOfDriveFolderId || '',
+            append: false
+          });
+        }
+
+        function enterExternalMirrorFolder_(panelIndex, driveFolderId) {
+          var state = panels[panelIndex];
+          if (!state.external || !state.external.mirrorCatalogId) {
+            return;
+          }
+          loadExternalMirrorPanel_(panelIndex, {
+            mirrorCatalogId: state.external.mirrorCatalogId,
+            driveFolderId: driveFolderId,
+            append: false
+          });
+        }
+
+        function navigateExternalUp_(panelIndex) {
+          var state = panels[panelIndex];
+          if (!state.external) {
+            return;
+          }
+          var parentId = state.external.parentDriveFolderId;
+          var rootId = state.external.rootDriveFolderId;
+          if (!parentId || String(state.external.driveFolderId) === String(rootId)) {
+            var catalogParent = state.external.catalogParentFolderId;
+            clearExternalPanelMode_(panelIndex);
+            if (catalogParent) {
+              navigatePanel(panelIndex, catalogParent);
+            } else {
+              navigatePanel(panelIndex, virtualRootFolderId);
+            }
+            return;
+          }
+          loadExternalMirrorPanel_(panelIndex, {
+            mirrorCatalogId: state.external.mirrorCatalogId,
+            driveFolderId: parentId,
+            append: false
+          });
+        }
+
+        function handleExternalMirrorResultError_(panelIndex, result, onDone) {
+          if (!result || result.ok !== false) {
+            return false;
+          }
+          if (result.code === 'GONE') {
+            showTimedSplash_(result.message || 'Больше нет такой папки, удаляю ярлык');
+            if (result.deletedMirrorId && catalogSnapshot && catalogSnapshot.foldersById) {
+              delete catalogSnapshot.foldersById[result.deletedMirrorId];
+            }
+            clearExternalPanelMode_(panelIndex);
+            var parentId = result.parentFolderId || virtualRootFolderId;
+            reloadCatalogSnapshot_([parentId], function () {
+              navigatePanel(panelIndex, parentId);
+              if (typeof onDone === 'function') {
+                onDone(result);
+              }
+            });
+            return true;
+          }
+          if (result.code === 'NO_ACCESS') {
+            showTimedSplash_(result.message || 'Нет доступа');
+            setStatus(result.message || 'Нет доступа');
+            return true;
+          }
+          return false;
+        }
+
+        function loadExternalMirrorPanel_(panelIndex, opts) {
+          opts = opts || {};
+          var state = panels[panelIndex];
+          state.loading = !opts.append;
+          if (!opts.append) {
+            state.selectedIndex = -1;
+            state.selectedMap = {};
+          }
+          renderPanel(panelIndex);
+          setStatus(opts.append ? 'Догрузка…' : 'Загрузка Drive…');
+          google.script.run
+            .withSuccessHandler(function (result) {
+              state.loading = false;
+              if (handleExternalMirrorResultError_(panelIndex, result, opts.onDone)) {
+                if (result && result.code === 'GONE') {
+                  return;
+                }
+                renderPanel(panelIndex);
+                if (typeof opts.onDone === 'function') {
+                  opts.onDone(result);
+                }
+                return;
+              }
+              if (!result || !result.ok) {
+                setStatus((result && result.message) || 'Ошибка Drive');
+                renderPanel(panelIndex);
+                if (typeof opts.onDone === 'function') {
+                  opts.onDone(result);
+                }
+                return;
+              }
+              state.mode = 'external';
+              var prevItems = opts.append && state.external ? state.items.slice() : [];
+              state.external = {
+                mirrorCatalogId: result.mirrorCatalogId,
+                rootDriveFolderId: result.rootDriveFolderId,
+                driveFolderId: result.driveFolderId,
+                parentDriveFolderId: result.parentDriveFolderId,
+                pathNames: result.pathNames || [],
+                pathIds: result.pathIds || [],
+                catalogParentFolderId: result.catalogParentFolderId || null,
+                nextPageToken: result.nextPageToken || null,
+                loadingMore: false
+              };
+              state.folderId = result.mirrorCatalogId;
+              state.folderName = result.driveFolderName || result.mirrorName || '';
+              state.parentFolderId = result.parentDriveFolderId || '__EXTERNAL_ROOT__';
+              state.items = prevItems.concat(result.items || []);
+              if (!opts.append) {
+                state.selectedMap = {};
+                sortPanelItems_(panelIndex);
+                if (state.parentFolderId) {
+                  state.selectedIndex = -1;
+                } else if (state.items.length) {
+                  state.selectedIndex = 0;
+                } else {
+                  state.selectedIndex = -1;
+                }
+              } else {
+                sortPanelItems_(panelIndex);
+              }
+              renderPanel(panelIndex);
+              setStatus('Готово');
+              if (panelIndex === activePanelIndex) {
+                restorePanelKeyboardFocus_();
+              }
+              if (!opts.append) {
+                scheduleSaveUserPanelState_();
+                notePanelHistory_(panelIndex);
+              }
+              if (typeof opts.onDone === 'function') {
+                opts.onDone(result);
+              }
+            })
+            .withFailureHandler(function (err) {
+              state.loading = false;
+              if (state.external) {
+                state.external.loadingMore = false;
+              }
+              renderPanel(panelIndex);
+              setStatus((err && err.message) || String(err));
+              if (typeof opts.onDone === 'function') {
+                opts.onDone(null);
+              }
+            })
+            .listExternalMirrorFolder({
+              mirrorCatalogId: opts.mirrorCatalogId,
+              driveFolderId: opts.driveFolderId || '',
+              pageToken: opts.pageToken || ''
+            });
+        }
+
+        function bindExternalPanelScroll_(panelIndex) {
+          var el = panelEls[panelIndex];
+          if (!el || !el.root || el.root._extScrollBound) {
+            return;
+          }
+          el.root._extScrollBound = true;
+          var scrollParent = el.table && el.table.parentElement ? el.table.parentElement : el.root;
+          scrollParent.addEventListener('scroll', function () {
+            var state = panels[panelIndex];
+            if (
+              !state ||
+              state.mode !== 'external' ||
+              !state.external ||
+              !state.external.nextPageToken ||
+              state.external.loadingMore ||
+              state.loading
+            ) {
+              return;
+            }
+            if (scrollParent.scrollTop + scrollParent.clientHeight < scrollParent.scrollHeight - 80) {
+              return;
+            }
+            state.external.loadingMore = true;
+            loadExternalMirrorPanel_(panelIndex, {
+              mirrorCatalogId: state.external.mirrorCatalogId,
+              driveFolderId: state.external.driveFolderId,
+              pageToken: state.external.nextPageToken,
+              append: true
+            });
+          });
         }
 
         function isTypingElement_(el) {
@@ -3232,6 +4728,10 @@
             closeRepairModal_();
             return true;
           }
+          if (id === 'catalog-search-modal') {
+            closeCatalogSearchModal_();
+            return true;
+          }
           modal.classList.add('hidden');
           restorePanelKeyboardFocus_();
           return true;
@@ -3239,6 +4739,13 @@
 
         function onDocumentEscapeKeydown_(e) {
           if (e.key !== 'Escape' || e.repeat) {
+            return;
+          }
+          var serviceMenu = document.getElementById('service-menu');
+          if (serviceMenu && !serviceMenu.classList.contains('hidden')) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeServiceMenu_();
             return;
           }
           if (dismissTopModalWithEsc_()) {
@@ -3260,6 +4767,17 @@
 
         /** Enter на уровне документа, если фокус ушёл с панели (клик по статусу и т.п.). */
         function onDocumentCatalogKeydown_(e) {
+          if (e.key === 'F7' && e.altKey && !e.repeat) {
+            if (!screens.main || screens.main.classList.contains('hidden')) {
+              return;
+            }
+            if (isCatalogModalOpen_() || isTypingElement_(document.activeElement)) {
+              return;
+            }
+            e.preventDefault();
+            openCatalogSearchModal_();
+            return;
+          }
           if (e.key !== 'Enter' || e.repeat) {
             return;
           }
@@ -3300,6 +4818,22 @@
           google.script.run
             .withSuccessHandler(function (result) {
               if (!result || !result.ok) {
+                if (result && result.code === 'GONE') {
+                  showTimedSplash_(result.message || 'Больше нет такого файла, удаляю ярлык');
+                  if (result.deletedShortcutId && catalogSnapshot && catalogSnapshot.filesById) {
+                    delete catalogSnapshot.filesById[result.deletedShortcutId];
+                  }
+                  var parentId = result.parentFolderId || (panels[panelIndex] && panels[panelIndex].folderId);
+                  reloadCatalogSnapshot_(parentId ? [parentId] : null, function () {
+                    setStatus('Готово');
+                  });
+                  return;
+                }
+                if (result && result.code === 'NO_ACCESS') {
+                  showTimedSplash_(result.message || 'Нет доступа');
+                  setStatus(result.message || 'Нет доступа');
+                  return;
+                }
                 var editors =
                   result && result.editors && result.editors.length
                     ? '\n\nРедакторы: ' + result.editors.join(', ')
@@ -3798,7 +5332,17 @@
             return '';
           }
           if (item.kind === 'folder') {
-            return 'Папка';
+            return item.isExternalMirror
+              ? 'Ярлык Drive'
+              : item.isMirror
+                ? 'Ярлык'
+                : 'Папка';
+          }
+          if (item.isExternalShortcut) {
+            return 'Ярлык Drive';
+          }
+          if (item.isShortcut) {
+            return 'Ярлык';
           }
           var name = String(item.name || '');
           var dot = name.lastIndexOf('.');
@@ -3848,11 +5392,22 @@
             name: item.name,
             mimeType: item.mimeType || '',
             sizeBytes: item.sizeBytes,
+            fileCount: item.fileCount,
             modifiedAt: item.modifiedAt,
             approved: item.approved,
             approvedBy: item.approvedBy,
             approvedByName: item.approvedByName || '',
             isSystem: item.isSystem,
+            isMirror: !!item.isMirror,
+            isExternalMirror: !!item.isExternalMirror,
+            mirrorOfFolderId: item.mirrorOfFolderId || '',
+            mirrorOfDriveFolderId: item.mirrorOfDriveFolderId || '',
+            isShortcut: !!item.isShortcut,
+            isExternalShortcut: !!item.isExternalShortcut,
+            shortcutOfCatalogId: item.shortcutOfCatalogId || '',
+            shortcutOfDriveFileId: item.shortcutOfDriveFileId || '',
+            openUrl: item.openUrl || '',
+            isExternalItem: !!item.isExternalItem,
             editors: (item.editors || []).slice(),
             commenters: (item.commenters || []).slice(),
             readers: (item.readers || []).slice()
@@ -3906,14 +5461,20 @@
           if (!item || item.kind === 'folder') {
             return {
               cls: 'file-icon-folder',
-              title: 'Папка',
+              title: item && item.isExternalMirror
+                ? 'Ярлык внешней папки'
+                : item && item.isMirror
+                  ? 'Ярлык папки'
+                  : 'Папка',
               imgUrl: driveTypeIconUrl_('application/vnd.google-apps.folder')
             };
           }
           var mime = resolveClientMimeType_(item);
           var title = formatItemTypeLabel_(item, { title: '' }) || mime || 'Файл';
           var googleIcon = resolveGoogleMimeIcon_(mime);
-          if (googleIcon && googleIcon.title) {
+          if (item.isShortcut) {
+            title = item.isExternalShortcut ? 'Ярлык внешнего файла' : 'Ярлык файла';
+          } else if (googleIcon && googleIcon.title) {
             title = googleIcon.title;
           } else if (mime === 'application/pdf') {
             title = 'PDF';
@@ -3992,11 +5553,16 @@
               id: child.id,
               name: child.name,
               sizeBytes: child.sizeBytes,
+              fileCount: child.fileCount != null ? child.fileCount : 0,
               modifiedAt: child.modifiedAt,
               approved: false,
               approvedBy: '',
               approvedByName: '',
               isSystem: !!child.isSystem,
+              isMirror: !!child.isMirror,
+              isExternalMirror: !!child.isExternalMirror,
+              mirrorOfFolderId: child.mirrorOfFolderId || '',
+              mirrorOfDriveFolderId: child.mirrorOfDriveFolderId || '',
               editors: child.editors || [],
               commenters: child.commenters || [],
               readers: child.readers || []
@@ -4017,7 +5583,13 @@
               approved: !!file.approved,
               approvedBy: file.approvedBy || '',
               approvedByName: file.approvedByName || '',
+              status: file.status || 'ready',
               isSystem: false,
+              isShortcut: !!file.isShortcut,
+              isExternalShortcut: !!file.isExternalShortcut,
+              shortcutOfCatalogId: file.shortcutOfCatalogId || '',
+              shortcutOfDriveFileId: file.shortcutOfDriveFileId || '',
+              openUrl: file.openUrl || '',
               editors: file.editors || [],
               commenters: file.commenters || [],
               readers: file.readers || []
@@ -4063,6 +5635,9 @@
             if (!panel.folderId) {
               return;
             }
+            if (panel.mode === 'external') {
+              return;
+            }
             if (affected && !affected[String(panel.folderId)]) {
               return;
             }
@@ -4072,9 +5647,16 @@
 
         /**
          * Перечитывает снимок с сервера (таблица = истина), затем обновляет открытые панели.
+         * @param {string[]=} folderIds
+         * @param {function=} done
+         * @param {{ quiet?: boolean }=} options quiet — не трогать строку статуса (для poll импорта)
          */
-        function reloadCatalogSnapshot_(folderIds, done) {
-          setStatus('Обновление каталога…');
+        function reloadCatalogSnapshot_(folderIds, done, options) {
+          options = options || {};
+          var quiet = !!options.quiet;
+          if (!quiet) {
+            setStatus('Обновление каталога…');
+          }
           google.script.run
             .withSuccessHandler(function (data) {
               ingestCatalogSnapshot_(data);
@@ -4082,12 +5664,14 @@
               tryReloadForRemoteRev_();
               if (done) {
                 done(null, data);
-              } else {
+              } else if (!quiet) {
                 setStatus('Готово');
               }
             })
             .withFailureHandler(function (err) {
-              setStatus((err && err.message) || String(err));
+              if (!quiet) {
+                setStatus((err && err.message) || String(err));
+              }
               if (done) {
                 done(err);
               }
@@ -4253,11 +5837,16 @@
                   id: folder.id,
                   name: folder.name,
                   sizeBytes: folder.sizeBytes,
+                  fileCount: folder.fileCount != null ? folder.fileCount : 0,
                   modifiedAt: folder.modifiedAt,
                   approved: false,
                   approvedBy: '',
                   approvedByName: '',
                   isSystem: !!folder.isSystem,
+                  isMirror: !!folder.isMirror,
+                  isExternalMirror: !!folder.isExternalMirror,
+                  mirrorOfFolderId: folder.mirrorOfFolderId || '',
+                  mirrorOfDriveFolderId: folder.mirrorOfDriveFolderId || '',
                   editors: folder.editors || [],
                   commenters: folder.commenters || [],
                   readers: folder.readers || []
@@ -4358,8 +5947,13 @@
             parentFolderId: folder.parentFolderId,
             name: folder.name,
             sizeBytes: folder.sizeBytes || 0,
+            fileCount: folder.fileCount != null ? folder.fileCount : 0,
             modifiedAt: folder.modifiedAt,
             isSystem: false,
+            isMirror: !!folder.isMirror,
+            isExternalMirror: !!folder.isExternalMirror,
+            mirrorOfFolderId: folder.mirrorOfFolderId || '',
+            mirrorOfDriveFolderId: folder.mirrorOfDriveFolderId || '',
             editors: folder.editors || [],
             commenters: folder.commenters || [],
             readers: folder.readers || []
@@ -4383,6 +5977,12 @@
             approved: !!item.approved,
             approvedBy: item.approvedBy || '',
             approvedByName: item.approvedByName || '',
+            status: item.status || 'ready',
+            isShortcut: !!item.isShortcut,
+            isExternalShortcut: !!item.isExternalShortcut,
+            shortcutOfCatalogId: item.shortcutOfCatalogId || '',
+            shortcutOfDriveFileId: item.shortcutOfDriveFileId || '',
+            openUrl: item.openUrl || '',
             editors: item.editors || [],
             commenters: item.commenters || [],
             readers: item.readers || []
@@ -4412,8 +6012,13 @@
               parentFolderId: folder.parentFolderId || null,
               name: folder.name,
               sizeBytes: folder.sizeBytes || 0,
+              fileCount: folder.fileCount != null ? folder.fileCount : 0,
               modifiedAt: folder.modifiedAt,
               isSystem: !!folder.isSystem,
+              isMirror: !!folder.isMirror,
+              isExternalMirror: !!folder.isExternalMirror,
+              mirrorOfFolderId: folder.mirrorOfFolderId || '',
+              mirrorOfDriveFolderId: folder.mirrorOfDriveFolderId || '',
               editors: folder.editors || [],
               commenters: folder.commenters || [],
               readers: folder.readers || []
@@ -4449,7 +6054,26 @@
           noteLocalCatalogMutation_();
         }
 
+        var createMirrorTargetId_ = '';
+        var createFileShortcutTargetId_ = '';
+        var createExtTargetId_ = '';
+        var createExtTargetName_ = '';
+        var createExtTargetKind_ = 'folder';
+        var createExtFolderId_ = 'root';
+        var createExtParentId_ = null;
+        var createExtPageToken_ = null;
+        var createExtStack_ = [];
+        var createExtScope_ = 'mydrive';
+        var createExtLoading_ = false;
+        var createExtSearchActive_ = false;
+        var createExtSearchQuery_ = '';
+        var createExtSearchPageToken_ = null;
+        var createExtSearchLoading_ = false;
+
         function openCreateModal() {
+          if (assertNotInExternalZone_('Создание')) {
+            return;
+          }
           var state = panels[activePanelIndex];
           if (!state || !state.folderId || state.loading) {
             alert('Выберите папку в активной панели.');
@@ -4458,7 +6082,13 @@
           document.getElementById('create-parent-name').textContent = state.folderName || 'каталог';
           document.getElementById('create-kind').value = 'folder';
           document.getElementById('create-name').value = '';
-          updateCreateOwnerHint_();
+          createMirrorTargetId_ = '';
+          createFileShortcutTargetId_ = '';
+          createExtTargetId_ = '';
+          createExtTargetName_ = '';
+          createExtTargetKind_ = 'folder';
+          clearCreatePickerSearchFields_();
+          updateCreateKindUi_();
           showCreateMessage('', '');
           document.getElementById('create-modal').classList.remove('hidden');
           document.getElementById('create-name').focus();
@@ -4469,9 +6099,575 @@
         }
 
         function updateCreateOwnerHint_() {
+          updateCreateKindUi_();
+        }
+
+        function isCreatePickerKind_(kind) {
+          return (
+            kind === 'mirror' ||
+            kind === 'external_mirror' ||
+            kind === 'file_shortcut' ||
+            kind === 'external_file_shortcut'
+          );
+        }
+
+        function createExtAllowsFiles_() {
+          return document.getElementById('create-kind').value === 'external_file_shortcut';
+        }
+
+        function clearCreatePickerSearchFields_() {
+          var mirrorQ = document.getElementById('create-mirror-search');
+          var fileQ = document.getElementById('create-file-shortcut-search');
+          var extQ = document.getElementById('create-ext-search-query');
+          if (mirrorQ) {
+            mirrorQ.value = '';
+          }
+          if (fileQ) {
+            fileQ.value = '';
+          }
+          if (extQ) {
+            extQ.value = '';
+          }
+          createExtSearchActive_ = false;
+          createExtSearchQuery_ = '';
+          createExtSearchPageToken_ = null;
+        }
+
+        function catalogFolderPathLabel_(folderId) {
+          if (!catalogSnapshot || !folderId) {
+            return '';
+          }
+          var parts = [];
+          var id = String(folderId);
+          var guard = 0;
+          while (id && catalogSnapshot.foldersById[id] && guard < 64) {
+            var folder = catalogSnapshot.foldersById[id];
+            parts.unshift(folder.name || id);
+            id = folder.parentFolderId ? String(folder.parentFolderId) : '';
+            guard += 1;
+          }
+          return parts.join(' / ');
+        }
+
+        function nameMatchesQuery_(name, query) {
+          if (!query) {
+            return true;
+          }
+          return String(name || '')
+            .toLowerCase()
+            .indexOf(query) >= 0;
+        }
+
+        function updateCreateKindUi_() {
           var kind = document.getElementById('create-kind').value;
           var hint = document.getElementById('create-owner-hint');
-          hint.style.display = kind === 'folder' ? 'none' : 'block';
+          var mirrorBlock = document.getElementById('create-mirror-block');
+          var fileShortcutBlock = document.getElementById('create-file-shortcut-block');
+          var extBlock = document.getElementById('create-external-mirror-block');
+          var nameWrap = document.getElementById('create-name-wrap');
+          hint.style.display = isCreatePickerKind_(kind) || kind === 'folder' ? 'none' : 'block';
+          mirrorBlock.classList.add('hidden');
+          fileShortcutBlock.classList.add('hidden');
+          extBlock.classList.add('hidden');
+          nameWrap.classList.add('hidden');
+          if (kind === 'mirror') {
+            mirrorBlock.classList.remove('hidden');
+            var mq = document.getElementById('create-mirror-search');
+            if (mq) {
+              mq.value = '';
+            }
+            renderCreateMirrorTree_();
+            if (mq) {
+              mq.focus();
+            }
+          } else if (kind === 'file_shortcut') {
+            fileShortcutBlock.classList.remove('hidden');
+            var fq = document.getElementById('create-file-shortcut-search');
+            if (fq) {
+              fq.value = '';
+            }
+            renderCreateFileShortcutTree_();
+            if (fq) {
+              fq.focus();
+            }
+          } else if (kind === 'external_mirror' || kind === 'external_file_shortcut') {
+            extBlock.classList.remove('hidden');
+            createExtTargetId_ = '';
+            createExtTargetName_ = '';
+            createExtTargetKind_ = kind === 'external_file_shortcut' ? 'file' : 'folder';
+            createExtSearchActive_ = false;
+            createExtSearchQuery_ = '';
+            createExtSearchPageToken_ = null;
+            var eq = document.getElementById('create-ext-search-query');
+            if (eq) {
+              eq.value = '';
+            }
+            resetCreateExtNav_();
+            loadCreateExtFolder_(createExtFolderId_, false);
+            if (eq) {
+              eq.focus();
+            }
+          } else {
+            nameWrap.classList.remove('hidden');
+          }
+        }
+
+        function renderCreateMirrorTree_() {
+          var root = document.getElementById('create-mirror-tree');
+          var picked = document.getElementById('create-mirror-picked');
+          var query = String(
+            (document.getElementById('create-mirror-search') || {}).value || ''
+          )
+            .trim()
+            .toLowerCase();
+          root.innerHTML = '';
+          if (!catalogSnapshot) {
+            root.textContent = 'Нет снимка каталога.';
+            return;
+          }
+
+          function selectFolder(folderId, folderName) {
+            createMirrorTargetId_ = folderId;
+            picked.textContent = 'Выбрано: ' + (folderName || folderId);
+            renderCreateMirrorTree_();
+          }
+
+          if (query) {
+            var matches = [];
+            Object.keys(catalogSnapshot.foldersById).forEach(function (fid) {
+              var folder = catalogSnapshot.foldersById[fid];
+              if (!folder || folder.isMirror) {
+                return;
+              }
+              if (!nameMatchesQuery_(folder.name, query)) {
+                return;
+              }
+              matches.push(folder);
+            });
+            matches.sort(function (a, b) {
+              return String(a.name || '').localeCompare(String(b.name || ''), 'ru', {
+                sensitivity: 'base'
+              });
+            });
+            if (!matches.length) {
+              root.textContent = 'Ничего не найдено.';
+            } else {
+              matches.forEach(function (folder) {
+                var row = document.createElement('div');
+                row.style.cursor = 'pointer';
+                row.style.paddingTop = '2px';
+                row.style.paddingBottom = '2px';
+                var path = catalogFolderPathLabel_(folder.id);
+                row.textContent = path || folder.name || folder.id;
+                if (String(createMirrorTargetId_) === String(folder.id)) {
+                  row.style.background = 'var(--accent)';
+                  row.style.color = '#fff';
+                }
+                row.addEventListener('click', function (e) {
+                  e.stopPropagation();
+                  selectFolder(folder.id, folder.name);
+                });
+                root.appendChild(row);
+              });
+            }
+          } else {
+            function addNode(parentEl, folderId, depth) {
+              var folder = catalogSnapshot.foldersById[folderId];
+              if (!folder || folder.isMirror) {
+                return;
+              }
+              var row = document.createElement('div');
+              row.style.paddingLeft = depth * 12 + 'px';
+              row.style.cursor = 'pointer';
+              row.style.paddingTop = '2px';
+              row.style.paddingBottom = '2px';
+              row.textContent = folder.name || folderId;
+              if (String(createMirrorTargetId_) === String(folderId)) {
+                row.style.background = 'var(--accent)';
+                row.style.color = '#fff';
+              }
+              row.addEventListener('click', function (e) {
+                e.stopPropagation();
+                selectFolder(folderId, folder.name);
+              });
+              parentEl.appendChild(row);
+              Object.keys(catalogSnapshot.foldersById).forEach(function (cid) {
+                var child = catalogSnapshot.foldersById[cid];
+                if (String(child.parentFolderId || '') !== String(folderId)) {
+                  return;
+                }
+                if (child.isMirror) {
+                  return;
+                }
+                addNode(parentEl, cid, depth + 1);
+              });
+            }
+            var rootId = catalogSnapshot.virtualRootFolderId || virtualRootFolderId;
+            addNode(root, rootId, 0);
+          }
+
+          if (createMirrorTargetId_ && catalogSnapshot.foldersById[createMirrorTargetId_]) {
+            picked.textContent =
+              'Выбрано: ' + catalogSnapshot.foldersById[createMirrorTargetId_].name;
+          } else {
+            picked.textContent = 'Не выбрано';
+          }
+        }
+
+        function renderCreateFileShortcutTree_() {
+          var root = document.getElementById('create-file-shortcut-tree');
+          var picked = document.getElementById('create-file-shortcut-picked');
+          var query = String(
+            (document.getElementById('create-file-shortcut-search') || {}).value || ''
+          )
+            .trim()
+            .toLowerCase();
+          root.innerHTML = '';
+          if (!catalogSnapshot) {
+            root.textContent = 'Нет снимка каталога.';
+            return;
+          }
+
+          function selectFile(fileId, fileName) {
+            createFileShortcutTargetId_ = fileId;
+            picked.textContent = 'Выбрано: ' + (fileName || fileId);
+            renderCreateFileShortcutTree_();
+          }
+
+          if (query) {
+            var matches = [];
+            Object.keys(catalogSnapshot.filesById || {}).forEach(function (fid) {
+              var file = catalogSnapshot.filesById[fid];
+              if (!file || file.isShortcut) {
+                return;
+              }
+              if (!nameMatchesQuery_(file.name, query)) {
+                return;
+              }
+              matches.push(file);
+            });
+            matches.sort(function (a, b) {
+              return String(a.name || '').localeCompare(String(b.name || ''), 'ru', {
+                sensitivity: 'base'
+              });
+            });
+            if (!matches.length) {
+              root.textContent = 'Ничего не найдено.';
+            } else {
+              matches.forEach(function (file) {
+                var row = document.createElement('div');
+                row.style.cursor = 'pointer';
+                row.style.paddingTop = '2px';
+                row.style.paddingBottom = '4px';
+                var path = catalogFolderPathLabel_(file.folderId);
+                row.innerHTML =
+                  '<div>' +
+                  escapeHtml(file.name || file.id) +
+                  '</div>' +
+                  (path
+                    ? '<div class="sub" style="margin:0;opacity:0.75;">' +
+                      escapeHtml(path) +
+                      '</div>'
+                    : '');
+                if (String(createFileShortcutTargetId_) === String(file.id)) {
+                  row.style.background = 'var(--accent)';
+                  row.style.color = '#fff';
+                }
+                row.addEventListener('click', function (e) {
+                  e.stopPropagation();
+                  selectFile(file.id, file.name);
+                });
+                root.appendChild(row);
+              });
+            }
+          } else {
+            function addFolder(parentEl, folderId, depth) {
+              var folder = catalogSnapshot.foldersById[folderId];
+              if (!folder || folder.isMirror) {
+                return;
+              }
+              var folderRow = document.createElement('div');
+              folderRow.style.paddingLeft = depth * 12 + 'px';
+              folderRow.style.paddingTop = '2px';
+              folderRow.style.paddingBottom = '2px';
+              folderRow.style.opacity = '0.85';
+              folderRow.textContent = folder.name || folderId;
+              parentEl.appendChild(folderRow);
+
+              Object.keys(catalogSnapshot.filesById || {}).forEach(function (fid) {
+                var file = catalogSnapshot.filesById[fid];
+                if (String(file.folderId || '') !== String(folderId)) {
+                  return;
+                }
+                if (file.isShortcut) {
+                  return;
+                }
+                var row = document.createElement('div');
+                row.style.paddingLeft = (depth + 1) * 12 + 'px';
+                row.style.cursor = 'pointer';
+                row.style.paddingTop = '2px';
+                row.style.paddingBottom = '2px';
+                row.textContent = '• ' + (file.name || fid);
+                if (String(createFileShortcutTargetId_) === String(fid)) {
+                  row.style.background = 'var(--accent)';
+                  row.style.color = '#fff';
+                }
+                row.addEventListener('click', function (e) {
+                  e.stopPropagation();
+                  selectFile(fid, file.name);
+                });
+                parentEl.appendChild(row);
+              });
+
+              Object.keys(catalogSnapshot.foldersById).forEach(function (cid) {
+                var child = catalogSnapshot.foldersById[cid];
+                if (String(child.parentFolderId || '') !== String(folderId)) {
+                  return;
+                }
+                if (child.isMirror) {
+                  return;
+                }
+                addFolder(parentEl, cid, depth + 1);
+              });
+            }
+            var rootId = catalogSnapshot.virtualRootFolderId || virtualRootFolderId;
+            addFolder(root, rootId, 0);
+          }
+
+          if (
+            createFileShortcutTargetId_ &&
+            catalogSnapshot.filesById[createFileShortcutTargetId_]
+          ) {
+            picked.textContent =
+              'Выбрано: ' + catalogSnapshot.filesById[createFileShortcutTargetId_].name;
+          } else {
+            picked.textContent = 'Не выбрано';
+          }
+        }
+
+        function resetCreateExtNav_() {
+          createExtScope_ = getSelectedCreateExtScope_();
+          createExtFolderId_ = importNavRootIdForScope_(createExtScope_);
+          createExtParentId_ = null;
+          createExtPageToken_ = null;
+          createExtStack_ = [];
+          createExtTargetId_ = '';
+          createExtTargetName_ = '';
+          createExtSearchActive_ = false;
+          createExtSearchQuery_ = '';
+          createExtSearchPageToken_ = null;
+          document.getElementById('create-ext-path').textContent =
+            importNavRootLabelForScope_(createExtScope_);
+          document.getElementById('create-ext-picked').textContent = 'Не выбрано';
+          document.getElementById('create-ext-up').disabled = true;
+          document.getElementById('create-ext-more').style.display = 'none';
+        }
+
+        function getSelectedCreateExtScope_() {
+          var el = document.querySelector('input[name="create-ext-scope"]:checked');
+          return (el && el.value) || 'mydrive';
+        }
+
+        function loadCreateExtFolder_(folderId, loadMore) {
+          if (createExtLoading_ || createExtSearchLoading_) {
+            return;
+          }
+          createExtSearchActive_ = false;
+          createExtSearchPageToken_ = null;
+          if (loadMore && !createExtPageToken_) {
+            return;
+          }
+          createExtLoading_ = true;
+          var list = document.getElementById('create-ext-list');
+          if (!loadMore) {
+            list.textContent = 'Загрузка…';
+          }
+          var payload = {
+            scope: createExtScope_ || 'mydrive',
+            folderId: folderId || importNavRootIdForScope_(createExtScope_)
+          };
+          if (loadMore && createExtPageToken_) {
+            payload.pageToken = createExtPageToken_;
+          }
+          gasRun_('listDriveFolderForImport', payload)
+            .then(function (result) {
+              createExtLoading_ = false;
+              if (!result || !result.ok) {
+                list.textContent = 'Ошибка загрузки';
+                return;
+              }
+              createExtFolderId_ = result.folderId;
+              createExtParentId_ = result.parentId || null;
+              createExtPageToken_ = result.nextPageToken || null;
+              document.getElementById('create-ext-path').textContent =
+                result.folderName || createExtFolderId_;
+              document.getElementById('create-ext-up').disabled =
+                !createExtParentId_ && !createExtStack_.length;
+              document.getElementById('create-ext-more').style.display = createExtPageToken_
+                ? 'inline-block'
+                : 'none';
+              renderCreateExtList_(result.items || [], !!loadMore);
+            })
+            .catch(function (err) {
+              createExtLoading_ = false;
+              list.textContent = (err && err.message) || String(err);
+            });
+        }
+
+        function runCreateExtSearch_(loadMore) {
+          var query = String(
+            document.getElementById('create-ext-search-query').value || ''
+          ).trim();
+          if (!query) {
+            createExtSearchActive_ = false;
+            createExtSearchQuery_ = '';
+            createExtSearchPageToken_ = null;
+            loadCreateExtFolder_(createExtFolderId_, false);
+            return;
+          }
+          if (createExtSearchLoading_ || createExtLoading_) {
+            return;
+          }
+          if (!loadMore) {
+            createExtSearchQuery_ = query;
+            createExtSearchPageToken_ = null;
+          } else if (!createExtSearchPageToken_) {
+            return;
+          }
+          createExtSearchLoading_ = true;
+          createExtSearchActive_ = true;
+          var list = document.getElementById('create-ext-list');
+          if (!loadMore) {
+            list.textContent = 'Поиск…';
+          }
+          var payload = { query: createExtSearchQuery_ || query };
+          if (loadMore && createExtSearchPageToken_) {
+            payload.pageToken = createExtSearchPageToken_;
+          }
+          gasRun_('searchDriveForImport', payload)
+            .then(function (result) {
+              createExtSearchLoading_ = false;
+              document.getElementById('create-ext-path').textContent =
+                'Поиск: ' + (createExtSearchQuery_ || query);
+              document.getElementById('create-ext-up').disabled = true;
+              createExtSearchPageToken_ = (result && result.nextPageToken) || null;
+              document.getElementById('create-ext-more').style.display =
+                createExtSearchPageToken_ ? 'inline-block' : 'none';
+              var allowFiles = createExtAllowsFiles_();
+              var items = ((result && result.items) || []).filter(function (it) {
+                return allowFiles ? it.kind === 'file' : it.kind === 'folder';
+              });
+              renderCreateExtList_(items, !!loadMore);
+            })
+            .catch(function (err) {
+              createExtSearchLoading_ = false;
+              list.textContent = (err && err.message) || String(err);
+            });
+        }
+
+        var createExtItems_ = [];
+
+        function renderCreateExtList_(items, append) {
+          var allowFiles = createExtAllowsFiles_();
+          var inSearch = createExtSearchActive_;
+          if (!append) {
+            createExtItems_ = (items || []).filter(function (it) {
+              if (inSearch) {
+                return allowFiles ? it.kind === 'file' : it.kind === 'folder';
+              }
+              return it.kind === 'folder' || (allowFiles && it.kind === 'file');
+            });
+          } else {
+            (items || []).forEach(function (it) {
+              if (inSearch) {
+                if (allowFiles ? it.kind === 'file' : it.kind === 'folder') {
+                  createExtItems_.push(it);
+                }
+                return;
+              }
+              if (it.kind === 'folder' || (allowFiles && it.kind === 'file')) {
+                createExtItems_.push(it);
+              }
+            });
+          }
+          var list = document.getElementById('create-ext-list');
+          list.innerHTML = '';
+          if (!createExtItems_.length) {
+            list.textContent = inSearch
+              ? 'Ничего не найдено.'
+              : allowFiles
+                ? 'Нет файлов и папок'
+                : 'Нет папок';
+            return;
+          }
+          createExtItems_.forEach(function (it) {
+            var row = document.createElement('div');
+            row.style.padding = '4px 6px';
+            row.style.cursor = 'pointer';
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.gap = '8px';
+            if (String(createExtTargetId_) === String(it.id)) {
+              row.style.background = 'var(--accent)';
+              row.style.color = '#fff';
+            }
+            var name = document.createElement('span');
+            name.textContent = (it.kind === 'file' ? '• ' : '') + (it.name || it.id);
+            row.addEventListener('click', function () {
+              if (allowFiles && it.kind !== 'file') {
+                return;
+              }
+              if (!allowFiles && it.kind !== 'folder') {
+                return;
+              }
+              createExtTargetId_ = it.id;
+              createExtTargetName_ = it.name || it.id;
+              createExtTargetKind_ = it.kind;
+              document.getElementById('create-ext-picked').textContent =
+                'Выбрано: ' + createExtTargetName_;
+              renderCreateExtList_(createExtItems_, false);
+            });
+            row.appendChild(name);
+            if (it.kind === 'folder' && !inSearch) {
+              var enter = document.createElement('button');
+              enter.type = 'button';
+              enter.className = 'secondary';
+              enter.textContent = '→';
+              enter.title = 'Войти';
+              enter.addEventListener('click', function (e) {
+                e.stopPropagation();
+                createExtStack_.push({
+                  id: createExtFolderId_,
+                  name: document.getElementById('create-ext-path').textContent
+                });
+                loadCreateExtFolder_(it.id, false);
+              });
+              row.appendChild(enter);
+            }
+            list.appendChild(row);
+          });
+        }
+
+        function createExtGoUp_() {
+          if (createExtSearchActive_) {
+            return;
+          }
+          if (createExtStack_.length) {
+            var prev = createExtStack_.pop();
+            loadCreateExtFolder_(prev.id, false);
+            return;
+          }
+          if (createExtParentId_) {
+            loadCreateExtFolder_(createExtParentId_, false);
+          }
+        }
+
+        function createExtLoadMore_() {
+          if (createExtSearchActive_) {
+            runCreateExtSearch_(true);
+            return;
+          }
+          loadCreateExtFolder_(createExtFolderId_, true);
         }
 
         function showCreateMessage(text, kind) {
@@ -4485,7 +6681,7 @@
           var state = panels[activePanelIndex];
           var name = document.getElementById('create-name').value.trim();
           var kind = document.getElementById('create-kind').value;
-          if (!name) {
+          if (!isCreatePickerKind_(kind) && !name) {
             showCreateMessage('Укажите имя.', 'error');
             return;
           }
@@ -4497,6 +6693,154 @@
           var btn = document.getElementById('create-submit');
           btn.disabled = true;
           showCreateMessage('', '');
+
+          if (kind === 'external_file_shortcut') {
+            if (!canRunCatalogOperations) {
+              btn.disabled = false;
+              showCreateMessage('Создание ярлыка доступно Менеджеру и Управляющему.', 'error');
+              return;
+            }
+            if (!createExtTargetId_ || createExtTargetKind_ !== 'file') {
+              btn.disabled = false;
+              showCreateMessage('Выберите файл Drive.', 'error');
+              return;
+            }
+            setStatus('Создание ярлыка…');
+            google.script.run
+              .withSuccessHandler(function (result) {
+                btn.disabled = false;
+                closeCreateModal();
+                if (result && result.item) {
+                  applyLocalCreateFile_(state.folderId, result.item);
+                  setStatus('Готово');
+                } else {
+                  reloadCatalogSnapshot_([state.folderId], function () {
+                    setStatus('Готово');
+                  });
+                }
+              })
+              .withFailureHandler(function (err) {
+                btn.disabled = false;
+                showCreateMessage((err && err.message) || String(err), 'error');
+                setStatus((err && err.message) || String(err));
+              })
+              .createCatalogExternalFileShortcut({
+                parentFolderId: state.folderId,
+                driveFileId: createExtTargetId_
+              });
+            return;
+          }
+
+          if (kind === 'file_shortcut') {
+            if (!canRunCatalogOperations) {
+              btn.disabled = false;
+              showCreateMessage('Создание ярлыка доступно Менеджеру и Управляющему.', 'error');
+              return;
+            }
+            if (!createFileShortcutTargetId_) {
+              btn.disabled = false;
+              showCreateMessage('Выберите файл-оригинал.', 'error');
+              return;
+            }
+            setStatus('Создание ярлыка…');
+            google.script.run
+              .withSuccessHandler(function (result) {
+                btn.disabled = false;
+                closeCreateModal();
+                if (result && result.item) {
+                  applyLocalCreateFile_(state.folderId, result.item);
+                  setStatus('Готово');
+                } else {
+                  reloadCatalogSnapshot_([state.folderId], function () {
+                    setStatus('Готово');
+                  });
+                }
+              })
+              .withFailureHandler(function (err) {
+                btn.disabled = false;
+                showCreateMessage((err && err.message) || String(err), 'error');
+                setStatus((err && err.message) || String(err));
+              })
+              .createCatalogFileShortcut({
+                parentFolderId: state.folderId,
+                targetCatalogId: createFileShortcutTargetId_
+              });
+            return;
+          }
+
+          if (kind === 'external_mirror') {
+            if (!canRunCatalogOperations) {
+              btn.disabled = false;
+              showCreateMessage('Создание ярлыка доступно Менеджеру и Управляющему.', 'error');
+              return;
+            }
+            if (!createExtTargetId_ || createExtTargetKind_ === 'file') {
+              btn.disabled = false;
+              showCreateMessage('Выберите папку Drive.', 'error');
+              return;
+            }
+            setStatus('Создание ярлыка…');
+            google.script.run
+              .withSuccessHandler(function (result) {
+                btn.disabled = false;
+                closeCreateModal();
+                if (result && result.folder) {
+                  applyLocalCreateFolder_(result.folder);
+                  setStatus('Готово');
+                } else {
+                  reloadCatalogSnapshot_([state.folderId], function () {
+                    setStatus('Готово');
+                  });
+                }
+              })
+              .withFailureHandler(function (err) {
+                btn.disabled = false;
+                showCreateMessage((err && err.message) || String(err), 'error');
+                setStatus((err && err.message) || String(err));
+              })
+              .createCatalogExternalMirror({
+                parentFolderId: state.folderId,
+                driveFolderId: createExtTargetId_
+              });
+            return;
+          }
+
+          if (kind === 'mirror') {
+            if (!canRunCatalogOperations) {
+              btn.disabled = false;
+              showCreateMessage('Создание ярлыка доступно Менеджеру и Управляющему.', 'error');
+              return;
+            }
+            if (!createMirrorTargetId_) {
+              btn.disabled = false;
+              showCreateMessage('Выберите папку-оригинал в дереве.', 'error');
+              return;
+            }
+            setStatus('Создание ярлыка…');
+            google.script.run
+              .withSuccessHandler(function (result) {
+                btn.disabled = false;
+                closeCreateModal();
+                if (result && result.folder) {
+                  applyLocalCreateFolder_(result.folder);
+                  setStatus('Готово');
+                } else {
+                  reloadCatalogSnapshot_([state.folderId], function () {
+                    setStatus('Готово');
+                  });
+                }
+              })
+              .withFailureHandler(function (err) {
+                btn.disabled = false;
+                showCreateMessage((err && err.message) || String(err), 'error');
+                setStatus((err && err.message) || String(err));
+              })
+              .createCatalogMirror({
+                parentFolderId: state.folderId,
+                targetFolderId: createMirrorTargetId_
+              });
+            return;
+          }
 
           if (kind === 'folder') {
             if (!canRunCatalogOperations) {
@@ -4560,6 +6904,7 @@
 
         function applyPanelData(panelIndex, data) {
           var state = panels[panelIndex];
+          clearExternalPanelMode_(panelIndex);
           state.folderId = data.folderId;
           state.parentFolderId = data.parentFolderId;
           state.folderName = data.folderName;
@@ -4582,6 +6927,8 @@
           if (panelIndex === activePanelIndex) {
             restorePanelKeyboardFocus_();
           }
+          scheduleSaveUserPanelState_();
+          notePanelHistory_(panelIndex);
         }
 
         function loadPanelContents(panelIndex, folderId, options) {
@@ -4628,18 +6975,51 @@
           renderPanel(0);
           renderPanel(1);
           setStatus('Загрузка каталога…');
+          suppressPanelStateSave_ = true;
 
           google.script.run
             .withSuccessHandler(function (data) {
               ingestCatalogSnapshot_(data);
-              applyPanelFromSnapshot_(0, folderId);
-              applyPanelFromSnapshot_(1, folderId);
-              updateEmptyTrashButton_();
-              focusPanelFirstRow_(0);
-              startCatalogRevPoller_();
-              setStatus('Готово');
+              google.script.run
+                .withSuccessHandler(function (pref) {
+                  var left = (pref && pref.left) || null;
+                  var right = (pref && pref.right) || null;
+                  var activeIdx =
+                    pref && Number(pref.activePanelIndex) === 1 ? 1 : 0;
+                  var pending = 2;
+                  var finishOne = function () {
+                    pending--;
+                    if (pending > 0) {
+                      return;
+                    }
+                    setActivePanel(activeIdx);
+                    focusPanelFirstRow_(activeIdx);
+                    startCatalogRevPoller_();
+                    suppressPanelStateSave_ = false;
+                    notePanelHistory_(0);
+                    notePanelHistory_(1);
+                    scheduleSaveUserPanelState_();
+                    setStatus('Готово');
+                  };
+                  restorePanelFromPref_(0, left, folderId, finishOne);
+                  restorePanelFromPref_(1, right, folderId, finishOne);
+                  updateEmptyTrashButton_();
+                })
+                .withFailureHandler(function () {
+                  applyPanelFromSnapshot_(0, folderId);
+                  applyPanelFromSnapshot_(1, folderId);
+                  updateEmptyTrashButton_();
+                  focusPanelFirstRow_(0);
+                  startCatalogRevPoller_();
+                  suppressPanelStateSave_ = false;
+                  notePanelHistory_(0);
+                  notePanelHistory_(1);
+                  setStatus('Готово');
+                })
+                .getUserPanelState();
             })
             .withFailureHandler(function (err) {
+              suppressPanelStateSave_ = false;
               panels[0].loading = false;
               panels[1].loading = false;
               renderPanel(0);
@@ -4676,6 +7056,25 @@
           updateEmptyTrashButton_();
           bindPanelSortHeaders_();
 
+          Array.prototype.forEach.call(
+            document.querySelectorAll('.panel-hist-btn'),
+            function (btn) {
+              btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var panelIndex = Number(btn.getAttribute('data-panel'));
+                if (panelIndex !== 0 && panelIndex !== 1) {
+                  return;
+                }
+                if (btn.getAttribute('data-hist') === 'back') {
+                  goPanelHistory_(panelIndex, -1);
+                } else if (btn.getAttribute('data-hist') === 'forward') {
+                  goPanelHistory_(panelIndex, 1);
+                }
+              });
+            }
+          );
+
           document.getElementById('main-user').textContent = data.userEmail
             ? data.userEmail
             : '';
@@ -4684,6 +7083,90 @@
           document.getElementById('btn-acl').addEventListener('click', openAclForSelection_);
           document.getElementById('btn-import').addEventListener('click', openImportModal);
           document.getElementById('btn-refresh').addEventListener('click', refreshCatalogSnapshotManual_);
+          document.getElementById('btn-service').addEventListener('click', function (e) {
+            e.stopPropagation();
+            toggleServiceMenu_();
+          });
+          document.getElementById('service-menu').addEventListener('click', function (e) {
+            var t = e.target;
+            if (t && t.classList && t.classList.contains('cmd-menu-item') && !t.disabled) {
+              closeServiceMenu_();
+            }
+          });
+          document.addEventListener('click', function (e) {
+            var wrap = document.querySelector('.cmd-service-wrap');
+            if (!wrap || wrap.contains(e.target)) {
+              return;
+            }
+            closeServiceMenu_();
+          });
+          document
+            .getElementById('btn-catalog-search')
+            .addEventListener('click', openCatalogSearchModal_);
+          document
+            .getElementById('catalog-search-cancel')
+            .addEventListener('click', closeCatalogSearchModal_);
+          document.getElementById('catalog-search-modal').addEventListener('click', function (e) {
+            if (e.target.id === 'catalog-search-modal') {
+              closeCatalogSearchModal_();
+            }
+          });
+          document
+            .getElementById('catalog-search-query')
+            .addEventListener('input', runCatalogSearchFilter_);
+          document
+            .getElementById('catalog-search-query')
+            .addEventListener('keydown', function (e) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (!catalogSearchHits_.length) {
+                  return;
+                }
+                var max = Math.min(catalogSearchHits_.length, CATALOG_SEARCH_LIMIT_) - 1;
+                catalogSearchFocusIndex_ = Math.min(
+                  (catalogSearchFocusIndex_ < 0 ? -1 : catalogSearchFocusIndex_) + 1,
+                  max
+                );
+                highlightCatalogSearchFocus_();
+                return;
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!catalogSearchHits_.length) {
+                  return;
+                }
+                catalogSearchFocusIndex_ = Math.max(catalogSearchFocusIndex_ - 1, 0);
+                highlightCatalogSearchFocus_();
+                return;
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                var hit =
+                  catalogSearchFocusIndex_ >= 0
+                    ? catalogSearchHits_[catalogSearchFocusIndex_]
+                    : catalogSearchHits_[0];
+                if (hit) {
+                  goToCatalogSearchHit_(hit);
+                }
+              }
+            });
+          Array.prototype.forEach.call(
+            document.querySelectorAll('input[name="catalog-search-scope"]'),
+            function (radio) {
+              radio.addEventListener('change', function () {
+                catalogSearchScopePref_ = getCatalogSearchScope_();
+                var external =
+                  panels[activePanelIndex] && panels[activePanelIndex].mode === 'external';
+                var canSubtree =
+                  !external &&
+                  panels[activePanelIndex] &&
+                  panels[activePanelIndex].folderId &&
+                  !panels[activePanelIndex].loading;
+                setCatalogSearchScopeUi_(catalogSearchScopePref_, canSubtree, external);
+                runCatalogSearchFilter_();
+              });
+            }
+          );
           var exportBtn = document.getElementById('btn-export-structure');
           if (exportBtn) {
             exportBtn.addEventListener('click', exportCatalogStructureAction_);
@@ -4829,6 +7312,41 @@
           document.getElementById('create-cancel').addEventListener('click', closeCreateModal);
           document.getElementById('create-submit').addEventListener('click', submitCreate);
           document.getElementById('create-kind').addEventListener('change', updateCreateOwnerHint_);
+          document.getElementById('create-ext-up').addEventListener('click', createExtGoUp_);
+          document.getElementById('create-ext-more').addEventListener('click', createExtLoadMore_);
+          document.getElementById('create-ext-search-btn').addEventListener('click', function () {
+            runCreateExtSearch_(false);
+          });
+          document
+            .getElementById('create-ext-search-query')
+            .addEventListener('keydown', function (e) {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                runCreateExtSearch_(false);
+              }
+            });
+          document.getElementById('create-mirror-search').addEventListener('input', function () {
+            renderCreateMirrorTree_();
+          });
+          document
+            .getElementById('create-file-shortcut-search')
+            .addEventListener('input', function () {
+              renderCreateFileShortcutTree_();
+            });
+          Array.prototype.forEach.call(
+            document.querySelectorAll('input[name="create-ext-scope"]'),
+            function (radio) {
+              radio.addEventListener('change', function () {
+                createExtScope_ = getSelectedCreateExtScope_();
+                var eq = document.getElementById('create-ext-search-query');
+                if (eq) {
+                  eq.value = '';
+                }
+                resetCreateExtNav_();
+                loadCreateExtFolder_(createExtFolderId_, false);
+              });
+            }
+          );
           document.getElementById('create-modal').addEventListener('click', function (e) {
             if (e.target.id === 'create-modal') {
               closeCreateModal();
@@ -5341,11 +7859,39 @@
 
         function openImportModal() {
           var state = panels[activePanelIndex];
-          if (!state || !state.folderId || state.loading) {
+          var targetState = state;
+          var targetPanelIndex = activePanelIndex;
+          if (state && state.mode === 'external') {
+            if (!canRunCatalogOperations) {
+              setStatus('Импорт доступен Менеджеру и Управляющему.');
+              return;
+            }
+            var other = panels[activePanelIndex === 0 ? 1 : 0];
+            if (other && other.mode === 'catalog' && other.folderId) {
+              targetState = other;
+              targetPanelIndex = activePanelIndex === 0 ? 1 : 0;
+            } else if (state.external && state.external.catalogParentFolderId) {
+              targetState = {
+                folderId: state.external.catalogParentFolderId,
+                folderName:
+                  (catalogSnapshot &&
+                    catalogSnapshot.foldersById[state.external.catalogParentFolderId] &&
+                    catalogSnapshot.foldersById[state.external.catalogParentFolderId].name) ||
+                  'каталог'
+              };
+            } else {
+              setStatus('Откройте папку каталога во второй панели — туда пойдёт импорт.');
+              return;
+            }
+          }
+          if (!targetState || !targetState.folderId || (state && state.loading)) {
             alert('Выберите папку в активной панели.');
             return;
           }
-          document.getElementById('import-target-name').textContent = state.folderName || 'каталог';
+          openImportModal._targetFolderId = targetState.folderId;
+          openImportModal._targetPanelIndex = targetPanelIndex;
+          document.getElementById('import-target-name').textContent =
+            targetState.folderName || 'каталог';
           document.querySelector('input[name="import-scenario"][value="drive"]').checked = true;
           document.getElementById('import-drive-urls').value = '';
           document.getElementById('import-search-query').value = '';
@@ -5432,7 +7978,9 @@
         function startJobsPoller_(folderIds, onDone) {
           jobsPollFolderIds_ = folderIds || jobsPollFolderIds_;
           stopJobsPoller_();
+          setJobsBusyStatusUi_(true);
           var ticks = 0;
+          var lastMsg = '';
           function tick() {
             ticks += 1;
             google.script.run.withFailureHandler(function () {}).processCatalogJobs();
@@ -5440,6 +7988,7 @@
               .withSuccessHandler(function (st) {
                 if (!st || !st.busy) {
                   stopJobsPoller_();
+                  setJobsBusyStatusUi_(false);
                   var folders = jobsPollFolderIds_;
                   jobsPollFolderIds_ = null;
                   reloadCatalogSnapshot_(folders, function () {
@@ -5454,17 +8003,75 @@
                 }
                 if (st.progressMessage) {
                   setStatus(st.progressMessage);
+                  setJobsBusyStatusUi_(true);
+                  if (st.progressMessage !== lastMsg || ticks % 4 === 0) {
+                    lastMsg = st.progressMessage;
+                    // quiet: не затирать «Импорт: N/M» статусом «Обновление/Готово»
+                    reloadCatalogSnapshot_(jobsPollFolderIds_, null, { quiet: true });
+                  }
                 }
               })
               .withFailureHandler(function () {
                 if (ticks > 120) {
                   stopJobsPoller_();
+                  setJobsBusyStatusUi_(false);
                 }
               })
               .getCatalogJobsStatus();
           }
           tick();
           jobsPollTimer_ = setInterval(tick, 1500);
+        }
+
+        function promptCancelActiveJobs_() {
+          if (!jobsPollTimer_) {
+            return;
+          }
+          google.script.run
+            .withSuccessHandler(function (st) {
+              if (!st || !st.busy) {
+                return;
+              }
+              var remaining = st.remaining != null ? st.remaining : '?';
+              var eta = st.estimateRemainingLabel || '—';
+              var lines = [
+                'Фоновая операция: ' + (st.progressMessage || 'идёт…'),
+                'Осталось файлов: ' + remaining + '.',
+                'Примерно осталось: ' + eta + '.',
+                'Прервать? Уже скопированное (режим копирования) уйдёт в корзину каталога.'
+              ];
+              showAppConfirm_(lines.join('\n')).then(function (ok) {
+                if (!ok) {
+                  return;
+                }
+                setStatus('Прерывание…');
+                google.script.run
+                  .withSuccessHandler(function (res) {
+                    stopJobsPoller_();
+                    setJobsBusyStatusUi_(false);
+                    var msg =
+                      'Импорт прерван: готово ' +
+                      ((res && res.done) || 0) +
+                      ' из ' +
+                      ((res && res.chainTotal) || 0);
+                    if (res && res.trashed) {
+                      msg += '; в корзину: ' + res.trashed;
+                    }
+                    if (res && res.removedPending) {
+                      msg += '; снято pending: ' + res.removedPending;
+                    }
+                    setStatus(msg);
+                    reloadCatalogSnapshot_(jobsPollFolderIds_ || null);
+                    jobsPollFolderIds_ = null;
+                  })
+                  .withFailureHandler(function (err) {
+                    setStatus((err && err.message) || String(err));
+                  })
+                  .cancelActiveCatalogJobs();
+              });
+            })
+            .withFailureHandler(function () {})
+            .getCatalogJobsStatus();
         }
 
         function formatJobsBusyError_(err) {
@@ -5587,8 +8194,17 @@
               }
               var n = (result && result.fileCount) || 0;
               setStatus('Импорт: 0/' + n);
-              startJobsPoller_([state.folderId]);
-              google.script.run.processCatalogJobs();
+              setJobsBusyStatusUi_(true);
+              reloadCatalogSnapshot_(
+                [state.folderId],
+                function () {
+                  setStatus('Импорт: 0/' + n);
+                  setJobsBusyStatusUi_(true);
+                  startJobsPoller_([state.folderId]);
+                  google.script.run.processCatalogJobs();
+                },
+                { quiet: true }
+              );
             })
             .withFailureHandler(function (err) {
               btn.disabled = false;
@@ -5600,8 +8216,26 @@
             .importFromDrive(payload);
         }
 
+        function getImportTargetState_() {
+          var overrideId = openImportModal._targetFolderId;
+          if (overrideId && catalogSnapshot && catalogSnapshot.foldersById[overrideId]) {
+            var f = catalogSnapshot.foldersById[overrideId];
+            return {
+              folderId: overrideId,
+              folderName: f.name || 'каталог'
+            };
+          }
+          if (overrideId) {
+            return {
+              folderId: overrideId,
+              folderName: document.getElementById('import-target-name').textContent || 'каталог'
+            };
+          }
+          return panels[activePanelIndex];
+        }
+
         function submitImport() {
-          var state = panels[activePanelIndex];
+          var state = getImportTargetState_();
           var scenarioInput = document.querySelector('input[name="import-scenario"]:checked');
           var scenario = scenarioInput ? scenarioInput.value : 'drive';
           var modeInput = document.querySelector('input[name="import-mode"]:checked');
@@ -5635,8 +8269,8 @@
             );
             return;
           }
-          if (urls.length > 500) {
-            showImportMessage('Не больше 500 ссылок за одну очередь.', 'error');
+          if (urls.length > 5000) {
+            showImportMessage('Не больше 5000 ссылок/файлов за одну операцию.', 'error');
             return;
           }
 
@@ -5650,13 +8284,40 @@
           setStatus('Подсчёт файлов…');
           gasRun_('preflightDriveImport', preflightPayload)
             .then(function (pre) {
-              return confirmOperationWithWeight_(
-                'Импортировать с Drive в «' +
-                  targetName +
-                  '».\nФайлы и папки — одна очередь Jobs.',
-                pre && pre.fileCount,
-                pre && pre.totalBytes
+              var lines = [
+                'Импортировать с Drive в «' + targetName + '».'
+              ];
+              var files = (pre && pre.fileCount) || 0;
+              var folders = (pre && pre.folderCount) || 0;
+              var bytes = (pre && pre.totalBytes) || 0;
+              var parts = (pre && pre.jobParts) || 0;
+              lines.push(
+                'Файлов: ' +
+                  files +
+                  (folders ? ', папок: ' + folders : '') +
+                  ', объём: ' +
+                  formatBytes(bytes) +
+                  '.'
               );
+              if (parts > 1) {
+                lines.push('Будет обработано в фоне порциями: ' + parts + ' (по ≤50 файлов).');
+              } else {
+                lines.push('Одна очередь Jobs в фоне.');
+              }
+              if (pre && (pre.estimateCopyLabel || pre.estimateMoveLabel)) {
+                lines.push(
+                  'Примерно: копирование ' +
+                    (pre.estimateCopyLabel || '—') +
+                    ', перемещение ' +
+                    (pre.estimateMoveLabel || '—') +
+                    '.'
+                );
+              }
+              if (files > 30 || bytes >= HEAVY_OP_WARN_BYTES_) {
+                lines.push('Операция может занять время.');
+              }
+              lines.push('Продолжить?');
+              return showAppConfirm_(lines.join('\n'));
             })
             .then(function (okHeavy) {
               if (!okHeavy) {
@@ -5683,12 +8344,27 @@
           if (!item) {
             return;
           }
+          if (panels[panelIndex] && panels[panelIndex].mode === 'external') {
+            setStatus('Во внешней зоне нельзя менять права.');
+            return;
+          }
+          if (item.kind === 'folder' && item.isMirror) {
+            setStatus('У ярлыка нельзя менять права — только удалить.');
+            return;
+          }
+          if (item.kind === 'file' && item.isShortcut) {
+            setStatus('У ярлыка нельзя менять права — только удалить.');
+            return;
+          }
           openAclEditorForObjects_(panelIndex, [
             { objectType: item.kind, objectId: item.id }
           ]);
         }
 
         function openAclForSelection_() {
+          if (assertNotInExternalZone_('Доступ')) {
+            return;
+          }
           var panelIndex = activePanelIndex;
           var state = panels[panelIndex];
           if (!state || state.loading) {
@@ -5697,6 +8373,10 @@
           var items = getSelectedPanelItems_(panelIndex);
           if (!items.length) {
             showAppConfirm_('Выберите файл или папку.');
+            return;
+          }
+          if (selectionContainsMirror_(items)) {
+            setStatus('У ярлыка нельзя менять права — только удалить.');
             return;
           }
           var objects = [];
@@ -5968,7 +8648,11 @@
           if (state.loading) {
             return;
           }
-          if (!state.items.length && !state.parentFolderId) {
+          if (
+            !state.items.length &&
+            state.mode !== 'external' &&
+            !state.parentFolderId
+          ) {
             return;
           }
 
@@ -5985,7 +8669,8 @@
             e.preventDefault();
             var prev;
             if (state.selectedIndex <= 0) {
-              prev = state.parentFolderId ? -1 : 0;
+              prev =
+                state.mode === 'external' || state.parentFolderId ? -1 : 0;
             } else {
               prev = state.selectedIndex - 1;
             }
@@ -6010,9 +8695,16 @@
           } else if (e.key === 'Enter') {
             e.preventDefault();
             activateFocusedPanelItem_(panelIndex);
-          } else if (e.key === 'Backspace' && state.parentFolderId) {
+          } else if (
+            e.key === 'Backspace' &&
+            (state.mode === 'external' || state.parentFolderId)
+          ) {
             e.preventDefault();
-            navigatePanel(panelIndex, state.parentFolderId);
+            if (state.mode === 'external') {
+              navigateExternalUp_(panelIndex);
+            } else {
+              navigatePanel(panelIndex, state.parentFolderId);
+            }
           } else if (e.key === 'Tab') {
             e.preventDefault();
             setActivePanel(activePanelIndex === 0 ? 1 : 0);
@@ -6040,6 +8732,10 @@
             moveSelectedToInactivePanel();
           } else if (e.key === 'F7') {
             e.preventDefault();
+            if (e.altKey) {
+              openCatalogSearchModal_();
+              return;
+            }
             openCreateModal();
           } else if (e.key === 'F8') {
             e.preventDefault();

@@ -52,17 +52,27 @@ function createCatalogFolder(input) {
 
   var folderId = Utilities.getUuid();
   var now = new Date();
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Tree');
-  if (!sheet) {
-    throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: Tree');
-  }
-
-  sheet.appendRow([folderId, parentFolderId, name, now, false, '', '', '']);
+  appendTreeFolderRowsBatch_([
+    {
+      folderId: folderId,
+      parentFolderId: parentFolderId,
+      name: name,
+      folderCreatedAt: now,
+      isSystem: false,
+      aclEditors: '',
+      aclCommenters: '',
+      aclReaders: '',
+      mirrorOfFolderId: '',
+      mirrorOfDriveFolderId: ''
+    }
+  ]);
   engine.foldersById[folderId] = {
     folder_id: folderId,
     parent_folder_id: parentFolderId,
     name: name,
-    is_system: false
+    is_system: false,
+    mirror_of_folder_id: '',
+    mirror_of_drive_folder_id: ''
   };
   copyExplicitAclFromParentFolder_(engine, 'folder', folderId, parentFolderId);
   var acl = getEffectiveAclDisplayFromEngine_(engine, 'folder', folderId);
@@ -75,8 +85,13 @@ function createCatalogFolder(input) {
       parentFolderId: parentFolderId,
       name: name,
       sizeBytes: 0,
+      fileCount: 0,
       modifiedAt: formatCatalogDate_(now),
       isSystem: false,
+      isMirror: false,
+      isExternalMirror: false,
+      mirrorOfFolderId: '',
+      mirrorOfDriveFolderId: '',
       editors: acl.editors || [],
       commenters: acl.commenters || [],
       readers: acl.readers || []

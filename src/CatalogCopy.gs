@@ -118,6 +118,9 @@ function assertCopyPermissions_(
       if (!file) {
         throw catalogError_('FILE_NOT_FOUND', 'File not found: ' + item.id);
       }
+      if (isFileShortcutRow_(file)) {
+        throw catalogError_('NOT_ALLOWED', 'Ярлык нельзя копировать — только удалить.');
+      }
       requiredFolders[String(file.folder_id)] = true;
       return;
     }
@@ -134,6 +137,9 @@ function assertCopyPermissions_(
     }
     if (parseBoolean_(folder.is_system)) {
       throw catalogError_('NOT_ALLOWED', 'Cannot copy a system folder.');
+    }
+    if (isMirrorFolderRow_(folder)) {
+      throw catalogError_('NOT_ALLOWED', 'Ярлык нельзя копировать — только удалить.');
     }
     requiredFolders[item.id] = true;
     if (folder.parent_folder_id) {
@@ -638,30 +644,48 @@ function mapCopyFolderTree_(engine, ctx, sourceFolderId, targetParentFolderId) {
         ? targetParentFolderId
         : folderIdMap[String(source.parent_folder_id)];
 
+    var mirrorOf = String(source.mirror_of_folder_id || '').trim();
+    var mirrorOfDrive = String(source.mirror_of_drive_folder_id || '').trim();
     ctx.treeRows.push({
       folderId: newFolderId,
       parentFolderId: newParentId,
       name: source.name,
       folderCreatedAt: now,
-      isSystem: false
+      isSystem: false,
+      mirrorOfFolderId: mirrorOf,
+      mirrorOfDriveFolderId: mirrorOfDrive
     });
 
     engine.foldersById[newFolderId] = {
       folder_id: newFolderId,
       parent_folder_id: newParentId,
       name: source.name,
-      is_system: false
+      is_system: false,
+      mirror_of_folder_id: mirrorOf,
+      mirror_of_drive_folder_id: mirrorOfDrive
     };
 
-    var entries = queueCopyAcl_(ctx, engine, newParentId, 'folder', newFolderId);
-    var acl = uiAclFromCopyEntries_(engine, entries, false);
+    var acl;
+    if (mirrorOfDrive) {
+      acl = { editors: [], commenters: [], readers: [] };
+    } else if (mirrorOf) {
+      acl = getEffectiveAclDisplayFromEngine_(engine, 'folder', mirrorOf);
+    } else {
+      var entries = queueCopyAcl_(ctx, engine, newParentId, 'folder', newFolderId);
+      acl = uiAclFromCopyEntries_(engine, entries, false);
+    }
     folders.push({
       id: newFolderId,
       parentFolderId: newParentId,
       name: source.name,
       sizeBytes: 0,
+      fileCount: 0,
       modifiedAt: formatCatalogDate_(now),
       isSystem: false,
+      isMirror: !!(mirrorOf || mirrorOfDrive),
+      isExternalMirror: !!mirrorOfDrive,
+      mirrorOfFolderId: mirrorOf,
+      mirrorOfDriveFolderId: mirrorOfDrive,
       editors: acl.editors,
       commenters: acl.commenters,
       readers: acl.readers

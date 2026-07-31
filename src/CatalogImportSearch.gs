@@ -470,7 +470,12 @@ function searchDriveForImport(input) {
  *   ok: true,
  *   fileCount: number,
  *   totalBytes: number,
- *   folderCount: number
+ *   folderCount: number,
+ *   jobParts: number,
+ *   estimateCopySeconds: number,
+ *   estimateMoveSeconds: number,
+ *   estimateCopyLabel: string,
+ *   estimateMoveLabel: string
  * }}
  */
 function preflightDriveImport(input) {
@@ -502,16 +507,16 @@ function preflightDriveImport(input) {
       } catch (eFolder) {
         throw catalogError_('INVALID_FOLDER', 'Drive folder not found or not accessible.');
       }
-      var walk = walkDriveFolderForImport_(sourceFolder, IMPORT_DRIVE_JOB_MAX_FILES_);
-      if (walk.fileCount > IMPORT_DRIVE_JOB_MAX_FILES_) {
+      var walk = walkDriveFolderForImport_(sourceFolder, IMPORT_DRIVE_OPERATION_MAX_FILES_);
+      if (walk.fileCount > IMPORT_DRIVE_OPERATION_MAX_FILES_) {
         throw catalogError_(
           'IMPORT_TOO_LARGE',
           'Слишком много файлов в папке «' +
             sourceFolder.getName() +
             '» (' +
             walk.fileCount +
-            '). Максимум: ' +
-            IMPORT_DRIVE_JOB_MAX_FILES_ +
+            '). Максимум за одну операцию: ' +
+            IMPORT_DRIVE_OPERATION_MAX_FILES_ +
             '.'
         );
       }
@@ -550,22 +555,28 @@ function preflightDriveImport(input) {
     }
   });
 
-  if (fileCount > IMPORT_DRIVE_JOB_MAX_FILES_) {
+  if (fileCount > IMPORT_DRIVE_OPERATION_MAX_FILES_) {
     throw catalogError_(
       'IMPORT_TOO_LARGE',
       'Слишком много файлов (' +
         fileCount +
-        '). Максимум за одну очередь: ' +
-        IMPORT_DRIVE_JOB_MAX_FILES_ +
+        '). Максимум за одну операцию: ' +
+        IMPORT_DRIVE_OPERATION_MAX_FILES_ +
         '.'
     );
   }
 
+  var eta = estimateImportDriveTimes_(fileCount, totalBytes);
   return {
     ok: true,
     fileCount: fileCount,
     totalBytes: totalBytes,
-    folderCount: folderCount
+    folderCount: folderCount,
+    jobParts: eta.jobParts,
+    estimateCopySeconds: eta.estimateCopySeconds,
+    estimateMoveSeconds: eta.estimateMoveSeconds,
+    estimateCopyLabel: eta.estimateCopyLabel,
+    estimateMoveLabel: eta.estimateMoveLabel
   };
 }
 
@@ -656,15 +667,14 @@ function importDriveSelection(input) {
     jobItems.push(built.item);
     fileRows.push(built.row);
   });
-  appendCatalogFileRowsBatch_(fileRows);
 
-  if (jobItems.length > IMPORT_DRIVE_JOB_MAX_FILES_) {
+  if (jobItems.length > IMPORT_DRIVE_OPERATION_MAX_FILES_) {
     throw catalogError_(
       'IMPORT_TOO_LARGE',
       'Слишком много файлов (' +
         jobItems.length +
-        '). Максимум за одну очередь: ' +
-        IMPORT_DRIVE_JOB_MAX_FILES_ +
+        '). Максимум за одну операцию: ' +
+        IMPORT_DRIVE_OPERATION_MAX_FILES_ +
         '.'
     );
   }
@@ -673,6 +683,7 @@ function importDriveSelection(input) {
   }
   if (!jobItems.length) {
     // только пустые папки — Jobs не нужен
+    appendCatalogFileRowsBatch_(fileRows);
     bumpCatalogRev_();
     return {
       ok: true,
@@ -686,16 +697,19 @@ function importDriveSelection(input) {
     };
   }
 
-  var jobId = enqueueCatalogJob_(
-    'import_drive',
-    {
-      scenario: 'drive',
-      mode: mode,
-      targetFolderId: targetFolderId,
-      phase: 'work',
-      items: jobItems
-    },
-    userEmail
+  var chainIdSel = Utilities.getUuid();
+  fileRows.forEach(function (row) {
+    row.importChainId = chainIdSel;
+  });
+  appendCatalogFileRowsBatch_(fileRows);
+
+  var queued = enqueueImportDriveJobsChain_(
+    mode,
+    targetFolderId,
+    jobItems,
+    userEmail,
+    'drive',
+    chainIdSel
   );
   ensureCatalogJobsTrigger_();
   kickCatalogJobsProcessing_();
@@ -705,11 +719,13 @@ function importDriveSelection(input) {
     ok: true,
     queued: true,
     kind: 'drive',
-    jobId: jobId,
-    fileCount: jobItems.length,
+    jobId: queued.jobId,
+    chainId: queued.chainId,
+    fileCount: queued.fileCount,
+    jobParts: queued.jobParts,
     folderCount: folderCount,
     mode: mode,
-    displayName: jobItems.length + ' файл(ов)'
+    displayName: queued.fileCount + ' файл(ов)'
   };
 }
 
@@ -799,16 +815,16 @@ function appendImportDriveFolderToJob_(
     throw catalogError_('INVALID_FOLDER', 'Drive folder not found or not accessible.');
   }
 
-  var walk = walkDriveFolderForImport_(sourceFolder, IMPORT_DRIVE_JOB_MAX_FILES_);
-  if (walk.fileCount > IMPORT_DRIVE_JOB_MAX_FILES_) {
+  var walk = walkDriveFolderForImport_(sourceFolder, IMPORT_DRIVE_OPERATION_MAX_FILES_);
+  if (walk.fileCount > IMPORT_DRIVE_OPERATION_MAX_FILES_) {
     throw catalogError_(
       'IMPORT_TOO_LARGE',
       'Слишком много файлов в папке «' +
         sourceFolder.getName() +
         '» (' +
         walk.fileCount +
-        '). Максимум: ' +
-        IMPORT_DRIVE_JOB_MAX_FILES_ +
+        '). Максимум за одну операцию: ' +
+        IMPORT_DRIVE_OPERATION_MAX_FILES_ +
         '.'
     );
   }
@@ -908,7 +924,8 @@ function buildPendingImportFileItem_(sourceFileId, parentFolderId, displayName) 
       driveModifiedAt: '',
       sourceFileId: sourceFileId,
       mimeType: '',
-      status: 'pending'
+      status: 'pending',
+      importChainId: ''
     }
   };
 }

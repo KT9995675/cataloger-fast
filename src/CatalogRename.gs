@@ -101,6 +101,16 @@ function renameCatalogFolderFast_(userEmail, loginRole, folderId, newName) {
     throw catalogError_('NOT_ALLOWED', 'Нельзя переименовать системную папку.');
   }
 
+  var mirrorOfCol = headers.indexOf('mirror_of_folder_id');
+  var mirrorOfDriveCol = headers.indexOf('mirror_of_drive_folder_id');
+  var mirrorOf =
+    mirrorOfCol >= 0 ? String(values[rowIndex][mirrorOfCol] || '').trim() : '';
+  var mirrorOfDrive =
+    mirrorOfDriveCol >= 0 ? String(values[rowIndex][mirrorOfDriveCol] || '').trim() : '';
+  if (mirrorOf || mirrorOfDrive) {
+    throw catalogError_('NOT_ALLOWED', 'Ярлык нельзя переименовать — только удалить.');
+  }
+
   // Права: лёгкий движок без Files
   var engine = buildAclEngineFromRows_(
     readSheetRecords_('Tree'),
@@ -136,6 +146,9 @@ function renameCatalogFile_(engine, userEmail, loginRole, catalogId, newName) {
   var file = engine.filesByCatalogId[catalogId];
   if (!file) {
     throw catalogError_('FILE_NOT_FOUND', 'File not found: ' + catalogId);
+  }
+  if (isFileShortcutRow_(file)) {
+    throw catalogError_('NOT_ALLOWED', 'Ярлык нельзя переименовать — только удалить.');
   }
 
   var parentFolderId = String(file.folder_id || '');

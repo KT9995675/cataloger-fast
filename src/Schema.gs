@@ -1,6 +1,6 @@
 /** @const {string} Версия схемы листов — §3.11 */
-var SCHEMA_VERSION_ = '0.5';
-/* <!-- OLD: 0.4 — Tree/Files acl_* cache; 0.3 — Users.display_name; 0.2 — Files.mime_type --> */
+var SCHEMA_VERSION_ = '0.9';
+/* <!-- OLD: 0.8 — Tree.mirror_of_drive_folder_id; 0.7 — Tree.mirror_of_folder_id; 0.6 — Files.import_chain_id; 0.5 — ACL.delta; 0.4 — Tree/Files acl_* cache; 0.3 — Users.display_name; 0.2 — Files.mime_type --> */
 
 /**
  * §15.2 п.1 — создаёт листы каталога и строку заголовков (row 1), если отсутствуют.
@@ -172,7 +172,9 @@ function getCatalogSheetSchema_() {
       'is_system',
       'acl_editors',
       'acl_commenters',
-      'acl_readers'
+      'acl_readers',
+      'mirror_of_folder_id',
+      'mirror_of_drive_folder_id'
     ],
     Files: [
       'catalog_id',
@@ -190,7 +192,10 @@ function getCatalogSheetSchema_() {
       'mime_type',
       'acl_editors',
       'acl_commenters',
-      'acl_readers'
+      'acl_readers',
+      'import_chain_id',
+      'shortcut_of_catalog_id',
+      'shortcut_of_drive_file_id'
     ],
     Users: ['email', 'login_role', 'added_at', 'added_by', 'display_name'],
     ACL: [
