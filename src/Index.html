@@ -100,6 +100,14 @@
         border: 1px solid var(--ok);
         color: var(--ok);
       }
+      .msg.hint {
+        display: block;
+        margin-top: 8px;
+        padding: 8px 10px;
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--muted);
+      }
       .msg.info {
         display: block;
         border: 1px solid var(--border);
@@ -174,6 +182,30 @@
       .panel-hist-btn:disabled {
         opacity: 0.35;
         cursor: default;
+      }
+      .panel-refresh-btn {
+        flex-shrink: 0;
+        width: 24px;
+        height: 22px;
+        padding: 0;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background: var(--panel);
+        color: var(--text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .panel-refresh-btn svg {
+        width: 14px;
+        height: 14px;
+        display: block;
+      }
+      .panel-refresh-btn:hover:not(:disabled) {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--panel);
       }
       .panel-path {
         flex: 1;
@@ -491,6 +523,55 @@
         margin: 4px 0;
         background: rgba(0, 0, 0, 0.12);
       }
+      .cmd-menu-submenu-wrap {
+        position: relative;
+        display: block;
+        width: 100%;
+      }
+      .command-bar .cmd-service-menu .cmd-menu-item.cmd-menu-has-sub {
+        padding-right: 18px;
+      }
+      .cmd-service-submenu {
+        position: absolute;
+        left: calc(100% + 2px);
+        bottom: 0;
+        min-width: 200px;
+        padding: 4px 0;
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.22);
+        border-radius: 4px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+        z-index: 81;
+        display: flex;
+        flex-direction: column;
+      }
+      .cmd-service-submenu.hidden {
+        display: none;
+      }
+      .command-bar .cmd-service-submenu .cmd-menu-item {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 6px 12px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: #1a1a1a;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: left;
+        cursor: pointer;
+        box-shadow: none;
+      }
+      .command-bar .cmd-service-submenu .cmd-menu-item:hover:not(:disabled) {
+        background: #e8f4fc;
+        color: #005a9e;
+      }
+      .command-bar .cmd-service-submenu .cmd-menu-item:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
       .hotkey-hints {
         display: flex;
         align-items: center;
@@ -551,6 +632,9 @@
         justify-content: center;
         z-index: 100;
         padding: 16px;
+      }
+      #confirm-modal {
+        z-index: 120;
       }
       .modal-card {
         width: 100%;
@@ -620,9 +704,67 @@
         margin-top: 10px;
       }
       .import-modal-card {
+        height: min(90vh, 680px);
         max-height: min(90vh, 680px);
         overflow: hidden;
         padding: 16px 20px;
+        display: flex;
+        flex-direction: column;
+      }
+      .import-local-drop {
+        border: 1px dashed #9aa5b5;
+        border-radius: 8px;
+        padding: 18px 14px;
+        text-align: center;
+        background: #f7f9fc;
+        cursor: pointer;
+        user-select: none;
+      }
+      .import-local-drop.dragover {
+        border-color: #3b82f6;
+        background: #eff6ff;
+      }
+      .import-local-drop .drop-title {
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .import-local-list {
+        margin-top: 10px;
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid #dde3ea;
+        border-radius: 6px;
+        background: #fff;
+      }
+      .import-local-list:empty {
+        display: none;
+      }
+      .import-local-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-bottom: 1px solid #eef2f6;
+        font-size: 13px;
+      }
+      .import-local-row:last-child {
+        border-bottom: none;
+      }
+      .import-local-row .path {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .import-local-row .meta {
+        color: #6b7280;
+        flex-shrink: 0;
+      }
+      .import-local-row button {
+        flex-shrink: 0;
+        padding: 2px 8px;
+        font-size: 12px;
       }
       .import-modal-card h2 {
         margin-bottom: 4px;
@@ -809,6 +951,56 @@
       .people-toolbar .cmd-btn {
         flex: 0 0 auto;
       }
+      .clear-keep-opts {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 0 0 16px;
+        font-size: 13px;
+      }
+      .clear-keep-opts label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+      }
+      .export-snap-path {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 12px;
+        word-break: break-all;
+      }
+      .export-snap-nav {
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        max-height: 280px;
+        overflow: auto;
+        margin-bottom: 12px;
+        min-height: 120px;
+      }
+      .export-snap-nav .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+        font-size: 13px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .export-snap-nav .nav-row:hover {
+        background: rgba(14, 99, 156, 0.25);
+      }
+      .export-snap-nav .nav-row.is-up {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .export-snap-nav .nav-row.is-file {
+        color: var(--text);
+      }
+      .export-snap-nav .nav-row.is-selected {
+        background: rgba(14, 99, 156, 0.45);
+        font-weight: 600;
+      }
       .acl-principals-wrap {
         overflow: auto;
         border: 1px solid var(--border);
@@ -991,9 +1183,10 @@
         white-space: nowrap;
       }
       #import-nav-list {
-        flex: 1;
-        min-height: 100px;
-        max-height: min(28vh, 200px);
+        flex: none;
+        height: 220px;
+        min-height: 220px;
+        max-height: 220px;
         overflow: auto;
       }
       #import-nav-list:empty::before {
@@ -1181,6 +1374,19 @@
                   →
                 </button>
               </div>
+              <button
+                type="button"
+                class="panel-refresh-btn"
+                title="Обновить"
+                aria-label="Обновить"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path
+                    fill="currentColor"
+                    d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+                  />
+                </svg>
+              </button>
               <div class="panel-path" id="path-left">…</div>
             </div>
             <div class="panel-list-wrap">
@@ -1227,6 +1433,19 @@
                   →
                 </button>
               </div>
+              <button
+                type="button"
+                class="panel-refresh-btn"
+                title="Обновить"
+                aria-label="Обновить"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path
+                    fill="currentColor"
+                    d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+                  />
+                </svg>
+              </button>
               <div class="panel-path" id="path-right">…</div>
             </div>
             <div class="panel-list-wrap">
@@ -1255,7 +1474,6 @@
               <button type="button" id="btn-move" class="cmd-btn hidden">F6 Перем.</button>
               <button type="button" id="btn-create" class="cmd-btn">F7 Создать</button>
               <button type="button" id="btn-delete" class="cmd-btn hidden">F8 Удал.</button>
-              <button type="button" id="btn-refresh" class="cmd-btn" title="Обновить снимок каталога с сервера">Обновить</button>
               <button
                 type="button"
                 id="btn-catalog-search"
@@ -1284,10 +1502,10 @@
                     role="menuitem"
                     title="Утвердить выделенные файлы"
                   >
-                    Подписать
+                    Подписать документ
                   </button>
                   <button type="button" id="btn-users" class="cmd-menu-item hidden" role="menuitem">
-                    Пользователи
+                    Управление пользователями
                   </button>
                   <button
                     type="button"
@@ -1296,30 +1514,91 @@
                     role="menuitem"
                     title="Права на выделенные объекты"
                   >
-                    Доступ
+                    Управление доступом
                   </button>
                   <button type="button" id="btn-import" class="cmd-menu-item hidden" role="menuitem">
-                    Импорт
+                    Импорт файлов/папок
                   </button>
                   <div class="cmd-menu-sep hidden" id="service-menu-sep-admin"></div>
                   <button
                     type="button"
-                    id="btn-export-structure"
+                    id="btn-archive-catalog"
                     class="cmd-menu-item hidden"
                     role="menuitem"
-                    title="Выгрузить структуру каталога в Google Таблицу"
+                    title="Архивация файлов каталога в папки Drive (§24)"
                   >
-                    Выгрузка
+                    Архивация каталога
                   </button>
-                  <button
-                    type="button"
-                    id="btn-repair"
-                    class="cmd-menu-item hidden"
-                    role="menuitem"
-                    title="Проверка и ремонт целостности каталога"
-                  >
-                    Ремонт
-                  </button>
+                  <div class="cmd-menu-submenu-wrap hidden" id="service-repair-wrap">
+                    <button
+                      type="button"
+                      id="btn-repair-submenu"
+                      class="cmd-menu-item cmd-menu-has-sub"
+                      role="menuitem"
+                      aria-haspopup="true"
+                      aria-expanded="false"
+                      aria-controls="service-repair-menu"
+                      title="Служебные операции и ремонт каталога"
+                    >
+                      Ремонт каталога ▸
+                    </button>
+                    <div id="service-repair-menu" class="cmd-service-submenu hidden" role="menu">
+                      <button
+                        type="button"
+                        id="btn-repair"
+                        class="cmd-menu-item"
+                        role="menuitem"
+                        title="Проверка и ремонт целостности каталога"
+                      >
+                        Проверка целостности
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-export-structure"
+                        class="cmd-menu-item"
+                        role="menuitem"
+                        title="Выгрузить структуру каталога в Google Таблицу"
+                      >
+                        Выгрузка структуры
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-load-structure"
+                        class="cmd-menu-item"
+                        role="menuitem"
+                        title="Дополнить каталог из снимка-образа без дублей (§24.2a)"
+                      >
+                        Загрузка структуры
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-export-snapshot"
+                        class="cmd-menu-item"
+                        role="menuitem"
+                        title="Экспорт снимка метаданных каталога (§24)"
+                      >
+                        Экспорт метаданных
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-import-snapshot"
+                        class="cmd-menu-item"
+                        role="menuitem"
+                        title="Импорт снимка метаданных каталога (§24)"
+                      >
+                        Импорт метаданных
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-clear-catalog"
+                        class="cmd-menu-item"
+                        role="menuitem"
+                        title="Очистить каталог (§24)"
+                      >
+                        Очистить каталог
+                      </button>
+                    </div>
+                  </div>
                   <button
                     type="button"
                     id="btn-empty-trash"
@@ -1414,15 +1693,24 @@
             </div>
           </div>
           <div id="import-local-block" class="hidden">
-            <p class="sub" style="margin-top:0;">Выберите файлы и/или папку. Структура папок сохранится в каталоге.</p>
-            <div class="mode-row" style="margin-bottom:10px;">
-              <button type="button" class="secondary" id="import-local-files-btn">Файлы…</button>
-              <button type="button" class="secondary" id="import-local-folder-btn">Папка…</button>
+            <div
+              id="import-local-drop"
+              class="import-local-drop"
+              tabindex="0"
+              role="button"
+              aria-label="Добавить файлы или папки"
+            >
+              <div class="drop-title">Перетащите файлы или папки сюда</div>
+              <div class="sub" style="margin:0;">или нажмите, чтобы выбрать файлы. Папки — перетаскиванием.</div>
+            </div>
+            <div class="mode-row" style="margin:10px 0;">
+              <button type="button" class="secondary" id="import-local-add-btn">Добавить файлы…</button>
               <button type="button" class="secondary" id="import-local-clear-btn">Очистить</button>
             </div>
             <input type="file" id="import-local-files" class="hidden" multiple />
             <input type="file" id="import-local-folder" class="hidden" webkitdirectory multiple />
             <p class="sub" id="import-local-summary">Ничего не выбрано.</p>
+            <div id="import-local-list" class="import-local-list"></div>
           </div>
         </div>
         <div class="import-modal-footer">
@@ -1555,6 +1843,80 @@
       </div>
     </div>
 
+    <div id="export-snapshot-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <h2>Экспорт метаданных</h2>
+        <p class="sub">
+          Снимок метаданных (Tree, Files, ACL, Users, Groups) в новую Google Таблицу.
+          Выберите папку на <strong>Моём диске</strong>.
+        </p>
+        <div class="export-snap-path hint" id="export-snap-path">Мой диск</div>
+        <div class="export-snap-nav" id="export-snap-nav"></div>
+        <div id="export-snap-msg" class="msg"></div>
+        <div class="modal-actions">
+          <button type="button" id="export-snap-submit">Экспортировать сюда</button>
+          <button type="button" class="secondary" id="export-snap-cancel">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="import-snapshot-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <h2 id="import-snap-title">Импорт метаданных</h2>
+        <p class="sub" id="import-snap-sub">
+          Заменить метаданные каталога из таблицы-снимка (§24). Файлы на Drive не копируются.
+          Выберите Google Таблицу на <strong>Моём диске</strong>.
+        </p>
+        <div class="export-snap-path hint" id="import-snap-path">Мой диск</div>
+        <div class="export-snap-nav" id="import-snap-nav"></div>
+        <div class="hint" id="import-snap-selected" style="margin:0 0 8px;">Таблица не выбрана</div>
+        <div id="import-snap-msg" class="msg"></div>
+        <div class="modal-actions">
+          <button type="button" id="import-snap-submit" disabled>Импортировать</button>
+          <button type="button" class="secondary" id="import-snap-cancel">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="archive-catalog-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <h2>Архивация каталога</h2>
+        <p class="sub">
+          Перенести файлы каталога в реальные папки Drive. Цель — <strong>пустая</strong> папка
+          на Моём диске (она станет корнем архива). В каталоге останется пустая структура.
+        </p>
+        <div class="export-snap-path hint" id="archive-path">Мой диск</div>
+        <div class="export-snap-nav" id="archive-nav"></div>
+        <div id="archive-msg" class="msg"></div>
+        <div class="modal-actions">
+          <button type="button" id="archive-submit" disabled>Архивировать сюда</button>
+          <button type="button" class="secondary" id="archive-cancel">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="clear-catalog-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <h2>Очистить каталог</h2>
+        <p class="sub">
+          Файлы уйдут в корзину Google Drive. По умолчанию удаляется всё — затем откроется
+          «Первый запуск». Галочки ниже — что <strong>не</strong> удалять (каталог останется
+          инициализированным).
+        </p>
+        <div class="clear-keep-opts">
+          <label><input type="checkbox" id="clear-keep-tree" /> Не удалять структуру папок</label>
+          <label><input type="checkbox" id="clear-keep-acl" /> Не удалять права (ACL)</label>
+          <label><input type="checkbox" id="clear-keep-users" /> Не удалять пользователей</label>
+          <label><input type="checkbox" id="clear-keep-groups" /> Не удалять группы</label>
+        </div>
+        <div id="clear-catalog-msg" class="msg"></div>
+        <div class="modal-actions">
+          <button type="button" id="clear-catalog-submit">Очистить</button>
+          <button type="button" class="secondary" id="clear-catalog-cancel">Отмена</button>
+        </div>
+      </div>
+    </div>
+
     <div id="repair-modal" class="modal-backdrop hidden">
       <div class="modal-card">
         <h2>Ремонт каталога</h2>
@@ -1588,8 +1950,8 @@
 
     <div id="people-modal" class="modal-backdrop hidden">
       <div class="modal-card wide">
-        <h2>Пользователи</h2>
-        <p class="sub" id="people-modal-sub">Пользователи и группы каталога.</p>
+        <h2>Управление пользователями</h2>
+        <p class="sub" id="people-modal-sub">Пользователи и группы каталога. Роль входа: Пользователь / Менеджер.</p>
         <div class="people-tabs">
           <button type="button" class="people-tab active" data-people-tab="users" id="people-tab-users">Люди</button>
           <button type="button" class="people-tab" data-people-tab="groups" id="people-tab-groups">Группы</button>
@@ -1768,7 +2130,7 @@
         function setStatus(text) {
           var el = document.getElementById('status-text');
           el.textContent = text || 'Готово';
-          if (!jobsPollTimer_) {
+          if (!jobsPollTimer_ && !cancelOpPollTimer_) {
             el.classList.remove('status-jobs-busy');
           }
         }
@@ -2332,6 +2694,9 @@
               item.status &&
               String(item.status).toLowerCase() === 'pending'
             ) {
+              tr.classList.add('row-pending');
+            }
+            if (item.kind === 'folder' && item.pendingImport) {
               tr.classList.add('row-pending');
             }
             if (isRowSelected_(state, rowIndex)) {
@@ -3372,7 +3737,19 @@
           return false;
         }
 
+        function closeRepairSubmenu_() {
+          var sub = document.getElementById('service-repair-menu');
+          var btn = document.getElementById('btn-repair-submenu');
+          if (sub) {
+            sub.classList.add('hidden');
+          }
+          if (btn) {
+            btn.setAttribute('aria-expanded', 'false');
+          }
+        }
+
         function closeServiceMenu_() {
+          closeRepairSubmenu_();
           var menu = document.getElementById('service-menu');
           var btn = document.getElementById('btn-service');
           if (menu) {
@@ -3380,6 +3757,25 @@
           }
           if (btn) {
             btn.setAttribute('aria-expanded', 'false');
+          }
+        }
+
+        function toggleRepairSubmenu_(e) {
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          var sub = document.getElementById('service-repair-menu');
+          var btn = document.getElementById('btn-repair-submenu');
+          if (!sub || !btn) {
+            return;
+          }
+          var open = sub.classList.contains('hidden');
+          if (open) {
+            sub.classList.remove('hidden');
+            btn.setAttribute('aria-expanded', 'true');
+          } else {
+            closeRepairSubmenu_();
           }
         }
 
@@ -3391,6 +3787,7 @@
           }
           var open = menu.classList.contains('hidden');
           if (open) {
+            closeRepairSubmenu_();
             menu.classList.remove('hidden');
             btn.setAttribute('aria-expanded', 'true');
           } else {
@@ -3399,16 +3796,29 @@
         }
 
         function updateEmptyTrashButton_() {
-          var exportBtn = document.getElementById('btn-export-structure');
-          if (exportBtn) {
-            exportBtn.classList.toggle('hidden', !canEmptyTrash);
-            exportBtn.disabled = !canEmptyTrash;
+          var showAdmin = !!canEmptyTrash;
+          var repairWrap = document.getElementById('service-repair-wrap');
+          if (repairWrap) {
+            repairWrap.classList.toggle('hidden', !showAdmin);
           }
-          var repairBtn = document.getElementById('btn-repair');
-          if (repairBtn) {
-            repairBtn.classList.toggle('hidden', !canEmptyTrash);
-            repairBtn.disabled = !canEmptyTrash;
+          var repairSubBtn = document.getElementById('btn-repair-submenu');
+          if (repairSubBtn) {
+            repairSubBtn.disabled = !showAdmin;
           }
+          [
+            'btn-export-structure',
+            'btn-load-structure',
+            'btn-export-snapshot',
+            'btn-import-snapshot',
+            'btn-archive-catalog',
+            'btn-repair',
+            'btn-clear-catalog'
+          ].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+              el.disabled = !showAdmin;
+            }
+          });
           var btn = document.getElementById('btn-empty-trash');
           var show = false;
           if (btn) {
@@ -3423,7 +3833,14 @@
           }
           var sep = document.getElementById('service-menu-sep-admin');
           if (sep) {
-            sep.classList.toggle('hidden', !canEmptyTrash);
+            sep.classList.toggle('hidden', !showAdmin);
+          }
+          var archiveBtn = document.getElementById('btn-archive-catalog');
+          if (archiveBtn) {
+            archiveBtn.classList.toggle('hidden', !showAdmin);
+          }
+          if (!showAdmin) {
+            closeRepairSubmenu_();
           }
         }
 
@@ -3616,6 +4033,815 @@
             .exportCatalogStructure();
         }
 
+        var exportSnapFolderId_ = 'root';
+        var exportSnapParentId_ = null;
+        var exportSnapPath_ = ['Мой диск'];
+
+        function openExportSnapshotModal_() {
+          if (!canEmptyTrash) {
+            return;
+          }
+          exportSnapFolderId_ = 'root';
+          exportSnapParentId_ = null;
+          exportSnapPath_ = ['Мой диск'];
+          var msg = document.getElementById('export-snap-msg');
+          if (msg) {
+            msg.textContent = '';
+            msg.className = 'msg';
+          }
+          document.getElementById('export-snapshot-modal').classList.remove('hidden');
+          refreshExportSnapNav_();
+        }
+
+        function closeExportSnapshotModal_() {
+          document.getElementById('export-snapshot-modal').classList.add('hidden');
+          restorePanelKeyboardFocus_();
+        }
+
+        function refreshExportSnapNav_() {
+          var pathEl = document.getElementById('export-snap-path');
+          var nav = document.getElementById('export-snap-nav');
+          if (pathEl) {
+            pathEl.textContent = exportSnapPath_.join(' \\ ');
+          }
+          if (!nav) {
+            return;
+          }
+          nav.textContent = 'Загрузка…';
+          google.script.run
+            .withSuccessHandler(function (result) {
+              nav.innerHTML = '';
+              if (!result || result.ok === false) {
+                nav.textContent = (result && result.message) || 'Ошибка';
+                return;
+              }
+              exportSnapParentId_ = result.parentId != null ? result.parentId : null;
+              if (exportSnapFolderId_ !== 'root') {
+                var up = document.createElement('div');
+                up.className = 'nav-row is-up';
+                up.textContent = '[..]';
+                up.addEventListener('click', function () {
+                  if (exportSnapPath_.length > 1) {
+                    exportSnapPath_.pop();
+                  }
+                  exportSnapFolderId_ = exportSnapParentId_ || 'root';
+                  refreshExportSnapNav_();
+                });
+                nav.appendChild(up);
+              }
+              var items = result.items || [];
+              var folders = items.filter(function (it) {
+                return (
+                  it &&
+                  (it.kind === 'folder' ||
+                    String(it.mimeType || '') ===
+                      'application/vnd.google-apps.folder')
+                );
+              });
+              if (!folders.length) {
+                var empty = document.createElement('div');
+                empty.className = 'nav-row';
+                empty.style.cursor = 'default';
+                empty.textContent = 'Нет подпапок — можно экспортировать сюда';
+                nav.appendChild(empty);
+                return;
+              }
+              folders.forEach(function (folder) {
+                var row = document.createElement('div');
+                row.className = 'nav-row';
+                row.textContent = folder.name || folder.id;
+                row.addEventListener('click', function () {
+                  exportSnapFolderId_ = folder.id;
+                  exportSnapPath_.push(folder.name || folder.id);
+                  refreshExportSnapNav_();
+                });
+                nav.appendChild(row);
+              });
+            })
+            .withFailureHandler(function (err) {
+              nav.textContent = (err && err.message) || String(err);
+            })
+            .listDriveFolderForImport({
+              scope: 'mydrive',
+              folderId: exportSnapFolderId_ === 'root' ? 'root' : exportSnapFolderId_
+            });
+        }
+
+        function runExportSnapshotAction_() {
+          if (!canEmptyTrash) {
+            return;
+          }
+          var submit = document.getElementById('export-snap-submit');
+          if (submit) {
+            submit.disabled = true;
+          }
+          setStatus('Экспорт метаданных…');
+          showOpStartSplash_();
+          google.script.run
+            .withSuccessHandler(function (result) {
+              if (submit) {
+                submit.disabled = false;
+              }
+              closeExportSnapshotModal_();
+              flashOperationDone_();
+              var url = result && result.url;
+              if (url) {
+                try {
+                  window.open(url, '_blank');
+                } catch (eOpen) {
+                  // popup blocked
+                }
+                showAppConfirm_(
+                  'Снимок создан' +
+                    (result.title ? ': «' + result.title + '».' : '.'),
+                  {
+                    infoOnly: true,
+                    linkUrl: url,
+                    linkLabel: 'Открыть таблицу'
+                  }
+                );
+              }
+              setStatus('Экспорт метаданных готов');
+            })
+            .withFailureHandler(function (err) {
+              if (submit) {
+                submit.disabled = false;
+              }
+              var msg = formatJobsBusyError_(err);
+              setStatus(msg);
+              var msgEl = document.getElementById('export-snap-msg');
+              if (msgEl) {
+                msgEl.textContent = msg;
+                msgEl.className = 'msg error';
+              }
+            })
+            .exportCatalogSnapshot({
+              targetFolderId: exportSnapFolderId_ || 'root'
+            });
+        }
+
+        var importSnapFolderId_ = 'root';
+        var importSnapParentId_ = null;
+        var importSnapPath_ = ['Мой диск'];
+        var importSnapSelectedId_ = null;
+        var importSnapSelectedName_ = '';
+        /** @type {'import'|'merge'} */
+        var importSnapMode_ = 'import';
+        var SHEET_MIME_ = 'application/vnd.google-apps.spreadsheet';
+
+        function updateImportSnapSelectedUi_() {
+          var label = document.getElementById('import-snap-selected');
+          var submit = document.getElementById('import-snap-submit');
+          if (label) {
+            label.textContent = importSnapSelectedId_
+              ? 'Выбрано: «' + (importSnapSelectedName_ || importSnapSelectedId_) + '»'
+              : 'Таблица не выбрана';
+          }
+          if (submit) {
+            submit.disabled = !importSnapSelectedId_;
+            submit.textContent =
+              importSnapMode_ === 'merge' ? 'Дополнить из снимка' : 'Импортировать';
+          }
+        }
+
+        function applyImportSnapModalCopy_() {
+          var title = document.getElementById('import-snap-title');
+          var sub = document.getElementById('import-snap-sub');
+          if (importSnapMode_ === 'merge') {
+            if (title) {
+              title.textContent = 'Загрузка структуры';
+            }
+            if (sub) {
+              sub.innerHTML =
+                'Дополнить текущий каталог из таблицы-снимка (§24.2a). Уже существующие объекты ' +
+                '<strong>не дублируются</strong> и не перезаписываются. Файлы на Drive не копируются. ' +
+                'Выберите Google Таблицу на <strong>Моём диске</strong>.';
+            }
+          } else {
+            if (title) {
+              title.textContent = 'Импорт метаданных';
+            }
+            if (sub) {
+              sub.innerHTML =
+                'Заменить метаданные каталога из таблицы-снимка (§24). Файлы на Drive не копируются. ' +
+                'Выберите Google Таблицу на <strong>Моём диске</strong>.';
+            }
+          }
+          updateImportSnapSelectedUi_();
+        }
+
+        function openImportSnapshotModal_() {
+          if (!canEmptyTrash) {
+            return;
+          }
+          importSnapMode_ = 'import';
+          openImportSnapshotModalShared_();
+        }
+
+        function openLoadStructureModal_() {
+          if (!canEmptyTrash) {
+            return;
+          }
+          importSnapMode_ = 'merge';
+          openImportSnapshotModalShared_();
+        }
+
+        function openImportSnapshotModalShared_() {
+          importSnapFolderId_ = 'root';
+          importSnapParentId_ = null;
+          importSnapPath_ = ['Мой диск'];
+          importSnapSelectedId_ = null;
+          importSnapSelectedName_ = '';
+          applyImportSnapModalCopy_();
+          var msg = document.getElementById('import-snap-msg');
+          if (msg) {
+            msg.textContent = '';
+            msg.className = 'msg';
+          }
+          document.getElementById('import-snapshot-modal').classList.remove('hidden');
+          refreshImportSnapNav_();
+        }
+
+        function closeImportSnapshotModal_() {
+          document.getElementById('import-snapshot-modal').classList.add('hidden');
+          restorePanelKeyboardFocus_();
+        }
+
+        function refreshImportSnapNav_() {
+          var pathEl = document.getElementById('import-snap-path');
+          var nav = document.getElementById('import-snap-nav');
+          if (pathEl) {
+            pathEl.textContent = importSnapPath_.join(' \\ ');
+          }
+          if (!nav) {
+            return;
+          }
+          nav.textContent = 'Загрузка…';
+          google.script.run
+            .withSuccessHandler(function (result) {
+              nav.innerHTML = '';
+              if (!result || result.ok === false) {
+                nav.textContent = (result && result.message) || 'Ошибка';
+                return;
+              }
+              importSnapParentId_ = result.parentId != null ? result.parentId : null;
+              if (importSnapFolderId_ !== 'root') {
+                var up = document.createElement('div');
+                up.className = 'nav-row is-up';
+                up.textContent = '[..]';
+                up.addEventListener('click', function () {
+                  if (importSnapPath_.length > 1) {
+                    importSnapPath_.pop();
+                  }
+                  importSnapFolderId_ = importSnapParentId_ || 'root';
+                  refreshImportSnapNav_();
+                });
+                nav.appendChild(up);
+              }
+              var items = result.items || [];
+              var folders = [];
+              var sheets = [];
+              items.forEach(function (it) {
+                if (!it) {
+                  return;
+                }
+                var mime = String(it.mimeType || '');
+                if (
+                  it.kind === 'folder' ||
+                  mime === 'application/vnd.google-apps.folder'
+                ) {
+                  folders.push(it);
+                } else if (mime === SHEET_MIME_) {
+                  sheets.push(it);
+                }
+              });
+              if (!folders.length && !sheets.length) {
+                var empty = document.createElement('div');
+                empty.className = 'nav-row';
+                empty.style.cursor = 'default';
+                empty.textContent = 'Нет папок и таблиц';
+                nav.appendChild(empty);
+                return;
+              }
+              folders.forEach(function (folder) {
+                var row = document.createElement('div');
+                row.className = 'nav-row';
+                row.textContent = folder.name || folder.id;
+                row.addEventListener('click', function () {
+                  importSnapFolderId_ = folder.id;
+                  importSnapPath_.push(folder.name || folder.id);
+                  refreshImportSnapNav_();
+                });
+                nav.appendChild(row);
+              });
+              sheets.forEach(function (sheet) {
+                var row = document.createElement('div');
+                row.className =
+                  'nav-row is-file' +
+                  (importSnapSelectedId_ === sheet.id ? ' is-selected' : '');
+                row.textContent = '[таблица] ' + (sheet.name || sheet.id);
+                row.addEventListener('click', function () {
+                  importSnapSelectedId_ = sheet.id;
+                  importSnapSelectedName_ = sheet.name || sheet.id;
+                  updateImportSnapSelectedUi_();
+                  var rows = nav.querySelectorAll('.nav-row.is-file');
+                  for (var i = 0; i < rows.length; i++) {
+                    rows[i].classList.remove('is-selected');
+                  }
+                  row.classList.add('is-selected');
+                });
+                nav.appendChild(row);
+              });
+            })
+            .withFailureHandler(function (err) {
+              nav.textContent = (err && err.message) || String(err);
+            })
+            .listDriveFolderForImport({
+              scope: 'mydrive',
+              folderId: importSnapFolderId_ === 'root' ? 'root' : importSnapFolderId_
+            });
+        }
+
+        function runImportSnapshotAction_() {
+          if (!canEmptyTrash || !importSnapSelectedId_) {
+            return;
+          }
+          var isMerge = importSnapMode_ === 'merge';
+          var warn = isMerge
+            ? 'Дополнить каталог из снимка «' +
+              (importSnapSelectedName_ || importSnapSelectedId_) +
+              '»?\nДобавятся только отсутствующие объекты (без дублей и без перезаписи). Jobs должны быть пусты.'
+            : 'Заменить метаданные каталога из снимка «' +
+              (importSnapSelectedName_ || importSnapSelectedId_) +
+              '»?\nТекущие Tree/Files/ACL/Users/Groups будут перезаписаны. Jobs должны быть пусты.';
+          showAppConfirm_(warn).then(function (ok) {
+            if (!ok) {
+              return;
+            }
+            var submit = document.getElementById('import-snap-submit');
+            if (submit) {
+              submit.disabled = true;
+            }
+            setStatus(isMerge ? 'Загрузка структуры…' : 'Импорт метаданных…');
+            showOpStartSplash_();
+            var runner = google.script.run
+              .withSuccessHandler(function (result) {
+                closeImportSnapshotModal_();
+                flashOperationDone_();
+                var lines = [];
+                if (isMerge) {
+                  lines.push(
+                    'Структура дополнена' +
+                      (result && result.title ? ': «' + result.title + '»' : '')
+                  );
+                  if (result && result.added) {
+                    var a = result.added;
+                    lines.push(
+                      'Добавлено: папок ' +
+                        (a.tree || 0) +
+                        ', файлов ' +
+                        (a.files || 0) +
+                        ', пользователей ' +
+                        (a.users || 0) +
+                        ', групп ' +
+                        (a.groups || 0) +
+                        ', ACL ' +
+                        (a.acl || 0)
+                    );
+                  }
+                  if (result && result.skipped) {
+                    lines.push(
+                      'Пропущено (уже есть): ' +
+                        ((result.skipped.tree || 0) +
+                          (result.skipped.files || 0) +
+                          (result.skipped.users || 0) +
+                          (result.skipped.groups || 0) +
+                          (result.skipped.acl || 0))
+                    );
+                  }
+                } else {
+                  lines.push(
+                    'Снимок загружен' +
+                      (result && result.title ? ': «' + result.title + '»' : '')
+                  );
+                }
+                if (result && result.message) {
+                  lines.push(result.message);
+                }
+                if (result && result.controllerMismatch) {
+                  lines.push(result.controllerMismatch);
+                }
+                if (result && result.missingCount) {
+                  lines.push(
+                    'Отсутствуют на Drive: ' +
+                      result.missingCount +
+                      (result.missingSample && result.missingSample.length
+                        ? ' (' + result.missingSample.join(', ') + ')'
+                        : '')
+                  );
+                }
+                showAppConfirm_(lines.join('\n'), { infoOnly: true }).then(function () {
+                  reloadCatalogSnapshot_(null, function () {
+                    setStatus('Готово');
+                  });
+                });
+              })
+              .withFailureHandler(function (err) {
+                if (submit) {
+                  submit.disabled = false;
+                }
+                var msg = formatJobsBusyError_(err);
+                setStatus(msg);
+                var msgEl = document.getElementById('import-snap-msg');
+                if (msgEl) {
+                  msgEl.textContent = msg;
+                  msgEl.className = 'msg error';
+                }
+              });
+            if (isMerge) {
+              runner.mergeCatalogSnapshot({
+                spreadsheetId: importSnapSelectedId_
+              });
+            } else {
+              runner.importCatalogSnapshot({
+                spreadsheetId: importSnapSelectedId_
+              });
+            }
+          });
+        }
+
+        var archiveFolderId_ = 'root';
+        var archiveParentId_ = null;
+        var archivePath_ = ['Мой диск'];
+        var archiveTargetReady_ = false;
+
+        function updateArchiveSubmitUi_() {
+          var submit = document.getElementById('archive-submit');
+          if (submit) {
+            submit.disabled = !archiveTargetReady_;
+          }
+          var msg = document.getElementById('archive-msg');
+          if (!msg) {
+            return;
+          }
+          if (archiveFolderId_ === 'root') {
+            msg.textContent = 'Выберите пустую подпапку (не корень Моего диска).';
+            msg.className = 'msg hint';
+            return;
+          }
+          if (!archiveTargetReady_) {
+            msg.textContent = 'Папка не пуста — архивация сюда недоступна.';
+            msg.className = 'msg hint';
+            return;
+          }
+          msg.textContent = 'Папка пуста — можно архивировать сюда.';
+          msg.className = 'msg ok';
+        }
+
+        function openArchiveCatalogModal_() {
+          if (!canEmptyTrash) {
+            return;
+          }
+          archiveFolderId_ = 'root';
+          archiveParentId_ = null;
+          archivePath_ = ['Мой диск'];
+          archiveTargetReady_ = false;
+          updateArchiveSubmitUi_();
+          document.getElementById('archive-catalog-modal').classList.remove('hidden');
+          refreshArchiveNav_();
+        }
+
+        function closeArchiveCatalogModal_() {
+          document.getElementById('archive-catalog-modal').classList.add('hidden');
+          restorePanelKeyboardFocus_();
+        }
+
+        function refreshArchiveNav_() {
+          var pathEl = document.getElementById('archive-path');
+          var nav = document.getElementById('archive-nav');
+          if (pathEl) {
+            pathEl.textContent = archivePath_.join(' \\ ');
+          }
+          if (!nav) {
+            return;
+          }
+          archiveTargetReady_ = false;
+          updateArchiveSubmitUi_();
+          nav.textContent = 'Загрузка…';
+          google.script.run
+            .withSuccessHandler(function (result) {
+              nav.innerHTML = '';
+              if (!result || result.ok === false) {
+                nav.textContent = (result && result.message) || 'Ошибка';
+                archiveTargetReady_ = false;
+                updateArchiveSubmitUi_();
+                return;
+              }
+              archiveParentId_ = result.parentId != null ? result.parentId : null;
+              var items = result.items || [];
+              var isEmpty = !items.length && !result.nextPageToken;
+              archiveTargetReady_ =
+                archiveFolderId_ !== 'root' && isEmpty;
+              updateArchiveSubmitUi_();
+
+              if (archiveFolderId_ !== 'root') {
+                var up = document.createElement('div');
+                up.className = 'nav-row is-up';
+                up.textContent = '[..]';
+                up.addEventListener('click', function () {
+                  if (archivePath_.length > 1) {
+                    archivePath_.pop();
+                  }
+                  archiveFolderId_ = archiveParentId_ || 'root';
+                  refreshArchiveNav_();
+                });
+                nav.appendChild(up);
+              }
+              var folders = items.filter(function (it) {
+                return (
+                  it &&
+                  (it.kind === 'folder' ||
+                    String(it.mimeType || '') ===
+                      'application/vnd.google-apps.folder')
+                );
+              });
+              if (!folders.length) {
+                var empty = document.createElement('div');
+                empty.className = 'nav-row';
+                empty.style.cursor = 'default';
+                empty.textContent = isEmpty
+                  ? archiveFolderId_ === 'root'
+                    ? 'Выберите подпапку'
+                    : 'Папка пуста'
+                  : 'Нет подпапок (есть файлы — сюда нельзя)';
+                nav.appendChild(empty);
+                return;
+              }
+              folders.forEach(function (folder) {
+                var row = document.createElement('div');
+                row.className = 'nav-row';
+                row.textContent = folder.name || folder.id;
+                row.addEventListener('click', function () {
+                  archiveFolderId_ = folder.id;
+                  archivePath_.push(folder.name || folder.id);
+                  refreshArchiveNav_();
+                });
+                nav.appendChild(row);
+              });
+            })
+            .withFailureHandler(function (err) {
+              nav.textContent = (err && err.message) || String(err);
+              archiveTargetReady_ = false;
+              updateArchiveSubmitUi_();
+            })
+            .listDriveFolderForImport({
+              scope: 'mydrive',
+              folderId: archiveFolderId_ === 'root' ? 'root' : archiveFolderId_
+            });
+        }
+
+        function runArchiveCatalogAction_() {
+          if (!canEmptyTrash || !archiveTargetReady_) {
+            return;
+          }
+          if (!archiveFolderId_ || archiveFolderId_ === 'root') {
+            return;
+          }
+          var targetId = archiveFolderId_;
+          var folderName =
+            archivePath_.length > 1
+              ? archivePath_[archivePath_.length - 1]
+              : targetId;
+          closeArchiveCatalogModal_();
+          showAppConfirm_(
+            'Архивировать файлы каталога в папку «' +
+              folderName +
+              '»?\nФайлы будут перенесены; в каталоге останется пустая структура.'
+          ).then(function (ok) {
+            if (!ok) {
+              return;
+            }
+            setStatus('Архивация…');
+            showOpStartSplash_();
+            google.script.run
+              .withSuccessHandler(function (result) {
+                if (result && result.queued === false) {
+                  flashOperationDone_();
+                  var url0 = result.archiveUrl;
+                  if (url0) {
+                    showAppConfirm_('Архивация завершена (файлов не было).', {
+                      infoOnly: true,
+                      linkUrl: url0,
+                      linkLabel: 'Открыть папку архива'
+                    }).then(function () {
+                      reloadCatalogSnapshot_(null, function () {
+                        setStatus('Готово');
+                      });
+                    });
+                  } else {
+                    reloadCatalogSnapshot_(null, function () {
+                      setStatus('Готово');
+                    });
+                  }
+                  return;
+                }
+                setStatus(
+                  'Архивация: 0/' +
+                    (((result && result.fileCount) || 0) +
+                      ((result && result.folderCount) || 0))
+                );
+                startArchiveCatalogPoller_(result && result.archiveUrl);
+                google.script.run.processCatalogJobs();
+              })
+              .withFailureHandler(function (err) {
+                var msg = formatJobsBusyError_(err);
+                setStatus(msg);
+                showAppConfirm_(msg, { infoOnly: true });
+              })
+              .archiveCatalog({
+                targetFolderId: targetId
+              });
+          });
+        }
+
+        function startArchiveCatalogPoller_(archiveUrl) {
+          stopJobsPoller_();
+          setJobsBusyStatusUi_(true);
+          var ticks = 0;
+          function tick() {
+            ticks += 1;
+            google.script.run.withFailureHandler(function () {}).processCatalogJobs();
+            google.script.run
+              .withSuccessHandler(function (st) {
+                if (st && st.busy) {
+                  if (st.progressMessage) {
+                    setStatus(st.progressMessage);
+                    setJobsBusyStatusUi_(true);
+                  }
+                  if (ticks > 600) {
+                    stopJobsPoller_();
+                    setJobsBusyStatusUi_(false);
+                    setStatus('Архивация: таймаут ожидания');
+                  }
+                  return;
+                }
+                stopJobsPoller_();
+                setJobsBusyStatusUi_(false);
+                flashOperationDone_();
+                var finish = function () {
+                  reloadCatalogSnapshot_(null, function () {
+                    remoteCatalogRev_ = catalogRev_;
+                    setStatus('Готово');
+                  }, { quiet: true });
+                };
+                if (archiveUrl) {
+                  showAppConfirm_('Архивация завершена.', {
+                    infoOnly: true,
+                    linkUrl: archiveUrl,
+                    linkLabel: 'Открыть папку архива'
+                  }).then(finish);
+                } else {
+                  finish();
+                }
+              })
+              .withFailureHandler(function () {
+                if (ticks > 120) {
+                  stopJobsPoller_();
+                  setJobsBusyStatusUi_(false);
+                }
+              })
+              .getCatalogJobsStatus();
+          }
+          tick();
+          jobsPollTimer_ = setInterval(tick, 1500);
+        }
+
+        function openClearCatalogModal_() {
+          if (!canEmptyTrash) {
+            return;
+          }
+          document.getElementById('clear-keep-tree').checked = false;
+          document.getElementById('clear-keep-acl').checked = false;
+          document.getElementById('clear-keep-users').checked = false;
+          document.getElementById('clear-keep-groups').checked = false;
+          var msg = document.getElementById('clear-catalog-msg');
+          if (msg) {
+            msg.textContent = '';
+            msg.className = 'msg';
+          }
+          document.getElementById('clear-catalog-modal').classList.remove('hidden');
+        }
+
+        function closeClearCatalogModal_() {
+          document.getElementById('clear-catalog-modal').classList.add('hidden');
+          restorePanelKeyboardFocus_();
+        }
+
+        function runClearCatalogAction_() {
+          if (!canEmptyTrash) {
+            return;
+          }
+          var keepTree = document.getElementById('clear-keep-tree').checked;
+          var keepAcl = document.getElementById('clear-keep-acl').checked;
+          var keepUsers = document.getElementById('clear-keep-users').checked;
+          var keepGroups = document.getElementById('clear-keep-groups').checked;
+          var fullReset = !keepTree && !keepAcl && !keepUsers && !keepGroups;
+          var warn = fullReset
+            ? 'Удалить всё и перейти к «Первый запуск»?\nФайлы — в корзину Google Drive (~30 дней).'
+            : 'Очистить каталог с выбранными исключениями?\nФайлы — в корзину Google Drive (~30 дней).';
+          showAppConfirm_(warn).then(function (ok) {
+            if (!ok) {
+              return;
+            }
+            closeClearCatalogModal_();
+            setStatus('Очистка каталога…');
+            showOpStartSplash_();
+            google.script.run
+              .withSuccessHandler(function (result) {
+                var goFirstLaunch = !!(result && (result.needsFirstLaunch || result.fullReset));
+                if (result && result.queued === false) {
+                  flashOperationDone_();
+                  if (goFirstLaunch) {
+                    setStatus('Каталог очищен. Первый запуск…');
+                    google.script.run
+                      .withSuccessHandler(routeBootstrap)
+                      .withFailureHandler(onBootstrapError)
+                      .getWebAppBootstrap();
+                  } else {
+                    reloadCatalogSnapshot_(null, function () {
+                      setStatus('Готово');
+                    });
+                  }
+                  return;
+                }
+                setStatus(
+                  'Очистка каталога: 0/' + ((result && result.fileCount) || 0)
+                );
+                startClearCatalogPoller_(goFirstLaunch);
+                google.script.run.processCatalogJobs();
+              })
+              .withFailureHandler(function (err) {
+                var msg = formatJobsBusyError_(err);
+                setStatus(msg);
+                showAppConfirm_(msg);
+              })
+              .clearCatalog({
+                keepTree: keepTree,
+                keepAcl: keepAcl,
+                keepUsers: keepUsers,
+                keepGroups: keepGroups
+              });
+          });
+        }
+
+        function startClearCatalogPoller_(goFirstLaunch) {
+          stopJobsPoller_();
+          setJobsBusyStatusUi_(true);
+          var ticks = 0;
+          function tick() {
+            ticks += 1;
+            google.script.run.withFailureHandler(function () {}).processCatalogJobs();
+            google.script.run
+              .withSuccessHandler(function (st) {
+                if (st && st.busy) {
+                  if (st.progressMessage) {
+                    setStatus(st.progressMessage);
+                    setJobsBusyStatusUi_(true);
+                  }
+                  if (ticks > 600) {
+                    stopJobsPoller_();
+                    setJobsBusyStatusUi_(false);
+                    setStatus('Очистка каталога: таймаут ожидания');
+                  }
+                  return;
+                }
+                stopJobsPoller_();
+                setJobsBusyStatusUi_(false);
+                if (goFirstLaunch) {
+                  setStatus('Каталог очищен. Первый запуск…');
+                  google.script.run
+                    .withSuccessHandler(routeBootstrap)
+                    .withFailureHandler(onBootstrapError)
+                    .getWebAppBootstrap();
+                  return;
+                }
+                flashOperationDone_();
+                reloadCatalogSnapshot_(null, function () {
+                  remoteCatalogRev_ = catalogRev_;
+                }, { quiet: true });
+              })
+              .withFailureHandler(function () {
+                if (ticks > 120) {
+                  stopJobsPoller_();
+                  setJobsBusyStatusUi_(false);
+                }
+              })
+              .getCatalogJobsStatus();
+          }
+          tick();
+          jobsPollTimer_ = setInterval(tick, 1500);
+        }
+
         function emptyTrashAction_() {
           if (!canEmptyTrash) {
             return;
@@ -3643,26 +4869,37 @@
             showOpStartSplash_();
             google.script.run
               .withSuccessHandler(function (result) {
+                function refreshTrashUi_() {
+                  reloadCatalogSnapshot_(['__TRASH__'], function () {
+                    panels.forEach(function (panel, panelIndex) {
+                      var folderId = panel.folderId;
+                      if (!folderId || !catalogSnapshot.foldersById[folderId]) {
+                        folderId = '__TRASH__';
+                      }
+                      applyPanelFromSnapshot_(panelIndex, folderId);
+                    });
+                    updateEmptyTrashButton_();
+                    flashOperationDone_();
+                  }, { quiet: true });
+                }
                 if (result && result.queued === false) {
-                  flashOperationDone_();
+                  refreshTrashUi_();
                   return;
                 }
                 var total =
                   (result && result.fileCount) ||
                   ((result && result.folderCount) ? 1 : 0);
                 setStatus('Очистка: 0/' + total);
+                setJobsBusyStatusUi_(true);
+                google.script.run
+                  .withFailureHandler(function () {})
+                  .unpauseCatalogJobs();
                 startJobsPoller_(['__TRASH__'], function () {
-                  panels.forEach(function (panel, panelIndex) {
-                    var folderId = panel.folderId;
-                    if (!folderId || !catalogSnapshot.foldersById[folderId]) {
-                      folderId = '__TRASH__';
-                    }
-                    applyPanelFromSnapshot_(panelIndex, folderId);
-                  });
-                  updateEmptyTrashButton_();
-                  flashOperationDone_();
+                  refreshTrashUi_();
                 });
-                google.script.run.processCatalogJobs();
+                google.script.run
+                  .withFailureHandler(function () {})
+                  .processCatalogJobs();
               })
               .withFailureHandler(function (err) {
                 var msg = formatJobsBusyError_(err);
@@ -3686,7 +4923,8 @@
         }
 
         function runCopyItems(targetFolderId, items, sourceFolderId) {
-          setStatus('Копирование…');
+          setStatus('Постановка копирования…');
+          setJobsBusyStatusUi_(true);
           showOpStartSplash_();
           google.script.run
             .withSuccessHandler(function (result) {
@@ -3698,12 +4936,17 @@
                 startJobsPoller_([sourceFolderId, targetFolderId], function () {
                   flashOperationDone_();
                 });
+                google.script.run
+                  .withFailureHandler(function () {})
+                  .processCatalogJobs();
                 return;
               }
+              setJobsBusyStatusUi_(false);
               applyLocalCopy_(targetFolderId, result && result.created);
               flashOperationDone_();
             })
             .withFailureHandler(function (err) {
+              setJobsBusyStatusUi_(false);
               var msg = formatJobsBusyError_(err);
               if (msg === ((err && err.message) || String(err || ''))) {
                 msg = formatCatalogOpError_(err);
@@ -3744,21 +4987,31 @@
           var onlyShortcuts =
             (mirrorIds.length || fileShortcutIds.length) && !normalItems.length;
           setStatus(onlyShortcuts ? 'Удаление ярлыка…' : 'Перемещение…');
+          // До ответа сервера / старта Jobs-поллера — не давать rev-poller
+          // перезаписать optimistic move устаревшим снимком.
+          setJobsBusyStatusUi_(true);
+          showOpStartSplash_();
           google.script.run
             .withSuccessHandler(function (result) {
-              var needReload =
-                String(targetFolderId) === '__TRASH__' ||
-                (result && result.deletedMirrors && result.deletedMirrors.length) ||
-                (result && result.deletedFileShortcuts && result.deletedFileShortcuts.length);
-              if (needReload) {
-                reloadCatalogSnapshot_([sourceFolderId, targetFolderId], function () {
+              if (result && result.queued) {
+                var total = result.fileCount != null ? result.fileCount : 0;
+                var isTrash = String(targetFolderId) === '__TRASH__';
+                setStatus(
+                  (isTrash ? 'Удаление: 0/' : 'Перемещение: 0/') + total
+                );
+                startJobsPoller_([sourceFolderId, targetFolderId], function () {
                   flashOperationDone_();
-                }, { quiet: true });
+                });
                 return;
               }
-              flashOperationDone_();
+              setJobsBusyStatusUi_(false);
+              // Всегда quiet reload — кэш acl_* после keep-deltas обновлён на сервере.
+              reloadCatalogSnapshot_([sourceFolderId, targetFolderId], function () {
+                flashOperationDone_();
+              }, { quiet: true });
             })
             .withFailureHandler(function (err) {
+              setJobsBusyStatusUi_(false);
               restoreMoveSnapshot_(snapshot, sourceFolderId, targetFolderId);
               if (mirrorIds.length) {
                 reloadCatalogSnapshot_([sourceFolderId, targetFolderId], null, { quiet: true });
@@ -4728,6 +5981,22 @@
             closeRepairModal_();
             return true;
           }
+          if (id === 'clear-catalog-modal') {
+            closeClearCatalogModal_();
+            return true;
+          }
+          if (id === 'export-snapshot-modal') {
+            closeExportSnapshotModal_();
+            return true;
+          }
+          if (id === 'import-snapshot-modal') {
+            closeImportSnapshotModal_();
+            return true;
+          }
+          if (id === 'archive-catalog-modal') {
+            closeArchiveCatalogModal_();
+            return true;
+          }
           if (id === 'catalog-search-modal') {
             closeCatalogSearchModal_();
             return true;
@@ -4813,6 +6082,16 @@
         }
 
         function openCatalogItem(catalogId, panelIndex) {
+          var snapFile =
+            catalogSnapshot && catalogSnapshot.filesById
+              ? catalogSnapshot.filesById[catalogId]
+              : null;
+          if (snapFile && isCatalogFileInTrashUi_(snapFile)) {
+            showAppConfirm_(
+              'Файл в корзине и не может быть открыт.'
+            );
+            return;
+          }
           showOpeningSplash_();
           setStatus('Открытие файла…');
           google.script.run
@@ -4829,6 +6108,14 @@
                   });
                   return;
                 }
+                if (result && result.code === 'IN_TRASH') {
+                  showTimedSplash_(result.message || 'Файл в корзине');
+                  showAppConfirm_(
+                    result.message || 'Файл в корзине и не может быть открыт.'
+                  );
+                  setStatus('Готово');
+                  return;
+                }
                 if (result && result.code === 'NO_ACCESS') {
                   showTimedSplash_(result.message || 'Нет доступа');
                   setStatus(result.message || 'Нет доступа');
@@ -4838,7 +6125,7 @@
                   result && result.editors && result.editors.length
                     ? '\n\nРедакторы: ' + result.editors.join(', ')
                     : '';
-                alert(
+                showAppConfirm_(
                   (result && result.message) ||
                     'Нет прав на открытие файла.' + editors
                 );
@@ -4860,15 +6147,31 @@
             })
             .withFailureHandler(function (err) {
               setStatus((err && err.message) || String(err));
-              alert((err && err.message) || String(err));
+              showAppConfirm_((err && err.message) || String(err));
             })
             .openCatalogFile(catalogId);
+        }
+
+        /** Файл или ярлык в корзине каталога / цель ярлыка в корзине. */
+        function isCatalogFileInTrashUi_(file) {
+          if (!file) {
+            return false;
+          }
+          if (String(file.folderId || '') === '__TRASH__') {
+            return true;
+          }
+          var targetId = String(file.shortcutOfCatalogId || '').trim();
+          if (targetId && catalogSnapshot && catalogSnapshot.filesById[targetId]) {
+            return String(catalogSnapshot.filesById[targetId].folderId || '') === '__TRASH__';
+          }
+          return false;
         }
 
         var canRunCatalogOperations = false;
         var canEmptyTrash = false;
         var jobsPollTimer_ = null;
         var jobsPollFolderIds_ = null;
+        var cancelOpPollTimer_ = null;
         var peopleAdminState = null;
         var peopleUserEditEmail = null;
         var peopleGroupEditId = null;
@@ -5312,19 +6615,96 @@
             return 'folder';
           }
           var mime = String(item.mimeType || '').toLowerCase();
-          var name = String(item.name || '').toLowerCase();
-          var ext = '';
-          var dot = name.lastIndexOf('.');
-          if (dot > 0 && dot < name.length - 1) {
-            ext = name.slice(dot + 1);
-          }
           if (mime.indexOf('vnd.google-apps.') >= 0) {
             return mime.replace('application/vnd.google-apps.', 'g:');
           }
+          var ext = extractSaneFileExt_(item.name);
           if (ext) {
-            return ext;
+            return ext.toLowerCase();
           }
           return mime || 'file';
+        }
+
+        /**
+         * Расширение из имени только если похоже на реальное (pdf, docx…),
+         * не «хвост» после точки в названии («Отчёт. Итоговый»).
+         */
+        function extractSaneFileExt_(name) {
+          var s = String(name || '');
+          var dot = s.lastIndexOf('.');
+          if (dot <= 0 || dot >= s.length - 1) {
+            return '';
+          }
+          var ext = s.slice(dot + 1).trim();
+          if (!ext || ext.length > 8 || /\s/.test(ext)) {
+            return '';
+          }
+          if (!/^[A-Za-z0-9]+$/.test(ext)) {
+            return '';
+          }
+          return ext.toUpperCase();
+        }
+
+        function formatMimeTypeLabel_(mime) {
+          var m = String(mime || '')
+            .trim()
+            .toLowerCase();
+          if (!m) {
+            return '';
+          }
+          if (m.indexOf('application/vnd.google-apps.') === 0) {
+            var g = resolveGoogleMimeIcon_(m);
+            if (g && g.title) {
+              return g.title;
+            }
+            return m.split('.').pop() || 'Google';
+          }
+          if (m === 'application/pdf') {
+            return 'PDF';
+          }
+          if (m.indexOf('image/') === 0) {
+            return 'Изображение';
+          }
+          if (m.indexOf('audio/') === 0) {
+            return 'Аудио';
+          }
+          if (m.indexOf('video/') === 0) {
+            return 'Видео';
+          }
+          if (m.indexOf('text/') === 0) {
+            return 'Текст';
+          }
+          if (
+            m.indexOf('wordprocessingml') >= 0 ||
+            m === 'application/msword'
+          ) {
+            return 'DOC';
+          }
+          if (
+            m.indexOf('spreadsheetml') >= 0 ||
+            m === 'application/vnd.ms-excel'
+          ) {
+            return 'XLS';
+          }
+          if (
+            m.indexOf('presentationml') >= 0 ||
+            m === 'application/vnd.ms-powerpoint'
+          ) {
+            return 'PPT';
+          }
+          if (
+            m === 'application/zip' ||
+            m === 'application/x-zip-compressed' ||
+            m === 'application/vnd.rar' ||
+            m === 'application/x-7z-compressed'
+          ) {
+            return 'ZIP';
+          }
+          if (m === 'application/octet-stream') {
+            return '';
+          }
+          var slash = m.lastIndexOf('/');
+          return slash >= 0 ? m.slice(slash + 1) : m;
         }
 
         function formatItemTypeLabel_(item, icon) {
@@ -5344,19 +6724,19 @@
           if (item.isShortcut) {
             return 'Ярлык';
           }
-          var name = String(item.name || '');
-          var dot = name.lastIndexOf('.');
-          if (dot > 0 && dot < name.length - 1) {
-            return name.slice(dot + 1).toUpperCase();
+          // MIME важнее «хвоста» после точки в имени (иначе «Отчёт. Итог» → «ИТОГ»).
+          var mimeLabel = formatMimeTypeLabel_(item.mimeType);
+          if (mimeLabel) {
+            return mimeLabel;
+          }
+          var ext = extractSaneFileExt_(item.name);
+          if (ext) {
+            return ext;
           }
           if (icon && icon.title) {
             return String(icon.title);
           }
-          var mime = String(item.mimeType || '');
-          if (mime.indexOf('vnd.google-apps.') >= 0) {
-            return mime.split('.').pop() || 'Google';
-          }
-          return mime ? mime.split('/').pop() : 'файл';
+          return 'файл';
         }
 
         function comparePanelItemsClient_(a, b, sortKey, sortDir) {
@@ -5426,12 +6806,7 @@
           if (mime) {
             return mime;
           }
-          var name = String((item && item.name) || '').toLowerCase();
-          var ext = '';
-          var dot = name.lastIndexOf('.');
-          if (dot > 0 && dot < name.length - 1) {
-            ext = name.slice(dot + 1);
-          }
+          var ext = extractSaneFileExt_(item && item.name).toLowerCase();
           var byExt = {
             pdf: 'application/pdf',
             doc: 'application/msword',
@@ -5470,20 +6845,18 @@
             };
           }
           var mime = resolveClientMimeType_(item);
-          var title = formatItemTypeLabel_(item, { title: '' }) || mime || 'Файл';
           var googleIcon = resolveGoogleMimeIcon_(mime);
+          var title = 'Файл';
           if (item.isShortcut) {
             title = item.isExternalShortcut ? 'Ярлык внешнего файла' : 'Ярлык файла';
           } else if (googleIcon && googleIcon.title) {
             title = googleIcon.title;
-          } else if (mime === 'application/pdf') {
-            title = 'PDF';
-          } else if (mime.indexOf('image/') === 0) {
-            title = 'Изображение';
-          } else if (mime.indexOf('audio/') === 0) {
-            title = 'Аудио';
-          } else if (mime.indexOf('video/') === 0) {
-            title = 'Видео';
+          } else {
+            title =
+              formatMimeTypeLabel_(mime) ||
+              extractSaneFileExt_(item.name) ||
+              mime ||
+              'Файл';
           }
           return {
             cls: 'file-icon-drive',
@@ -5513,21 +6886,74 @@
         }
 
         function ingestCatalogSnapshot_(data) {
+          if (!data) {
+            throw new Error(
+              'Пустой снимок (null) — ответ Web App слишком большой. Нужна порционная загрузка.'
+            );
+          }
           var foldersById = {};
           var filesById = {};
-          (data.folders || []).forEach(function (folder) {
-            foldersById[folder.id] = folder;
-          });
-          (data.files || []).forEach(function (file) {
-            filesById[file.id] = file;
-          });
+          function asAclList_(v) {
+            if (!v) {
+              return [];
+            }
+            if (Object.prototype.toString.call(v) === '[object Array]') {
+              return v;
+            }
+            return String(v)
+              .split(',')
+              .map(function (p) {
+                return String(p || '').trim();
+              })
+              .filter(Boolean);
+          }
+          function normalizeFile_(file) {
+            file.editors = asAclList_(file.editors);
+            file.commenters = asAclList_(file.commenters);
+            file.readers = asAclList_(file.readers);
+            if (!file.status) {
+              file.status = 'ready';
+            }
+            return file;
+          }
+          if (data.folders) {
+            foldersById = {};
+            (data.folders || []).forEach(function (folder) {
+              folder.editors = asAclList_(folder.editors);
+              folder.commenters = asAclList_(folder.commenters);
+              folder.readers = asAclList_(folder.readers);
+              foldersById[folder.id] = folder;
+            });
+          } else if (catalogSnapshot && catalogSnapshot.foldersById) {
+            foldersById = catalogSnapshot.foldersById;
+          }
+          // partial (Tree-only старт: files:[]) — не затираем уже загруженные файлы.
+          // Полный getCatalogSnapshot / transfer Files — замена filesById целиком
+          // (иначе удалённые после empty_trash/clear остаются «призраками» до F5).
+          if (data.partial) {
+            filesById = (catalogSnapshot && catalogSnapshot.filesById) || {};
+            (data.files || []).forEach(function (file) {
+              filesById[file.id] = normalizeFile_(file);
+            });
+          } else if (Object.prototype.hasOwnProperty.call(data, 'files')) {
+            filesById = {};
+            (data.files || []).forEach(function (file) {
+              filesById[file.id] = normalizeFile_(file);
+            });
+          } else if (catalogSnapshot && catalogSnapshot.filesById) {
+            filesById = catalogSnapshot.filesById;
+          }
           catalogSnapshot = {
-            virtualRootFolderId: data.virtualRootFolderId,
+            virtualRootFolderId:
+              data.virtualRootFolderId ||
+              (catalogSnapshot && catalogSnapshot.virtualRootFolderId) ||
+              virtualRootFolderId,
             foldersById: foldersById,
             filesById: filesById
           };
           if (data && data.catalogRev != null) {
             catalogRev_ = Number(data.catalogRev) || 0;
+            remoteCatalogRev_ = catalogRev_;
           }
         }
 
@@ -5563,6 +6989,7 @@
               isExternalMirror: !!child.isExternalMirror,
               mirrorOfFolderId: child.mirrorOfFolderId || '',
               mirrorOfDriveFolderId: child.mirrorOfDriveFolderId || '',
+              pendingImport: !!child.pendingImport,
               editors: child.editors || [],
               commenters: child.commenters || [],
               readers: child.readers || []
@@ -5655,13 +7082,24 @@
           options = options || {};
           var quiet = !!options.quiet;
           if (!quiet) {
-            setStatus('Обновление каталога…');
+            if (jobsPollTimer_ || isJobsBusyStatusUi_()) {
+              quiet = true;
+            } else {
+              setStatus('Обновление каталога…');
+            }
           }
           google.script.run
             .withSuccessHandler(function (data) {
               ingestCatalogSnapshot_(data);
               refreshOpenPanels_(folderIds);
-              tryReloadForRemoteRev_();
+              if (!quiet) {
+                tryReloadForRemoteRev_();
+              } else if (remoteCatalogRev_ < catalogRev_) {
+                remoteCatalogRev_ = catalogRev_;
+              } else if (catalogRev_ < remoteCatalogRev_) {
+                // quiet: не запускать второй тяжёлый snapshot во время/после Jobs
+                catalogRev_ = remoteCatalogRev_;
+              }
               if (done) {
                 done(null, data);
               } else if (!quiet) {
@@ -5679,8 +7117,16 @@
             .getCatalogSnapshot();
         }
 
+        function isJobsBusyStatusUi_() {
+          var el = document.getElementById('status-text');
+          return !!(el && el.classList && el.classList.contains('status-jobs-busy'));
+        }
+
         function isCatalogUiBusyForRevReload_() {
           if (jobsPollTimer_) {
+            return true;
+          }
+          if (isJobsBusyStatusUi_()) {
             return true;
           }
           if (dndPayload_) {
@@ -5868,20 +7314,14 @@
           }
 
           if (catalogSnapshot) {
-            var parentFolder = catalogSnapshot.foldersById[String(targetFolderId)];
-            var parentAcl = {
-              editors: (parentFolder && parentFolder.editors) || [],
-              commenters: (parentFolder && parentFolder.commenters) || [],
-              readers: (parentFolder && parentFolder.readers) || []
-            };
-
+            // §14.7 keep-deltas: не затирать acl_* правами цели (иначе «права пропали»).
             movedItems.forEach(function (item) {
               if (item.kind === 'file' && catalogSnapshot.filesById[item.id]) {
                 catalogSnapshot.filesById[item.id].folderId = String(targetFolderId);
-                applyParentAclToSnapshotItem_(catalogSnapshot.filesById[item.id], parentAcl);
               } else if (item.kind === 'folder' && catalogSnapshot.foldersById[item.id]) {
-                catalogSnapshot.foldersById[item.id].parentFolderId = String(targetFolderId);
-                applyParentAclToSnapshotSubtree_(item.id, parentAcl);
+                catalogSnapshot.foldersById[item.id].parentFolderId = String(
+                  targetFolderId
+                );
               }
             });
           }
@@ -6019,6 +7459,7 @@
               isExternalMirror: !!folder.isExternalMirror,
               mirrorOfFolderId: folder.mirrorOfFolderId || '',
               mirrorOfDriveFolderId: folder.mirrorOfDriveFolderId || '',
+              pendingImport: !!folder.pendingImport,
               editors: folder.editors || [],
               commenters: folder.commenters || [],
               readers: folder.readers || []
@@ -6045,7 +7486,8 @@
               approvedByName: item.approvedByName || '',
               editors: item.editors || [],
               commenters: item.commenters || [],
-              readers: item.readers || []
+              readers: item.readers || [],
+              status: item.status || undefined
             };
             refreshIds[folderId] = true;
           });
@@ -6974,60 +8416,388 @@
           panels[1].loading = true;
           renderPanel(0);
           renderPanel(1);
-          setStatus('Загрузка каталога…');
           suppressPanelStateSave_ = true;
+          catalogInitialLoadBusy_ = true;
+
+          var loadGen = (loadInitialPanels._gen = (loadInitialPanels._gen || 0) + 1);
+          var startedAt = Date.now();
+          var loadPhase_ = 'зонд';
+          var loadFinished_ = false;
+          var pendingPref_ = null;
+          var prefsSettled_ = false;
+          var snapshotTreeReady_ = false;
+          var snapshotFilesReady_ = false;
+          var initialPaintDone_ = false;
+          var paintInProgress_ = false;
+          var tickTimer = setInterval(function () {
+            if (loadFinished_ || loadInitialPanels._gen !== loadGen) {
+              return;
+            }
+            var sec = Math.floor((Date.now() - startedAt) / 1000);
+            setStatus('Загрузка каталога… ' + sec + ' с · ' + loadPhase_ + ' (r11)');
+          }, 1000);
+          setStatus('Загрузка каталога… 0 с · ' + loadPhase_ + ' (r11)');
+
+          var softTimer = setTimeout(function () {
+            if (loadFinished_ || loadInitialPanels._gen !== loadGen) {
+              return;
+            }
+            if (loadPhase_ !== 'зонд') {
+              return;
+            }
+            setStatus('Загрузка каталога… ответ сервера задерживается. Ждите (r8)');
+          }, 8000);
+          var hardTimer = setTimeout(function () {
+            if (loadFinished_ || loadInitialPanels._gen !== loadGen) {
+              return;
+            }
+            // Не затираем UI, если дерево/файлы уже на экране — только статус.
+            if (catalogSnapshot && catalogSnapshot.foldersById) {
+              if (!prefsSettled_) {
+                prefsSettled_ = true;
+                pendingPref_ = pendingPref_ || {};
+              }
+              snapshotTreeReady_ = true;
+              snapshotFilesReady_ = true;
+              tryPaintInitial_();
+              loadFinished_ = true;
+              clearLoadWatchdogs_();
+              catalogInitialLoadBusy_ = false;
+              suppressPanelStateSave_ = false;
+              if (!initialPaintDone_ && !paintInProgress_) {
+                panels[0].loading = false;
+                panels[1].loading = false;
+                renderPanel(0);
+                renderPanel(1);
+              }
+              setStatus('Готово (загрузка долгая, статус обновлён)');
+              resumeJobsPollerAfterInitialLoad_(folderId);
+              return;
+            }
+            clearLoadWatchdogs_();
+            catalogInitialLoadBusy_ = false;
+            suppressPanelStateSave_ = false;
+            panels[0].loading = false;
+            panels[1].loading = false;
+            renderPanel(0);
+            renderPanel(1);
+            setStatus(
+              'Не удалось получить снимок в браузер. Обновите страницу (r11).'
+            );
+            resumeJobsPollerAfterInitialLoad_(folderId);
+          }, 45000);
+          function clearLoadWatchdogs_() {
+            clearInterval(tickTimer);
+            clearTimeout(softTimer);
+            clearTimeout(hardTimer);
+          }
+          function finishInitialLoadUi_(statusText) {
+            loadFinished_ = true;
+            clearLoadWatchdogs_();
+            catalogInitialLoadBusy_ = false;
+            suppressPanelStateSave_ = false;
+            if (statusText) {
+              setStatus(statusText);
+            }
+            resumeJobsPollerAfterInitialLoad_(folderId);
+          }
+
+          function settlePrefs_(pref) {
+            if (loadInitialPanels._gen !== loadGen) {
+              return;
+            }
+            pendingPref_ = pref || {};
+            prefsSettled_ = true;
+            tryPaintInitial_();
+            maybeFinishInitial_();
+          }
+
+          /**
+           * Первый paint — сразу в сохранённые локации (§21), без вспышки корня.
+           * Повторный вызов после Files — только refresh текущих папок.
+           */
+          function tryPaintInitial_() {
+            if (loadInitialPanels._gen !== loadGen) {
+              return;
+            }
+            if (!prefsSettled_ || !snapshotTreeReady_) {
+              return;
+            }
+            if (!catalogSnapshot || !catalogSnapshot.foldersById) {
+              return;
+            }
+            if (initialPaintDone_) {
+              refreshOpenPanels_(null);
+              updateEmptyTrashButton_();
+              return;
+            }
+            if (paintInProgress_) {
+              return;
+            }
+            paintInProgress_ = true;
+            var left = (pendingPref_ && pendingPref_.left) || null;
+            var right = (pendingPref_ && pendingPref_.right) || null;
+            var activeIdx =
+              pendingPref_ && Number(pendingPref_.activePanelIndex) === 1 ? 1 : 0;
+            var pending = 2;
+            function oneDone() {
+              pending -= 1;
+              if (pending > 0) {
+                return;
+              }
+              paintInProgress_ = false;
+              initialPaintDone_ = true;
+              setActivePanel(activeIdx);
+              updateEmptyTrashButton_();
+              focusPanelFirstRow_(activeIdx);
+              maybeFinishInitial_();
+            }
+            restorePanelFromPref_(0, left, folderId, oneDone);
+            restorePanelFromPref_(1, right, folderId, oneDone);
+          }
+
+          function maybeFinishInitial_() {
+            if (loadInitialPanels._gen !== loadGen || loadFinished_) {
+              return;
+            }
+            if (!prefsSettled_ || !snapshotTreeReady_ || !snapshotFilesReady_) {
+              return;
+            }
+            if (!initialPaintDone_) {
+              tryPaintInitial_();
+              return;
+            }
+            startCatalogRevPoller_();
+            finishInitialLoadUi_('Готово');
+            // Во время restore suppress глушил history — зафиксировать стартовые локации.
+            notePanelHistory_(0);
+            notePanelHistory_(1);
+            scheduleSaveUserPanelState_();
+          }
+
+          // Prefs параллельно с зондом/деревом — не ждать конца Files.
+          google.script.run
+            .withSuccessHandler(settlePrefs_)
+            .withFailureHandler(function () {
+              settlePrefs_({});
+            })
+            .getUserPanelState();
 
           google.script.run
-            .withSuccessHandler(function (data) {
-              ingestCatalogSnapshot_(data);
-              google.script.run
-                .withSuccessHandler(function (pref) {
-                  var left = (pref && pref.left) || null;
-                  var right = (pref && pref.right) || null;
-                  var activeIdx =
-                    pref && Number(pref.activePanelIndex) === 1 ? 1 : 0;
-                  var pending = 2;
-                  var finishOne = function () {
-                    pending--;
-                    if (pending > 0) {
+            .withSuccessHandler(function (probe) {
+              if (loadInitialPanels._gen !== loadGen) {
+                return;
+              }
+              loadPhase_ = 'дерево';
+              setStatus(
+                'Загрузка каталога… дерево' +
+                  (probe && probe.jobsPaused ? ' · Jobs на паузе' : '') +
+                  ' (r10)'
+              );
+              function loadFilesPage_(offset, pageSize) {
+                if (loadInitialPanels._gen !== loadGen) {
+                  return;
+                }
+                // Основной путь: CacheService-трансфер (короткие ответы).
+                loadPhase_ = 'файлы cache';
+                setStatus('Загрузка каталога… подготовка файлов (r10)');
+                google.script.run
+                  .withSuccessHandler(function (meta) {
+                    if (loadInitialPanels._gen !== loadGen) {
                       return;
                     }
-                    setActivePanel(activeIdx);
-                    focusPanelFirstRow_(activeIdx);
-                    startCatalogRevPoller_();
-                    suppressPanelStateSave_ = false;
-                    notePanelHistory_(0);
-                    notePanelHistory_(1);
-                    scheduleSaveUserPanelState_();
-                    setStatus('Готово');
-                  };
-                  restorePanelFromPref_(0, left, folderId, finishOne);
-                  restorePanelFromPref_(1, right, folderId, finishOne);
-                  updateEmptyTrashButton_();
+                    if (!meta || !meta.transferId || !meta.chunks) {
+                      snapshotFilesReady_ = true;
+                      maybeFinishInitial_();
+                      setStatus('Готово (файлы: нет transferId)');
+                      return;
+                    }
+                    var parts = [];
+                    var chunkIndex = 0;
+                    function fetchNextChunk_() {
+                      if (loadInitialPanels._gen !== loadGen) {
+                        return;
+                      }
+                      if (chunkIndex >= meta.chunks) {
+                        try {
+                          var json = parts.join('');
+                          var files = JSON.parse(json);
+                          ingestCatalogSnapshot_({
+                            files: files,
+                            catalogRev: meta.catalogRev
+                          });
+                          snapshotFilesReady_ = true;
+                          tryPaintInitial_();
+                          maybeFinishInitial_();
+                        } catch (eParse) {
+                          finishInitialLoadUi_(
+                            (eParse && eParse.message) || String(eParse)
+                          );
+                        }
+                        return;
+                      }
+                      setStatus(
+                        'Загрузка каталога… файлы чанк ' +
+                          (chunkIndex + 1) +
+                          '/' +
+                          meta.chunks +
+                          ' (r10)'
+                      );
+                      google.script.run
+                        .withSuccessHandler(function (chunk) {
+                          if (loadInitialPanels._gen !== loadGen) {
+                            return;
+                          }
+                          if (!chunk || !chunk.ok) {
+                            snapshotFilesReady_ = true;
+                            maybeFinishInitial_();
+                            setStatus(
+                              'Готово (файлы частично, чанк ' + chunkIndex + ')'
+                            );
+                            return;
+                          }
+                          parts.push(chunk.text || '');
+                          chunkIndex += 1;
+                          fetchNextChunk_();
+                        })
+                        .withFailureHandler(function (err) {
+                          if (loadInitialPanels._gen !== loadGen) {
+                            return;
+                          }
+                          snapshotFilesReady_ = true;
+                          maybeFinishInitial_();
+                          setStatus(
+                            'Готово (файлы частично: ' +
+                              ((err && err.message) || String(err)) +
+                              ')'
+                          );
+                        })
+                        .fetchCatalogFilesChunk(meta.transferId, chunkIndex);
+                    }
+                    fetchNextChunk_();
+                  })
+                  .withFailureHandler(function (err) {
+                    if (loadInitialPanels._gen !== loadGen) {
+                      return;
+                    }
+                    snapshotFilesReady_ = true;
+                    maybeFinishInitial_();
+                    setStatus(
+                      'Готово (файлы: ' +
+                        ((err && err.message) || String(err)) +
+                        ')'
+                    );
+                  })
+                  .beginCatalogFilesTransfer();
+              }
+              google.script.run
+                .withSuccessHandler(function (tree) {
+                  if (loadInitialPanels._gen !== loadGen) {
+                    return;
+                  }
+                  if (!tree) {
+                    clearLoadWatchdogs_();
+                    finishInitialLoadUi_('Пустое дерево (null)');
+                    return;
+                  }
+                  try {
+                    ingestCatalogSnapshot_(tree);
+                    snapshotTreeReady_ = true;
+                    tryPaintInitial_();
+                  } catch (eTree) {
+                    clearLoadWatchdogs_();
+                    finishInitialLoadUi_((eTree && eTree.message) || String(eTree));
+                    return;
+                  }
+                  if (!tree.fileTotal) {
+                    snapshotFilesReady_ = true;
+                    maybeFinishInitial_();
+                    return;
+                  }
+                  loadFilesPage_(0);
                 })
-                .withFailureHandler(function () {
-                  applyPanelFromSnapshot_(0, folderId);
-                  applyPanelFromSnapshot_(1, folderId);
-                  updateEmptyTrashButton_();
-                  focusPanelFirstRow_(0);
-                  startCatalogRevPoller_();
+                .withFailureHandler(function (err) {
+                  if (loadInitialPanels._gen !== loadGen) {
+                    return;
+                  }
+                  clearLoadWatchdogs_();
+                  catalogInitialLoadBusy_ = false;
                   suppressPanelStateSave_ = false;
-                  notePanelHistory_(0);
-                  notePanelHistory_(1);
-                  setStatus('Готово');
+                  panels[0].loading = false;
+                  panels[1].loading = false;
+                  renderPanel(0);
+                  renderPanel(1);
+                  updateEmptyTrashButton_();
+                  finishInitialLoadUi_((err && err.message) || String(err));
                 })
-                .getUserPanelState();
+                .getCatalogTreeSnapshot();
             })
             .withFailureHandler(function (err) {
-              suppressPanelStateSave_ = false;
-              panels[0].loading = false;
-              panels[1].loading = false;
-              renderPanel(0);
-              renderPanel(1);
-              updateEmptyTrashButton_();
-              setStatus((err && err.message) || String(err));
+              if (loadInitialPanels._gen !== loadGen) {
+                return;
+              }
+              setStatus(
+                'Зонд: ' + ((err && err.message) || String(err)) + ' → дерево…'
+              );
+              google.script.run
+                .withSuccessHandler(function (tree) {
+                  if (loadInitialPanels._gen !== loadGen) {
+                    return;
+                  }
+                  if (!tree) {
+                    clearLoadWatchdogs_();
+                    finishInitialLoadUi_('Пустое дерево (null)');
+                    return;
+                  }
+                  try {
+                    ingestCatalogSnapshot_(tree);
+                    snapshotTreeReady_ = true;
+                    snapshotFilesReady_ = true;
+                    tryPaintInitial_();
+                    maybeFinishInitial_();
+                  } catch (e2) {
+                    clearLoadWatchdogs_();
+                    finishInitialLoadUi_((e2 && e2.message) || String(e2));
+                  }
+                })
+                .withFailureHandler(function (err2) {
+                  if (loadInitialPanels._gen !== loadGen) {
+                    return;
+                  }
+                  clearLoadWatchdogs_();
+                  catalogInitialLoadBusy_ = false;
+                  suppressPanelStateSave_ = false;
+                  panels[0].loading = false;
+                  panels[1].loading = false;
+                  renderPanel(0);
+                  renderPanel(1);
+                  finishInitialLoadUi_((err2 && err2.message) || String(err2));
+                })
+                .getCatalogTreeSnapshot();
             })
-            .getCatalogSnapshot();
+            .getCatalogLoadProbe();
+        }
+
+        var catalogInitialLoadBusy_ = false;
+        var pendingJobsPollFolderIds_ = null;
+
+        function resumeJobsPollerAfterInitialLoad_(folderId) {
+          if (catalogInitialLoadBusy_) {
+            return;
+          }
+          var folders = pendingJobsPollFolderIds_ || (folderId ? [folderId] : null);
+          pendingJobsPollFolderIds_ = null;
+          google.script.run
+            .withSuccessHandler(function (st) {
+              if (st && st.busy) {
+                if (st.progressMessage) {
+                  setStatus(st.progressMessage);
+                }
+                startJobsPoller_(folders);
+              }
+            })
+            .withFailureHandler(function () {})
+            .resumeCatalogJobsAfterUiLoad();
         }
 
         function applyCommandBarAccess_(canOperate) {
@@ -7038,6 +8808,8 @@
             el.disabled = !canOperate;
           });
         }
+
+        var mainAppUiBound_ = false;
 
         function initMainApp(data) {
           virtualRootFolderId = data.virtualRootFolderId;
@@ -7056,6 +8828,25 @@
           updateEmptyTrashButton_();
           bindPanelSortHeaders_();
 
+          document.getElementById('main-user').textContent = data.userEmail
+            ? data.userEmail
+            : '';
+
+          if (!mainAppUiBound_) {
+            mainAppUiBound_ = true;
+            bindMainAppUiOnce_();
+          }
+
+          loadInitialPanels(virtualRootFolderId);
+          // Активную панель выставит restore prefs (§21); до paint — loading.
+          showScreen('main');
+          // Jobs-поллер — только после снимка: иначе processCatalogJobs держит lock
+          // и конкурирует с getCatalogSnapshot → вечная «Загрузка каталога…».
+          pendingJobsPollFolderIds_ = [virtualRootFolderId];
+        }
+
+        /** Слушатели UI один раз: повторный initMainApp после очистки/Первого запуска иначе ломает «Сервис» (toggle×2). */
+        function bindMainAppUiOnce_() {
           Array.prototype.forEach.call(
             document.querySelectorAll('.panel-hist-btn'),
             function (btn) {
@@ -7075,24 +8866,33 @@
             }
           );
 
-          document.getElementById('main-user').textContent = data.userEmail
-            ? data.userEmail
-            : '';
-
           document.getElementById('btn-users').addEventListener('click', openPeopleModal);
           document.getElementById('btn-acl').addEventListener('click', openAclForSelection_);
           document.getElementById('btn-import').addEventListener('click', openImportModal);
-          document.getElementById('btn-refresh').addEventListener('click', refreshCatalogSnapshotManual_);
+          Array.prototype.forEach.call(
+            document.querySelectorAll('.panel-refresh-btn'),
+            function (btn) {
+              btn.addEventListener('click', refreshCatalogSnapshotManual_);
+            }
+          );
           document.getElementById('btn-service').addEventListener('click', function (e) {
             e.stopPropagation();
             toggleServiceMenu_();
           });
           document.getElementById('service-menu').addEventListener('click', function (e) {
             var t = e.target;
-            if (t && t.classList && t.classList.contains('cmd-menu-item') && !t.disabled) {
-              closeServiceMenu_();
+            if (!t || !t.classList || !t.classList.contains('cmd-menu-item') || t.disabled) {
+              return;
             }
+            if (t.classList.contains('cmd-menu-has-sub') || t.id === 'btn-repair-submenu') {
+              return;
+            }
+            closeServiceMenu_();
           });
+          var repairSubmenuBtn = document.getElementById('btn-repair-submenu');
+          if (repairSubmenuBtn) {
+            repairSubmenuBtn.addEventListener('click', toggleRepairSubmenu_);
+          }
           document.addEventListener('click', function (e) {
             var wrap = document.querySelector('.cmd-service-wrap');
             if (!wrap || wrap.contains(e.target)) {
@@ -7171,9 +8971,93 @@
           if (exportBtn) {
             exportBtn.addEventListener('click', exportCatalogStructureAction_);
           }
+          var exportSnapBtn = document.getElementById('btn-export-snapshot');
+          if (exportSnapBtn) {
+            exportSnapBtn.addEventListener('click', openExportSnapshotModal_);
+          }
+          var exportSnapCancel = document.getElementById('export-snap-cancel');
+          if (exportSnapCancel) {
+            exportSnapCancel.addEventListener('click', closeExportSnapshotModal_);
+          }
+          var exportSnapSubmit = document.getElementById('export-snap-submit');
+          if (exportSnapSubmit) {
+            exportSnapSubmit.addEventListener('click', runExportSnapshotAction_);
+          }
+          var exportSnapModal = document.getElementById('export-snapshot-modal');
+          if (exportSnapModal) {
+            exportSnapModal.addEventListener('click', function (e) {
+              if (e.target.id === 'export-snapshot-modal') {
+                closeExportSnapshotModal_();
+              }
+            });
+          }
+          var importSnapBtn = document.getElementById('btn-import-snapshot');
+          if (importSnapBtn) {
+            importSnapBtn.addEventListener('click', openImportSnapshotModal_);
+          }
+          var loadStructureBtn = document.getElementById('btn-load-structure');
+          if (loadStructureBtn) {
+            loadStructureBtn.addEventListener('click', openLoadStructureModal_);
+          }
+          var importSnapCancel = document.getElementById('import-snap-cancel');
+          if (importSnapCancel) {
+            importSnapCancel.addEventListener('click', closeImportSnapshotModal_);
+          }
+          var importSnapSubmit = document.getElementById('import-snap-submit');
+          if (importSnapSubmit) {
+            importSnapSubmit.addEventListener('click', runImportSnapshotAction_);
+          }
+          var importSnapModal = document.getElementById('import-snapshot-modal');
+          if (importSnapModal) {
+            importSnapModal.addEventListener('click', function (e) {
+              if (e.target.id === 'import-snapshot-modal') {
+                closeImportSnapshotModal_();
+              }
+            });
+          }
+          var archiveBtn = document.getElementById('btn-archive-catalog');
+          if (archiveBtn) {
+            archiveBtn.addEventListener('click', openArchiveCatalogModal_);
+          }
+          var archiveCancel = document.getElementById('archive-cancel');
+          if (archiveCancel) {
+            archiveCancel.addEventListener('click', closeArchiveCatalogModal_);
+          }
+          var archiveSubmit = document.getElementById('archive-submit');
+          if (archiveSubmit) {
+            archiveSubmit.addEventListener('click', runArchiveCatalogAction_);
+          }
+          var archiveModal = document.getElementById('archive-catalog-modal');
+          if (archiveModal) {
+            archiveModal.addEventListener('click', function (e) {
+              if (e.target.id === 'archive-catalog-modal') {
+                closeArchiveCatalogModal_();
+              }
+            });
+          }
           var repairBtn = document.getElementById('btn-repair');
           if (repairBtn) {
             repairBtn.addEventListener('click', openRepairModal_);
+          }
+          var clearCatalogBtn = document.getElementById('btn-clear-catalog');
+          if (clearCatalogBtn) {
+            clearCatalogBtn.addEventListener('click', openClearCatalogModal_);
+          }
+          var clearCatalogCancel = document.getElementById('clear-catalog-cancel');
+          if (clearCatalogCancel) {
+            clearCatalogCancel.addEventListener('click', closeClearCatalogModal_);
+          }
+          var clearCatalogSubmit = document.getElementById('clear-catalog-submit');
+          if (clearCatalogSubmit) {
+            clearCatalogSubmit.addEventListener('click', runClearCatalogAction_);
+          }
+          var clearCatalogModal = document.getElementById('clear-catalog-modal');
+          if (clearCatalogModal) {
+            clearCatalogModal.addEventListener('click', function (e) {
+              if (e.target.id === 'clear-catalog-modal') {
+                closeClearCatalogModal_();
+              }
+            });
           }
           var repairQuick = document.getElementById('repair-quick');
           if (repairQuick) {
@@ -7274,11 +9158,8 @@
           document.querySelectorAll('input[name="import-scenario"]').forEach(function (el) {
             el.addEventListener('change', updateImportScenarioUi);
           });
-          document.getElementById('import-local-files-btn').addEventListener('click', function () {
+          document.getElementById('import-local-add-btn').addEventListener('click', function () {
             document.getElementById('import-local-files').click();
-          });
-          document.getElementById('import-local-folder-btn').addEventListener('click', function () {
-            document.getElementById('import-local-folder').click();
           });
           document.getElementById('import-local-clear-btn').addEventListener('click', function () {
             clearLocalImportSelection_();
@@ -7290,6 +9171,51 @@
           document.getElementById('import-local-folder').addEventListener('change', function (e) {
             appendLocalImportFiles_(e.target.files, true);
             e.target.value = '';
+          });
+          (function bindLocalImportDrop_() {
+            var drop = document.getElementById('import-local-drop');
+            if (!drop) {
+              return;
+            }
+            drop.addEventListener('click', function () {
+              document.getElementById('import-local-files').click();
+            });
+            drop.addEventListener('keydown', function (e) {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                document.getElementById('import-local-files').click();
+              }
+            });
+            drop.addEventListener('dragover', function (e) {
+              e.preventDefault();
+              drop.classList.add('dragover');
+            });
+            drop.addEventListener('dragleave', function () {
+              drop.classList.remove('dragover');
+            });
+            drop.addEventListener('drop', function (e) {
+              e.preventDefault();
+              drop.classList.remove('dragover');
+              ingestLocalImportDrop_(e.dataTransfer);
+            });
+          })();
+          document.getElementById('import-local-list').addEventListener('click', function (e) {
+            var t = e.target;
+            while (t && t !== e.currentTarget) {
+              if (t.getAttribute && t.getAttribute('data-local-remove') != null) {
+                break;
+              }
+              t = t.parentNode;
+            }
+            if (!t || t === e.currentTarget) {
+              return;
+            }
+            var idx = Number(t.getAttribute('data-local-remove'));
+            if (isNaN(idx) || idx < 0 || idx >= localImportEntries_.length) {
+              return;
+            }
+            localImportEntries_.splice(idx, 1);
+            updateLocalImportSummary_();
           });
           document.getElementById('import-modal').addEventListener('click', function (e) {
             if (e.target.id === 'import-modal') {
@@ -7398,20 +9324,7 @@
             });
           });
 
-          loadInitialPanels(virtualRootFolderId);
-          setActivePanel(0);
           document.addEventListener('keydown', onDocumentCatalogKeydown_);
-          showScreen('main');
-          google.script.run
-            .withSuccessHandler(function (st) {
-              if (st && st.busy) {
-                if (st.progressMessage) {
-                  setStatus(st.progressMessage);
-                }
-                startJobsPoller_([virtualRootFolderId]);
-              }
-            })
-            .getCatalogJobsStatus();
         }
 
         function updateImportScenarioUi() {
@@ -7754,9 +9667,10 @@
             if (!file) {
               continue;
             }
-            var relativePath = fromFolder
-              ? String(file.webkitRelativePath || file.name || '').replace(/\\/g, '/')
-              : String(file.name || '');
+            // webkitRelativePath есть и у drop папки, и у webkitdirectory — не терять дерево.
+            var relativePath = String(
+              file.webkitRelativePath || file.name || ''
+            ).replace(/\\/g, '/');
             if (!relativePath) {
               continue;
             }
@@ -7769,28 +9683,167 @@
           updateLocalImportSummary_();
         }
 
+        function ingestLocalImportDrop_(dataTransfer) {
+          if (!dataTransfer) {
+            return;
+          }
+          var items = dataTransfer.items;
+          if (items && items.length && typeof items[0].webkitGetAsEntry === 'function') {
+            var entries = [];
+            for (var i = 0; i < items.length; i++) {
+              var entry = items[i].webkitGetAsEntry && items[i].webkitGetAsEntry();
+              if (entry) {
+                entries.push(entry);
+              }
+            }
+            if (entries.length) {
+              readLocalImportEntries_(entries, '').then(function () {
+                updateLocalImportSummary_();
+              });
+              return;
+            }
+          }
+          appendLocalImportFiles_(dataTransfer.files, true);
+        }
+
+        function readLocalImportEntries_(entries, basePath) {
+          var chain = Promise.resolve();
+          (entries || []).forEach(function (entry) {
+            chain = chain.then(function () {
+              return readOneLocalImportEntry_(entry, basePath);
+            });
+          });
+          return chain;
+        }
+
+        function readOneLocalImportEntry_(entry, basePath) {
+          if (!entry) {
+            return Promise.resolve();
+          }
+          var pathPrefix = basePath ? basePath + '/' : '';
+          if (entry.isFile) {
+            return new Promise(function (resolve) {
+              entry.file(
+                function (file) {
+                  var rel = '';
+                  if (file && file.webkitRelativePath) {
+                    rel = String(file.webkitRelativePath).replace(/\\/g, '/');
+                  } else if (entry.fullPath) {
+                    rel = String(entry.fullPath)
+                      .replace(/\\/g, '/')
+                      .replace(/^\//, '');
+                  } else {
+                    rel = pathPrefix + (file.name || entry.name || 'file');
+                  }
+                  localImportEntries_.push({
+                    file: file,
+                    relativePath: rel,
+                    size: Number(file.size) || 0
+                  });
+                  resolve();
+                },
+                function () {
+                  resolve();
+                }
+              );
+            });
+          }
+          if (entry.isDirectory) {
+            var dirReader = entry.createReader();
+            var dirName = pathPrefix + (entry.name || 'folder');
+            return readAllDirectoryEntries_(dirReader).then(function (children) {
+              return readLocalImportEntries_(children, dirName);
+            });
+          }
+          return Promise.resolve();
+        }
+
+        function readAllDirectoryEntries_(dirReader) {
+          return new Promise(function (resolve) {
+            var all = [];
+            function readBatch() {
+              dirReader.readEntries(
+                function (batch) {
+                  if (!batch || !batch.length) {
+                    resolve(all);
+                    return;
+                  }
+                  for (var i = 0; i < batch.length; i++) {
+                    all.push(batch[i]);
+                  }
+                  readBatch();
+                },
+                function () {
+                  resolve(all);
+                }
+              );
+            }
+            readBatch();
+          });
+        }
+
         function updateLocalImportSummary_() {
           var el = document.getElementById('import-local-summary');
+          var listEl = document.getElementById('import-local-list');
           if (!localImportEntries_.length) {
             el.textContent = 'Ничего не выбрано.';
+            if (listEl) {
+              listEl.innerHTML = '';
+            }
             return;
           }
           var total = 0;
           var maxFile = 0;
+          var folderHints = {};
           localImportEntries_.forEach(function (e) {
             total += e.size;
             if (e.size > maxFile) {
               maxFile = e.size;
             }
+            var slash = String(e.relativePath || '').lastIndexOf('/');
+            if (slash > 0) {
+              folderHints[e.relativePath.substring(0, slash)] = true;
+            }
           });
+          var folderCount = Object.keys(folderHints).length;
           el.textContent =
             'Выбрано файлов: ' +
             localImportEntries_.length +
+            (folderCount ? ', папок в путях: ' + folderCount : '') +
             ', суммарно ' +
             formatBytes(total) +
             (maxFile >= LOCAL_IMPORT_WARN_BYTES_ || total >= LOCAL_IMPORT_WARN_BYTES_
               ? ' (есть объекты ≥ 10 МБ — будет предупреждение)'
               : '');
+          if (listEl) {
+            listEl.innerHTML = localImportEntries_
+              .map(function (e, idx) {
+                return (
+                  '<div class="import-local-row">' +
+                  '<span class="path" title="' +
+                  escapeHtml_(e.relativePath) +
+                  '">' +
+                  escapeHtml_(e.relativePath) +
+                  '</span>' +
+                  '<span class="meta">' +
+                  formatBytes(e.size) +
+                  '</span>' +
+                  '<button type="button" class="secondary" data-local-remove="' +
+                  idx +
+                  '">×</button>' +
+                  '</div>'
+                );
+              })
+              .join('');
+          }
+        }
+
+        function escapeHtml_(s) {
+          return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
         }
 
         function parentDirOfRelativePath_(relativePath) {
@@ -7975,6 +10028,32 @@
           }
         }
 
+        /**
+         * После Jobs: снять серый pending в локальном снимке и перерисовать ВСЕ открытые панели.
+         * (jobsPollFolderIds_ — только цель импорта; пользователь часто внутри вложенной папки.)
+         */
+        function clearLocalImportPendingMarks_() {
+          if (!catalogSnapshot) {
+            return;
+          }
+          Object.keys(catalogSnapshot.filesById || {}).forEach(function (id) {
+            var file = catalogSnapshot.filesById[id];
+            if (!file) {
+              return;
+            }
+            if (String(file.status || '').toLowerCase() === 'pending') {
+              file.status = 'ready';
+            }
+          });
+          Object.keys(catalogSnapshot.foldersById || {}).forEach(function (id) {
+            var folder = catalogSnapshot.foldersById[id];
+            if (folder && folder.pendingImport) {
+              folder.pendingImport = false;
+            }
+          });
+          refreshOpenPanels_(null);
+        }
+
         function startJobsPoller_(folderIds, onDone) {
           jobsPollFolderIds_ = folderIds || jobsPollFolderIds_;
           stopJobsPoller_();
@@ -7989,25 +10068,30 @@
                 if (!st || !st.busy) {
                   stopJobsPoller_();
                   setJobsBusyStatusUi_(false);
-                  var folders = jobsPollFolderIds_;
                   jobsPollFolderIds_ = null;
-                  reloadCatalogSnapshot_(folders, function () {
-                    if (typeof onDone === 'function') {
-                      onDone();
-                    } else {
-                      flashOperationDone_();
-                    }
-                    tryReloadForRemoteRev_();
-                  });
+                  // Сразу «Готово»: полный snapshot после большого импорта может идти долго —
+                  // не держим статус «Обновление каталога…».
+                  setStatus('Готово');
+                  // Не ждать snapshot: иначе серые pending висят, пока открыта вложенная папка.
+                  clearLocalImportPendingMarks_();
+                  if (typeof onDone === 'function') {
+                    onDone();
+                  } else {
+                    flashOperationDone_();
+                  }
+                  reloadCatalogSnapshot_(null, function () {
+                    remoteCatalogRev_ = catalogRev_;
+                    setStatus('Готово');
+                  }, { quiet: true });
                   return;
                 }
                 if (st.progressMessage) {
                   setStatus(st.progressMessage);
                   setJobsBusyStatusUi_(true);
-                  if (st.progressMessage !== lastMsg || ticks % 4 === 0) {
+                  // Во время Jobs полный snapshot не трогаем — конкурирует с воркером
+                  // и может повесить статус «Обновление каталога…».
+                  if (st.progressMessage !== lastMsg) {
                     lastMsg = st.progressMessage;
-                    // quiet: не затирать «Импорт: N/M» статусом «Обновление/Готово»
-                    reloadCatalogSnapshot_(jobsPollFolderIds_, null, { quiet: true });
                   }
                 }
               })
@@ -8015,6 +10099,7 @@
                 if (ticks > 120) {
                   stopJobsPoller_();
                   setJobsBusyStatusUi_(false);
+                  setStatus('Готово');
                 }
               })
               .getCatalogJobsStatus();
@@ -8023,8 +10108,35 @@
           jobsPollTimer_ = setInterval(tick, 1500);
         }
 
+        function stopCancelOpPoller_() {
+          if (cancelOpPollTimer_) {
+            clearInterval(cancelOpPollTimer_);
+            cancelOpPollTimer_ = null;
+          }
+        }
+
+        function startCancelOpPoller_() {
+          stopCancelOpPoller_();
+          function tickOp() {
+            google.script.run
+              .withSuccessHandler(function (st) {
+                if (st && st.message) {
+                  setStatus(st.message);
+                  setJobsBusyStatusUi_(true);
+                }
+              })
+              .withFailureHandler(function () {})
+              .getCatalogOpStatus();
+          }
+          cancelOpPollTimer_ = setInterval(tickOp, 700);
+          tickOp();
+        }
+
         function promptCancelActiveJobs_() {
-          if (!jobsPollTimer_) {
+          if (!jobsPollTimer_ && !cancelOpPollTimer_) {
+            return;
+          }
+          if (cancelOpPollTimer_) {
             return;
           }
           google.script.run
@@ -8034,21 +10146,52 @@
               }
               var remaining = st.remaining != null ? st.remaining : '?';
               var eta = st.estimateRemainingLabel || '—';
-              var lines = [
-                'Фоновая операция: ' + (st.progressMessage || 'идёт…'),
-                'Осталось файлов: ' + remaining + '.',
-                'Примерно осталось: ' + eta + '.',
-                'Прервать? Уже скопированное (режим копирования) уйдёт в корзину каталога.'
-              ];
+              var isClear =
+                (st.activeJob && st.activeJob.jobType === 'clear_catalog') ||
+                /Очистка каталога/i.test(String(st.progressMessage || ''));
+              var lines = isClear
+                ? [
+                    'Очистка каталога зависла или ещё идёт: ' +
+                      (st.progressMessage || '…'),
+                    'Нажмите OK — добьём оставшиеся файлы в корзину Drive и очистим метаданные.'
+                  ]
+                : [
+                    'Фоновая операция: ' + (st.progressMessage || 'идёт…'),
+                    'Осталось файлов: ' + remaining + '.',
+                    'Примерно осталось: ' + eta + '.',
+                    'Прервать? Уже скопированное (режим копирования) уйдёт в корзину каталога.'
+                  ];
               showAppConfirm_(lines.join('\n')).then(function (ok) {
                 if (!ok) {
                   return;
                 }
+                // Стоп поллера Jobs — иначе затрёт статус прерывания / ложно «Готово».
+                stopJobsPoller_();
+                startCancelOpPoller_();
+                setJobsBusyStatusUi_(true);
                 setStatus('Прерывание…');
                 google.script.run
                   .withSuccessHandler(function (res) {
-                    stopJobsPoller_();
+                    stopCancelOpPoller_();
                     setJobsBusyStatusUi_(false);
+                    if (res && res.jobType === 'clear_catalog') {
+                      if (res.needsFirstLaunch) {
+                        setStatus('Очистка завершена. Первый запуск…');
+                        google.script.run
+                          .withSuccessHandler(routeBootstrap)
+                          .withFailureHandler(onBootstrapError)
+                          .getWebAppBootstrap();
+                        return;
+                      }
+                      setStatus(
+                        'Очистка завершена' +
+                          (res.trashed ? ' (в корзину: ' + res.trashed + ')' : '')
+                      );
+                      reloadCatalogSnapshot_(null, function () {
+                        setStatus('Готово');
+                      }, { quiet: true });
+                      return;
+                    }
                     var msg =
                       'Импорт прерван: готово ' +
                       ((res && res.done) || 0) +
@@ -8061,10 +10204,15 @@
                       msg += '; снято pending: ' + res.removedPending;
                     }
                     setStatus(msg);
-                    reloadCatalogSnapshot_(jobsPollFolderIds_ || null);
                     jobsPollFolderIds_ = null;
+                    clearLocalImportPendingMarks_();
+                    reloadCatalogSnapshot_(null, function () {
+                      setStatus(msg);
+                    }, { quiet: true });
                   })
                   .withFailureHandler(function (err) {
+                    stopCancelOpPoller_();
+                    setJobsBusyStatusUi_(false);
                     setStatus((err && err.message) || String(err));
                   })
                   .cancelActiveCatalogJobs();
@@ -8084,23 +10232,24 @@
 
         function submitLocalImport_(state, btn) {
           if (!localImportEntries_.length) {
-            showImportMessage('Выберите файлы или папку с компьютера.', 'error');
+            showImportMessage('Выберите файлы или папки с компьютера.', 'error');
             return;
           }
 
           var targetName = state.folderName || 'папку';
           var total = 0;
-          localImportEntries_.forEach(function (e) {
+          var entriesSnapshot = localImportEntries_.slice();
+          entriesSnapshot.forEach(function (e) {
             total += e.size;
           });
 
           confirmOperationWithWeight_(
             'Импортировать ' +
-              localImportEntries_.length +
+              entriesSnapshot.length +
               ' файл(ов) с компьютера в «' +
               targetName +
               '».\nЗагрузка пойдёт в фоне (очередь Jobs).',
-            localImportEntries_.length,
+            entriesSnapshot.length,
             total
           )
             .then(function (okHeavy) {
@@ -8113,8 +10262,8 @@
               setStatus('Постановка в очередь…');
               showOpStartSplash_();
 
-              var folderPaths = collectLocalFolderPaths_(localImportEntries_);
-              var filesMeta = localImportEntries_.map(function (entry) {
+              var folderPaths = collectLocalFolderPaths_(entriesSnapshot);
+              var filesMeta = entriesSnapshot.map(function (entry) {
                 return {
                   relativePath: entry.relativePath,
                   fileName: fileNameOfRelativePath_(entry.relativePath),
@@ -8131,37 +10280,86 @@
                 .then(function (startResult) {
                   var jobId = startResult && startResult.jobId;
                   var pathToFolderId = (startResult && startResult.pathToFolderId) || {};
+                  var created = (startResult && startResult.created) || { folders: [], files: [] };
+                  var catalogIdByPath = {};
+                  entriesSnapshot.forEach(function (entry, index) {
+                    var cf = created.files && created.files[index];
+                    if (cf && cf.id) {
+                      catalogIdByPath[entry.relativePath] = cf.id;
+                    }
+                  });
                   closeImportModal();
-                  startJobsPoller_([state.folderId]);
-                  setStatus('Загрузка: 0/' + localImportEntries_.length);
+                  clearLocalImportSelection_();
+                  applyLocalCopy_(state.folderId, created);
+                  setJobsBusyStatusUi_(true);
+                  setStatus('Загрузка: 0/' + entriesSnapshot.length);
+                  google.script.run
+                    .withFailureHandler(function () {})
+                    .unpauseCatalogJobs();
 
+                  // §0.4a: пакетный upload без поллера на каждый файл (поллер конкурирует за lock).
+                  var batches = buildLocalImportUploadBatches_(entriesSnapshot);
+                  var uploaded = 0;
                   var chain = Promise.resolve();
-                  localImportEntries_.forEach(function (entry, index) {
+                  batches.forEach(function (batchEntries) {
                     chain = chain.then(function () {
-                      setStatus(
-                        'Загрузка: ' +
-                          (index + 1) +
-                          '/' +
-                          localImportEntries_.length
-                      );
-                      return readFileAsBase64_(entry.file).then(function (base64Data) {
-                        var dir = parentDirOfRelativePath_(entry.relativePath);
-                        var parentFolderId = dir
-                          ? pathToFolderId[dir] || state.folderId
-                          : state.folderId;
-                        return gasRun_('importLocalFile', {
-                          parentFolderId: parentFolderId,
-                          fileName: fileNameOfRelativePath_(entry.relativePath),
-                          mimeType: entry.file.type || 'application/octet-stream',
-                          base64Data: base64Data,
-                          sizeBytes: entry.size,
+                      return Promise.all(
+                        batchEntries.map(function (entry) {
+                          return readFileAsBase64_(entry.file).then(function (base64Data) {
+                            var dir = parentDirOfRelativePath_(entry.relativePath);
+                            return {
+                              parentFolderId: dir
+                                ? pathToFolderId[dir] || state.folderId
+                                : state.folderId,
+                              fileName: fileNameOfRelativePath_(entry.relativePath),
+                              mimeType: entry.file.type || 'application/octet-stream',
+                              base64Data: base64Data,
+                              sizeBytes: entry.size,
+                              relativePath: entry.relativePath,
+                              catalogId: catalogIdByPath[entry.relativePath] || ''
+                            };
+                          });
+                        })
+                      ).then(function (payloadFiles) {
+                        return gasRun_('importLocalFilesBatch', {
                           jobId: jobId,
-                          relativePath: entry.relativePath
+                          files: payloadFiles
+                        }).then(function (batchResult) {
+                          var results = (batchResult && batchResult.results) || [];
+                          results.forEach(function (res) {
+                            if (!res || !res.ok) {
+                              return;
+                            }
+                            uploaded += 1;
+                            var cid = res.catalogId;
+                            if (cid && catalogSnapshot && catalogSnapshot.filesById[cid]) {
+                              catalogSnapshot.filesById[cid].status = 'ready';
+                              if (res.fileId) {
+                                catalogSnapshot.filesById[cid].fileId = res.fileId;
+                              }
+                            }
+                          });
+                          refreshOpenPanels_([state.folderId]);
+                          setStatus(
+                            'Загрузка: ' +
+                              Math.min(uploaded, entriesSnapshot.length) +
+                              '/' +
+                              entriesSnapshot.length
+                          );
                         });
                       });
                     });
                   });
-                  return chain;
+                  return chain.then(function () {
+                    clearLocalImportPendingMarks_();
+                    google.script.run
+                      .withFailureHandler(function () {})
+                      .processCatalogJobs();
+                    flashOperationDone_();
+                    reloadCatalogSnapshot_([state.folderId], function () {
+                      setStatus('Готово');
+                    }, { quiet: true });
+                  });
                 })
                 .then(function () {
                   btn.disabled = false;
@@ -8176,6 +10374,36 @@
             });
         }
 
+        /**
+         * Пакеты upload: ≤5 файлов и ≤1.5 МБ сырого размера на RPC.
+         * @param {Array} entries
+         * @returns {Array<Array>}
+         */
+        function buildLocalImportUploadBatches_(entries) {
+          var maxFiles = 5;
+          var maxBytes = 1.5 * 1024 * 1024;
+          var batches = [];
+          var cur = [];
+          var curBytes = 0;
+          (entries || []).forEach(function (entry) {
+            var sz = Number(entry && entry.size) || 0;
+            if (
+              cur.length &&
+              (cur.length >= maxFiles || curBytes + sz > maxBytes)
+            ) {
+              batches.push(cur);
+              cur = [];
+              curBytes = 0;
+            }
+            cur.push(entry);
+            curBytes += sz;
+          });
+          if (cur.length) {
+            batches.push(cur);
+          }
+          return batches;
+        }
+
         function runDriveImportPayload_(state, btn, payload) {
           btn.disabled = true;
           showImportMessage('', '');
@@ -8187,24 +10415,35 @@
               btn.disabled = false;
               closeImportModal();
               if (result && result.queued === false) {
+                if (result.created) {
+                  applyLocalCopy_(state.folderId, result.created);
+                }
                 reloadCatalogSnapshot_([state.folderId], function () {
                   flashOperationDone_();
                 });
                 return;
               }
               var n = (result && result.fileCount) || 0;
-              setStatus('Импорт: 0/' + n);
+              var skipMsg = '';
+              if (result && result.skippedShortcuts > 0) {
+                skipMsg =
+                  ' (ярлыков Drive пропущено: ' +
+                  result.skippedShortcuts +
+                  (result.skippedShortcutNames && result.skippedShortcutNames.length
+                    ? ' — ' + result.skippedShortcutNames.join(', ')
+                    : '') +
+                  ')';
+              }
+              setStatus('Импорт: 0/' + n + skipMsg);
               setJobsBusyStatusUi_(true);
-              reloadCatalogSnapshot_(
-                [state.folderId],
-                function () {
-                  setStatus('Импорт: 0/' + n);
-                  setJobsBusyStatusUi_(true);
-                  startJobsPoller_([state.folderId]);
-                  google.script.run.processCatalogJobs();
-                },
-                { quiet: true }
-              );
+              // Сразу дерево + серые pending (§0.4a), не ждать полный snapshot.
+              if (result && result.created) {
+                applyLocalCopy_(state.folderId, result.created);
+              }
+              startJobsPoller_([state.folderId]);
+              google.script.run
+                .withFailureHandler(function () {})
+                .processCatalogJobs();
             })
             .withFailureHandler(function (err) {
               btn.disabled = false;
@@ -8277,13 +10516,29 @@
           var targetName = state.folderName || 'папку';
           var preflightPayload = {
             items: items,
-            driveUrls: urls
+            driveUrls: urls,
+            mode: mode
           };
           btn.disabled = true;
           showImportMessage('', '');
           setStatus('Подсчёт файлов…');
           gasRun_('preflightDriveImport', preflightPayload)
             .then(function (pre) {
+              if (mode === 'move' && pre && pre.canMove === false) {
+                var foreign = (pre.foreignOwnerCount || 0);
+                var sample = (pre.foreignOwnerSample || []).slice(0, 5).join(', ');
+                btn.disabled = false;
+                setStatus('Готово');
+                showImportMessage(
+                  'Перемещение невозможно: ' +
+                    foreign +
+                    ' файл(ов) другого владельца' +
+                    (sample ? ' (' + sample + ')' : '') +
+                    '. Выберите «Копировать» или уберите чужие файлы.',
+                  'error'
+                );
+                return null;
+              }
               var lines = [
                 'Импортировать с Drive в «' + targetName + '».'
               ];
@@ -8299,6 +10554,9 @@
                   formatBytes(bytes) +
                   '.'
               );
+              if (mode === 'move') {
+                lines.push('Режим: перемещение (сначала перенос, права — в фоне).');
+              }
               if (parts > 1) {
                 lines.push('Будет обработано в фоне порциями: ' + parts + ' (по ≤50 файлов).');
               } else {
@@ -8320,6 +10578,9 @@
               return showAppConfirm_(lines.join('\n'));
             })
             .then(function (okHeavy) {
+              if (okHeavy == null) {
+                return;
+              }
               if (!okHeavy) {
                 btn.disabled = false;
                 setStatus('Готово');

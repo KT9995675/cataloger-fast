@@ -6,6 +6,12 @@
 /** @const {number} Порог предупреждения на клиенте (байт); сервер не режет. */
 var LOCAL_IMPORT_WARN_BYTES_ = 10 * 1024 * 1024;
 
+/** @const {number} Макс. файлов в одном RPC upload-пакете (§0.4a / §9.13). */
+var LOCAL_IMPORT_UPLOAD_BATCH_FILES_ = 5;
+
+/** @const {number} Бюджет сырого размера файлов в одном пакете (байт). */
+var LOCAL_IMPORT_UPLOAD_BATCH_BYTES_ = 1.5 * 1024 * 1024;
+
 /**
  * Создаёт виртуальные папки по относительным путям под targetFolderId.
  *
@@ -49,16 +55,12 @@ function prepareLocalImportTree(input) {
     return a.split('/').length - b.split('/').length || (a < b ? -1 : a > b ? 1 : 0);
   });
 
-  var treeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Tree');
-  if (!treeSheet) {
-    throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: Tree');
-  }
-
   var pathToFolderId = {};
   var now = new Date();
   var created = 0;
 
   var createdFolders = [];
+  var treeBatch = [];
   normalized.forEach(function (path) {
     if (pathToFolderId[path]) {
       return;
@@ -73,14 +75,22 @@ function prepareLocalImportTree(input) {
         continue;
       }
       var folderId = Utilities.getUuid();
-      treeSheet.appendRow([folderId, parentId, parts[i], now, false, '', '', '']);
+      treeBatch.push({
+        folderId: folderId,
+        parentFolderId: parentId,
+        name: parts[i],
+        folderCreatedAt: now,
+        isSystem: false
+      });
       pathToFolderId[accum] = folderId;
       createdFolders.push({ folderId: folderId, parentId: parentId, name: parts[i] });
       parentId = folderId;
       created++;
     }
   });
-
+  if (treeBatch.length) {
+    appendTreeFolderRowsBatch_(treeBatch);
+  }
   if (createdFolders.length) {
     var engine = createAclEngine_();
     createdFolders.forEach(function (f) {
@@ -97,7 +107,15 @@ function prepareLocalImportTree(input) {
   return {
     ok: true,
     pathToFolderId: pathToFolderId,
-    folderCount: created
+    folderCount: created,
+    createdFolders: createdFolders.map(function (f) {
+      return {
+        id: f.folderId,
+        parentFolderId: f.parentId,
+        name: f.name,
+        pendingImport: true
+      };
+    })
   };
 }
 
@@ -137,6 +155,9 @@ function startLocalImportJob(input) {
   var targetFolderId = String(input.targetFolderId || '').trim();
   var pathToFolderId = tree.pathToFolderId || {};
 
+  var engine = createAclEngine_();
+  var pendingRows = [];
+  var createdFiles = [];
   var items = files.map(function (f, index) {
     var relativePath = String(f.relativePath || f.fileName || '').trim();
     var fileName = String(f.fileName || '').trim();
@@ -149,18 +170,52 @@ function startLocalImportJob(input) {
       dir = relativePath.substring(0, relativePath.lastIndexOf('/'));
     }
     var parentFolderId = dir ? pathToFolderId[dir] || targetFolderId : targetFolderId;
+    var catalogId = Utilities.getUuid();
+    var sizeBytes = parseNumber_(f.sizeBytes);
+    var mimeType = String(f.mimeType || 'application/octet-stream');
+    pendingRows.push({
+      catalogId: catalogId,
+      folderId: parentFolderId,
+      fileId: '',
+      displayName: fileName,
+      sizeBytes: sizeBytes,
+      driveModifiedAt: '',
+      sourceFileId: '',
+      mimeType: mimeType,
+      status: 'pending'
+    });
+    createdFiles.push({
+      id: catalogId,
+      folderId: parentFolderId,
+      name: fileName,
+      mimeType: mimeType,
+      sizeBytes: sizeBytes,
+      status: 'pending'
+    });
     return {
       index: index,
       relativePath: relativePath,
       fileName: fileName,
       parentFolderId: parentFolderId,
-      sizeBytes: parseNumber_(f.sizeBytes),
-      mimeType: String(f.mimeType || 'application/octet-stream'),
+      sizeBytes: sizeBytes,
+      mimeType: mimeType,
       status: 'waiting',
-      catalogId: '',
+      catalogId: catalogId,
       error: ''
     };
   });
+
+  if (pendingRows.length) {
+    appendCatalogFileRowsBatch_(pendingRows);
+    pendingRows.forEach(function (row) {
+      engine.filesByCatalogId[row.catalogId] = {
+        catalog_id: row.catalogId,
+        folder_id: row.folderId,
+        approved: false
+      };
+      copyExplicitAclFromParentFolder_(engine, 'file', row.catalogId, row.folderId);
+    });
+  }
 
   var jobId = enqueueCatalogJob_(
     'import_upload',
@@ -170,6 +225,7 @@ function startLocalImportJob(input) {
     },
     userEmail
   );
+  setCatalogJobsPaused_(false);
   ensureCatalogJobsTrigger_();
   markCatalogJobRunning_(jobId);
   patchCatalogJobRow_(jobId, {
@@ -177,6 +233,7 @@ function startLocalImportJob(input) {
     progress_message: 'Загрузка: 0/' + items.length
   });
   bumpCatalogRev_();
+  kickCatalogJobsProcessing_();
 
   return {
     ok: true,
@@ -184,73 +241,88 @@ function startLocalImportJob(input) {
     jobId: jobId,
     pathToFolderId: pathToFolderId,
     folderCount: tree.folderCount || 0,
-    fileCount: items.length
+    fileCount: items.length,
+    created: {
+      folders: tree.createdFolders || [],
+      files: createdFiles
+    }
   };
 }
 
 /**
- * Загружает один локальный файл в плоскую папку каталога на Drive + Files.
- * При jobId — часть очереди import_upload.
+ * Загружает один локальный файл — тонкая обёртка над пакетом.
+ *
+ * @param {Object} input
+ * @returns {Object}
+ */
+function importLocalFile(input) {
+  var batch = importLocalFilesBatch({
+    jobId: input && input.jobId,
+    files: [input || {}]
+  });
+  var first = (batch.results && batch.results[0]) || null;
+  if (!first || !first.ok) {
+    throw catalogError_(
+      (first && first.code) || 'IMPORT_FAILED',
+      (first && first.error) || 'Не удалось загрузить файл.'
+    );
+  }
+  return {
+    ok: true,
+    catalogId: first.catalogId,
+    displayName: first.displayName,
+    fileId: first.fileId,
+    sizeBytes: first.sizeBytes,
+    jobId: batch.jobId
+  };
+}
+
+/**
+ * §0.4a / §9.13 — пакетный upload с клиента (фаза place).
+ * Один вызов: один ACL-engine, один batch Files, один апдейт Jobs.
  *
  * @param {{
- *   parentFolderId: string,
- *   fileName: string,
- *   mimeType?: string,
- *   base64Data: string,
- *   sizeBytes?: number,
  *   jobId?: string,
- *   relativePath?: string
+ *   files: Array<{
+ *     parentFolderId: string,
+ *     fileName: string,
+ *     mimeType?: string,
+ *     base64Data: string,
+ *     sizeBytes?: number,
+ *     relativePath?: string,
+ *     catalogId?: string
+ *   }>
  * }} input
  * @returns {{
  *   ok: true,
- *   catalogId: string,
- *   displayName: string,
- *   fileId: string,
- *   sizeBytes: number,
- *   jobId?: string
+ *   jobId?: string,
+ *   doneCount: number,
+ *   failedCount: number,
+ *   results: Array<Object>
  * }}
  */
-function importLocalFile(input) {
+function importLocalFilesBatch(input) {
   assertCatalogReady_();
-
   input = input || {};
-  var parentFolderId = String(input.parentFolderId || '').trim();
-  var fileName = String(input.fileName || '').trim();
-  var mimeType = String(input.mimeType || 'application/octet-stream').trim();
-  var base64Data = String(input.base64Data || '').trim();
-  var sizeBytes = parseNumber_(input.sizeBytes);
-  var jobId = String(input.jobId || '').trim();
-  var relativePath = String(input.relativePath || '').trim();
-
-  if (!parentFolderId) {
-    throw catalogError_('INVALID_INPUT', 'parentFolderId is required.');
+  var files = Array.isArray(input.files) ? input.files : [];
+  if (!files.length) {
+    throw catalogError_('INVALID_INPUT', 'Нет файлов для загрузки.');
   }
-  if (!fileName) {
-    throw catalogError_('INVALID_INPUT', 'fileName is required.');
-  }
-  if (!base64Data) {
-    throw catalogError_('INVALID_INPUT', 'base64Data is required.');
-  }
-
-  var comma = base64Data.indexOf(',');
-  if (base64Data.indexOf('base64') >= 0 && comma >= 0) {
-    base64Data = base64Data.substring(comma + 1);
+  if (files.length > LOCAL_IMPORT_UPLOAD_BATCH_FILES_) {
+    throw catalogError_(
+      'INVALID_INPUT',
+      'Слишком много файлов в пакете (макс. ' + LOCAL_IMPORT_UPLOAD_BATCH_FILES_ + ').'
+    );
   }
 
   var userEmail = Session.getActiveUser().getEmail();
   if (!userEmail) {
     throw catalogError_('AUTH_REQUIRED', 'Google account email is required.');
   }
-
   var loginRole = getLoginRoleForUser_(userEmail);
   assertCanRunCatalogOperations_(loginRole);
 
-  var engine = createAclEngine_();
-  if (!engine.foldersById[parentFolderId]) {
-    throw catalogError_('FOLDER_NOT_FOUND', 'Parent folder not found: ' + parentFolderId);
-  }
-  assertEditorOnFolderForMove_(engine, userEmail, loginRole, parentFolderId);
-
+  var jobId = String(input.jobId || '').trim();
   if (jobId) {
     var job = getCatalogJobById_(jobId);
     if (!job || String(job.job_type) !== 'import_upload') {
@@ -262,83 +334,214 @@ function importLocalFile(input) {
     }
   }
 
-  var bytes;
-  try {
-    bytes = Utilities.base64Decode(base64Data);
-  } catch (e) {
-    if (jobId) {
-      markLocalImportItem_(jobId, relativePath, fileName, 'failed', '', (e && e.message) || 'decode');
+  var engine = createAclEngine_();
+  var checkedParents = {};
+  files.forEach(function (f) {
+    var parentFolderId = String((f && f.parentFolderId) || '').trim();
+    if (!parentFolderId) {
+      throw catalogError_('INVALID_INPUT', 'parentFolderId is required.');
     }
-    throw catalogError_('INVALID_INPUT', 'Не удалось разобрать содержимое файла.');
-  }
+    if (checkedParents[parentFolderId]) {
+      return;
+    }
+    if (!engine.foldersById[parentFolderId]) {
+      throw catalogError_('FOLDER_NOT_FOUND', 'Parent folder not found: ' + parentFolderId);
+    }
+    assertEditorOnFolderForMove_(engine, userEmail, loginRole, parentFolderId);
+    checkedParents[parentFolderId] = true;
+  });
 
-  if (!sizeBytes || sizeBytes < 0) {
-    sizeBytes = bytes.length;
-  }
+  var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
+  var controllerEmail =
+    PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) || '';
+  var filesBatch = beginFilesUpdateBatch_();
+  var results = [];
+  var marks = [];
+  var failedCount = 0;
 
-  try {
-    var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
-    var blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', fileName);
-    var driveFile = catalogRootFolder.createFile(blob);
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i] || {};
+    var parentFolderId = String(f.parentFolderId || '').trim();
+    var fileName = String(f.fileName || '').trim();
+    var mimeType = String(f.mimeType || 'application/octet-stream').trim();
+    var relativePath = String(f.relativePath || '').trim();
+    var catalogId = String(f.catalogId || '').trim();
+    var sizeBytes = parseNumber_(f.sizeBytes);
+    var base64Data = stripLocalImportBase64Prefix_(String(f.base64Data || ''));
 
-    var controllerEmail =
-      PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) || '';
-    if (controllerEmail) {
-      transferDriveFileToController_(driveFile, controllerEmail, userEmail);
+    if (!fileName || !base64Data) {
+      failedCount++;
+      results.push({
+        ok: false,
+        code: 'INVALID_INPUT',
+        error: 'fileName/base64Data required',
+        relativePath: relativePath,
+        catalogId: catalogId
+      });
+      if (jobId) {
+        marks.push({
+          relativePath: relativePath,
+          fileName: fileName,
+          status: 'failed',
+          catalogId: catalogId,
+          error: 'fileName/base64Data required'
+        });
+      }
+      continue;
     }
 
-    var catalogId = Utilities.getUuid();
-    var resolvedMime = '';
     try {
-      resolvedMime = String(driveFile.getMimeType() || mimeType || '');
-    } catch (eMime) {
-      resolvedMime = mimeType || '';
+      var bytes = Utilities.base64Decode(base64Data);
+      if (!sizeBytes || sizeBytes < 0) {
+        sizeBytes = bytes.length;
+      }
+      var blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', fileName);
+      var driveFile = catalogRootFolder.createFile(blob);
+      if (controllerEmail) {
+        transferDriveFileToController_(driveFile, controllerEmail, userEmail);
+      }
+      if (!catalogId && jobId) {
+        catalogId = findLocalImportCatalogIdFromPayloadItems_(
+          jobId,
+          relativePath,
+          fileName
+        );
+      }
+      var resolvedMime = '';
+      try {
+        resolvedMime = String(driveFile.getMimeType() || mimeType || '');
+      } catch (eMime) {
+        resolvedMime = mimeType || '';
+      }
+
+      if (catalogId && engine.filesByCatalogId[catalogId]) {
+        patchFilesBatchRow_(filesBatch, catalogId, {
+          fileId: driveFile.getId(),
+          sizeBytes: sizeBytes,
+          mimeType: resolvedMime,
+          status: 'ready',
+          driveModifiedAt: driveFile.getLastUpdated()
+        });
+      } else {
+        catalogId = catalogId || Utilities.getUuid();
+        appendCatalogFileRow_({
+          catalogId: catalogId,
+          folderId: parentFolderId,
+          fileId: driveFile.getId(),
+          displayName: fileName,
+          sizeBytes: sizeBytes,
+          driveModifiedAt: driveFile.getLastUpdated(),
+          sourceFileId: '',
+          mimeType: resolvedMime,
+          status: 'ready'
+        });
+        engine.filesByCatalogId[catalogId] = {
+          catalog_id: catalogId,
+          folder_id: parentFolderId,
+          approved: false
+        };
+        copyExplicitAclFromParentFolder_(engine, 'file', catalogId, parentFolderId);
+      }
+
+      results.push({
+        ok: true,
+        catalogId: catalogId,
+        displayName: fileName,
+        fileId: driveFile.getId(),
+        sizeBytes: sizeBytes,
+        relativePath: relativePath
+      });
+      if (jobId) {
+        marks.push({
+          relativePath: relativePath,
+          fileName: fileName,
+          status: 'done',
+          catalogId: catalogId,
+          error: ''
+        });
+      }
+    } catch (eUp) {
+      failedCount++;
+      var errMsg = (eUp && eUp.message) || String(eUp);
+      results.push({
+        ok: false,
+        code: (eUp && eUp.name) || 'IMPORT_FAILED',
+        error: errMsg,
+        relativePath: relativePath,
+        catalogId: catalogId
+      });
+      if (jobId) {
+        marks.push({
+          relativePath: relativePath,
+          fileName: fileName,
+          status: 'failed',
+          catalogId: catalogId,
+          error: errMsg
+        });
+      }
     }
-
-    appendCatalogFileRow_({
-      catalogId: catalogId,
-      folderId: parentFolderId,
-      fileId: driveFile.getId(),
-      displayName: fileName,
-      sizeBytes: sizeBytes,
-      driveModifiedAt: driveFile.getLastUpdated(),
-      sourceFileId: '',
-      mimeType: resolvedMime,
-      status: 'ready'
-    });
-
-    engine.filesByCatalogId[catalogId] = {
-      catalog_id: catalogId,
-      folder_id: parentFolderId,
-      approved: false
-    };
-    copyExplicitAclFromParentFolder_(engine, 'file', catalogId, parentFolderId);
-
-    if (jobId) {
-      markLocalImportItem_(jobId, relativePath, fileName, 'done', catalogId, '');
-    }
-
-    return {
-      ok: true,
-      catalogId: catalogId,
-      displayName: fileName,
-      fileId: driveFile.getId(),
-      sizeBytes: sizeBytes,
-      jobId: jobId || undefined
-    };
-  } catch (eUp) {
-    if (jobId) {
-      markLocalImportItem_(
-        jobId,
-        relativePath,
-        fileName,
-        'failed',
-        '',
-        (eUp && eUp.message) || String(eUp)
-      );
-    }
-    throw eUp;
   }
+
+  commitFilesUpdateBatch_(filesBatch);
+  if (jobId && marks.length) {
+    markLocalImportItemsBatch_(jobId, marks);
+  }
+  bumpCatalogRev_();
+
+  return {
+    ok: true,
+    jobId: jobId || undefined,
+    doneCount: results.length - failedCount,
+    failedCount: failedCount,
+    results: results
+  };
+}
+
+/**
+ * @param {string} raw
+ * @returns {string}
+ */
+function stripLocalImportBase64Prefix_(raw) {
+  var base64Data = String(raw || '').trim();
+  var comma = base64Data.indexOf(',');
+  if (base64Data.indexOf('base64') >= 0 && comma >= 0) {
+    return base64Data.substring(comma + 1);
+  }
+  return base64Data;
+}
+
+/**
+ * @param {string} jobId
+ * @param {string} relativePath
+ * @param {string} fileName
+ * @returns {string}
+ */
+function findLocalImportCatalogId_(jobId, relativePath, fileName) {
+  return findLocalImportCatalogIdFromPayloadItems_(jobId, relativePath, fileName);
+}
+
+/**
+ * @param {string} jobId
+ * @param {string} relativePath
+ * @param {string} fileName
+ * @returns {string}
+ */
+function findLocalImportCatalogIdFromPayloadItems_(jobId, relativePath, fileName) {
+  var job = getCatalogJobById_(jobId);
+  if (!job) {
+    return '';
+  }
+  var items = parseJobPayload_(job).items || [];
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (
+      (relativePath && it.relativePath === relativePath) ||
+      (!relativePath && it.fileName === fileName)
+    ) {
+      return String(it.catalogId || '');
+    }
+  }
+  return '';
 }
 
 /**
@@ -350,32 +553,51 @@ function importLocalFile(input) {
  * @param {string} error
  */
 function markLocalImportItem_(jobId, relativePath, fileName, status, catalogId, error) {
+  markLocalImportItemsBatch_(jobId, [
+    {
+      relativePath: relativePath,
+      fileName: fileName,
+      status: status,
+      catalogId: catalogId,
+      error: error
+    }
+  ]);
+}
+
+/**
+ * @param {string} jobId
+ * @param {Array<{ relativePath?: string, fileName?: string, status: string, catalogId?: string, error?: string }>} marks
+ */
+function markLocalImportItemsBatch_(jobId, marks) {
+  if (!jobId || !marks || !marks.length) {
+    return;
+  }
   var job = getCatalogJobById_(jobId);
   if (!job) {
     return;
   }
   var payload = parseJobPayload_(job);
   var items = payload.items || [];
-  var matched = false;
-  for (var i = 0; i < items.length; i++) {
-    var it = items[i];
-    if (it.status === 'done' || it.status === 'failed') {
-      continue;
+  marks.forEach(function (m) {
+    var relativePath = String(m.relativePath || '');
+    var fileName = String(m.fileName || '');
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it.status === 'done' || it.status === 'failed') {
+        continue;
+      }
+      if (
+        (relativePath && it.relativePath === relativePath) ||
+        (!relativePath && it.fileName === fileName) ||
+        (m.catalogId && String(it.catalogId || '') === String(m.catalogId))
+      ) {
+        it.status = m.status;
+        it.catalogId = m.catalogId || it.catalogId || '';
+        it.error = m.error || '';
+        break;
+      }
     }
-    if (
-      (relativePath && it.relativePath === relativePath) ||
-      (!relativePath && it.fileName === fileName)
-    ) {
-      it.status = status;
-      it.catalogId = catalogId || '';
-      it.error = error || '';
-      matched = true;
-      break;
-    }
-  }
-  if (!matched) {
-    return;
-  }
+  });
   payload.items = items;
   var done = 0;
   var failed = 0;
@@ -387,13 +609,13 @@ function markLocalImportItem_(jobId, relativePath, fileName, status, catalogId, 
       done++;
     }
   });
-  var progress = Math.round((done / items.length) * 100);
+  var progress = Math.round((done / Math.max(items.length, 1)) * 100);
   var finished = done >= items.length;
   var msg = finished
     ? failed
       ? 'Загрузка завершена с ошибками: ' + failed
       : 'Загрузка с компьютера завершена'
-    : 'Загрузка с компьютера: ' + done + '/' + items.length;
+    : 'Загрузка: ' + done + '/' + items.length;
   saveJobPayloadProgress_(jobId, payload, progress, msg, finished);
 }
 

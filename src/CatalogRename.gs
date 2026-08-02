@@ -129,7 +129,7 @@ function renameCatalogFolderFast_(userEmail, loginRole, folderId, newName) {
     return { ok: true, kind: 'folder', id: folderId, name: newName };
   }
 
-  sheet.getRange(rowIndex + 1, nameCol + 1).setValue(newName);
+  sheet.getRange(rowIndex + 1, nameCol + 1).setNumberFormat('@').setValue(String(newName));
   bumpCatalogRev_();
   return { ok: true, kind: 'folder', id: folderId, name: newName };
 }
@@ -188,7 +188,7 @@ function renameCatalogFile_(engine, userEmail, loginRole, catalogId, newName) {
   }
   for (var i = 1; i < values.length; i++) {
     if (String(values[i][idCol]) === catalogId) {
-      sheet.getRange(i + 1, nameCol + 1).setValue(newName);
+      sheet.getRange(i + 1, nameCol + 1).setNumberFormat('@').setValue(String(newName));
       bumpCatalogRev_();
       return { ok: true, kind: 'file', id: catalogId, name: newName };
     }

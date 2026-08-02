@@ -43,6 +43,11 @@ function listDriveFolderForImport(input) {
   var loginRole = getLoginRoleForUser_(userEmail);
   assertCanRunCatalogOperations_(loginRole);
 
+  // Мой диск — только DriveApp (UrlFetch съедает дневную квоту).
+  if (scope === 'mydrive') {
+    return listMyDriveFolderForImportViaDriveApp_(folderId, pageToken);
+  }
+
   var token = ScriptApp.getOAuthToken();
 
   if (folderId === 'sharedDrives' || (scope === 'shared_drives' && folderId === importNavRootFolderId_('shared_drives'))) {
@@ -50,17 +55,6 @@ function listDriveFolderForImport(input) {
   }
   if (folderId === 'sharedWithMe' || (scope === 'shared' && folderId === importNavRootFolderId_('shared'))) {
     return listSharedWithMeRootForImport_(token, pageToken, scope);
-  }
-  if (folderId === 'root' || (scope === 'mydrive' && folderId === importNavRootFolderId_('mydrive'))) {
-    return listDriveChildrenForImport_(token, {
-      scope: 'mydrive',
-      folderId: 'root',
-      folderName: 'Мой диск',
-      parentId: null,
-      pageToken: pageToken,
-      corpora: 'user',
-      driveId: ''
-    });
   }
 
   var meta = driveImportFetchJson_(
@@ -314,6 +308,107 @@ function listDriveChildrenForImport_(token, opts) {
 }
 
 /**
+ * Навигатор «Мой диск» без UrlFetch.
+ *
+ * @param {string} folderId
+ * @param {string} pageToken offset as decimal string
+ * @returns {Object}
+ */
+function listMyDriveFolderForImportViaDriveApp_(folderId, pageToken) {
+  var offset = parseInt(String(pageToken || '0'), 10) || 0;
+  if (offset < 0) {
+    offset = 0;
+  }
+  var folder;
+  var folderName;
+  var parentId = null;
+  var outFolderId = String(folderId || '').trim() || 'root';
+
+  try {
+    if (outFolderId === 'root') {
+      folder = DriveApp.getRootFolder();
+      folderName = 'Мой диск';
+      parentId = null;
+    } else {
+      folder = DriveApp.getFolderById(outFolderId);
+      folderName = folder.getName();
+      var parents = folder.getParents();
+      if (parents.hasNext()) {
+        var p = parents.next();
+        parentId = p.getId();
+        try {
+          if (p.getId() === DriveApp.getRootFolder().getId()) {
+            parentId = 'root';
+          }
+        } catch (eRoot) {
+          // keep parent id
+        }
+      } else {
+        parentId = 'root';
+      }
+    }
+  } catch (eFolder) {
+    throw catalogError_(
+      'INVALID_FOLDER',
+      (eFolder && eFolder.message) || 'Drive folder not found or not accessible.'
+    );
+  }
+
+  var items = [];
+  var itFolders = folder.getFolders();
+  while (itFolders.hasNext()) {
+    var sub = itFolders.next();
+    items.push({
+      id: sub.getId(),
+      name: sub.getName(),
+      kind: 'folder',
+      mimeType: DRIVE_FOLDER_MIME_
+    });
+  }
+  var itFiles = folder.getFiles();
+  while (itFiles.hasNext()) {
+    var file = itFiles.next();
+    var mime = '';
+    try {
+      mime = String(file.getMimeType() || '');
+    } catch (eMime) {
+      mime = '';
+    }
+    if (mime === 'application/vnd.google-apps.shortcut') {
+      continue;
+    }
+    items.push({
+      id: file.getId(),
+      name: file.getName(),
+      kind: 'file',
+      mimeType: mime
+    });
+  }
+
+  items.sort(function (a, b) {
+    if (a.kind !== b.kind) {
+      return a.kind === 'folder' ? -1 : 1;
+    }
+    return String(a.name).localeCompare(String(b.name), 'ru');
+  });
+
+  var pageSize = DRIVE_IMPORT_SEARCH_PAGE_SIZE_;
+  var page = items.slice(offset, offset + pageSize);
+  var next =
+    offset + pageSize < items.length ? String(offset + pageSize) : null;
+
+  return {
+    ok: true,
+    scope: 'mydrive',
+    folderId: outFolderId,
+    folderName: folderName,
+    parentId: parentId,
+    items: page,
+    nextPageToken: next
+  };
+}
+
+/**
  * @param {Array} files
  * @returns {Array<{ id: string, name: string, kind: 'file'|'folder', mimeType: string }>}
  */
@@ -344,11 +439,23 @@ function mapDriveImportFileItems_(files) {
  * @returns {Object}
  */
 function driveImportFetchJson_(url, token) {
-  var response = UrlFetchApp.fetch(url, {
-    method: 'get',
-    headers: { Authorization: 'Bearer ' + token },
-    muteHttpExceptions: true
-  });
+  var response;
+  try {
+    response = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    });
+  } catch (eFetch) {
+    var msg = String((eFetch && eFetch.message) || eFetch || '');
+    if (/urlfetch|too many times|слишком много раз/i.test(msg)) {
+      throw catalogError_(
+        'URLFETCH_QUOTA',
+        'Дневной лимит UrlFetch исчерпан. Используйте вкладку «Мой диск» (без UrlFetch) или повторите завтра. Shared / «Доступные мне» пока требуют UrlFetch.'
+      );
+    }
+    throw catalogError_('DRIVE_LIST_FAILED', msg || 'Drive list failed');
+  }
   var code = response.getResponseCode();
   var bodyText = response.getContentText() || '{}';
   var body;
@@ -396,66 +503,72 @@ function searchDriveForImport(input) {
   var loginRole = getLoginRoleForUser_(userEmail);
   assertCanRunCatalogOperations_(loginRole);
 
+  // DriveApp.search* — без UrlFetch.
   var escaped = query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  var q = "trashed = false and name contains '" + escaped + "'";
-  var params = [
-    'q=' + encodeURIComponent(q),
-    'pageSize=' + DRIVE_IMPORT_SEARCH_PAGE_SIZE_,
-    'fields=' + encodeURIComponent('nextPageToken,files(id,name,mimeType)'),
-    'supportsAllDrives=true',
-    'includeItemsFromAllDrives=true',
-    'orderBy=' + encodeURIComponent('folder,name')
-  ];
-  if (pageToken) {
-    params.push('pageToken=' + encodeURIComponent(pageToken));
+  var q = "title contains '" + escaped + "' and trashed = false";
+  var offset = parseInt(String(pageToken || '0'), 10) || 0;
+  if (offset < 0) {
+    offset = 0;
   }
-
-  var token = ScriptApp.getOAuthToken();
-  var response = UrlFetchApp.fetch(
-    'https://www.googleapis.com/drive/v3/files?' + params.join('&'),
-    {
-      method: 'get',
-      headers: { Authorization: 'Bearer ' + token },
-      muteHttpExceptions: true
-    }
-  );
-  var code = response.getResponseCode();
-  var bodyText = response.getContentText() || '{}';
-  var body;
-  try {
-    body = JSON.parse(bodyText);
-  } catch (e) {
-    throw catalogError_('DRIVE_SEARCH_FAILED', 'Не удалось разобрать ответ Drive.');
-  }
-  if (code < 200 || code >= 300) {
-    var errMsg =
-      (body.error && body.error.message) || 'Drive search failed (' + code + ')';
-    throw catalogError_('DRIVE_SEARCH_FAILED', errMsg);
-  }
-
   var items = [];
-  (body.files || []).forEach(function (f) {
-    if (!f || !f.id) {
-      return;
+  try {
+    var folderIt = DriveApp.searchFolders(q);
+    while (folderIt.hasNext() && items.length < offset + DRIVE_IMPORT_SEARCH_PAGE_SIZE_ + 5) {
+      var folder = folderIt.next();
+      items.push({
+        id: folder.getId(),
+        name: folder.getName(),
+        kind: 'folder',
+        mimeType: DRIVE_FOLDER_MIME_
+      });
     }
-    var mime = String(f.mimeType || '');
-    if (mime === 'application/vnd.google-apps.shortcut') {
-      return;
+  } catch (eFolders) {
+    // ignore searchFolders failures
+  }
+  try {
+    var fileIt = DriveApp.searchFiles(q);
+    while (fileIt.hasNext() && items.length < offset + DRIVE_IMPORT_SEARCH_PAGE_SIZE_ + 20) {
+      var file = fileIt.next();
+      var mime = '';
+      try {
+        mime = String(file.getMimeType() || '');
+      } catch (eMime) {
+        mime = '';
+      }
+      if (mime === 'application/vnd.google-apps.shortcut') {
+        continue;
+      }
+      items.push({
+        id: file.getId(),
+        name: file.getName(),
+        kind: 'file',
+        mimeType: mime
+      });
     }
-    var kind = mime === 'application/vnd.google-apps.folder' ? 'folder' : 'file';
-    items.push({
-      id: String(f.id),
-      name: String(f.name || f.id),
-      kind: kind,
-      mimeType: mime
-    });
+  } catch (eFiles) {
+    throw catalogError_(
+      'DRIVE_SEARCH_FAILED',
+      (eFiles && eFiles.message) || 'Drive search failed'
+    );
+  }
+
+  items.sort(function (a, b) {
+    if (a.kind !== b.kind) {
+      return a.kind === 'folder' ? -1 : 1;
+    }
+    return String(a.name).localeCompare(String(b.name), 'ru');
   });
+
+  var pageSize = DRIVE_IMPORT_SEARCH_PAGE_SIZE_;
+  var page = items.slice(offset, offset + pageSize);
+  var next =
+    offset + pageSize < items.length ? String(offset + pageSize) : null;
 
   return {
     ok: true,
     query: query,
-    items: items,
-    nextPageToken: body.nextPageToken ? String(body.nextPageToken) : null
+    items: page,
+    nextPageToken: next
   };
 }
 
@@ -482,6 +595,7 @@ function preflightDriveImport(input) {
   assertCatalogReady_();
 
   input = input || {};
+  var mode = String(input.mode || '').trim().toLowerCase();
   var userEmail = Session.getActiveUser().getEmail();
   if (!userEmail) {
     throw catalogError_('AUTH_REQUIRED', 'Google account email is required.');
@@ -498,6 +612,7 @@ function preflightDriveImport(input) {
   var totalBytes = 0;
   var folderCount = 0;
   var seenSourceIds = {};
+  var sourceFileIds = [];
 
   selections.forEach(function (sel) {
     if (sel.kind === 'folder') {
@@ -527,6 +642,7 @@ function preflightDriveImport(input) {
           return;
         }
         seenSourceIds[sourceFileId] = true;
+        sourceFileIds.push(sourceFileId);
         fileCount++;
         try {
           totalBytes += Number(item.file.getSize()) || 0;
@@ -541,6 +657,7 @@ function preflightDriveImport(input) {
       return;
     }
     seenSourceIds[sel.driveId] = true;
+    sourceFileIds.push(sel.driveId);
     var sourceFile;
     try {
       sourceFile = DriveApp.getFileById(sel.driveId);
@@ -567,6 +684,19 @@ function preflightDriveImport(input) {
   }
 
   var eta = estimateImportDriveTimes_(fileCount, totalBytes);
+  var foreignOwnerCount = 0;
+  var foreignOwnerSample = [];
+  var canMove = true;
+  if (mode === 'move' && sourceFileIds.length) {
+    var controllerEmail =
+      PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) ||
+      userEmail;
+    var own = checkImportMoveOwnership_(sourceFileIds, controllerEmail);
+    foreignOwnerCount = own.foreignOwnerCount;
+    foreignOwnerSample = own.foreignOwnerSample || [];
+    canMove = foreignOwnerCount === 0;
+  }
+
   return {
     ok: true,
     fileCount: fileCount,
@@ -576,7 +706,11 @@ function preflightDriveImport(input) {
     estimateCopySeconds: eta.estimateCopySeconds,
     estimateMoveSeconds: eta.estimateMoveSeconds,
     estimateCopyLabel: eta.estimateCopyLabel,
-    estimateMoveLabel: eta.estimateMoveLabel
+    estimateMoveLabel: eta.estimateMoveLabel,
+    mode: mode || '',
+    canMove: canMove,
+    foreignOwnerCount: foreignOwnerCount,
+    foreignOwnerSample: foreignOwnerSample
   };
 }
 
@@ -638,7 +772,10 @@ function importDriveSelection(input) {
 
   var jobItems = [];
   var fileRows = [];
+  var uiFolders = [];
   var folderCount = 0;
+  var skippedShortcuts = 0;
+  var skippedShortcutNames = [];
   var seenSourceIds = {};
 
   selections.forEach(function (sel) {
@@ -651,11 +788,20 @@ function importDriveSelection(input) {
         seenSourceIds
       );
       folderCount += folderResult.folderCount;
+      skippedShortcuts += folderResult.skippedShortcuts || 0;
+      (folderResult.skippedShortcutNames || []).forEach(function (n) {
+        if (skippedShortcutNames.length < 12) {
+          skippedShortcutNames.push(n);
+        }
+      });
       folderResult.items.forEach(function (it) {
         jobItems.push(it);
       });
       (folderResult.fileRows || []).forEach(function (row) {
         fileRows.push(row);
+      });
+      (folderResult.uiFolders || []).forEach(function (f) {
+        uiFolders.push(f);
       });
       return;
     }
@@ -693,7 +839,13 @@ function importDriveSelection(input) {
       fileCount: 0,
       folderCount: folderCount,
       mode: mode,
-      displayName: 'Папки без файлов'
+      displayName: 'Папки без файлов',
+      skippedShortcuts: skippedShortcuts,
+      skippedShortcutNames: skippedShortcutNames,
+      created: {
+        folders: uiFolders,
+        files: []
+      }
     };
   }
 
@@ -701,6 +853,13 @@ function importDriveSelection(input) {
   fileRows.forEach(function (row) {
     row.importChainId = chainIdSel;
   });
+  if (mode === 'move') {
+    assertImportMoveAllOwnedByController_(
+      jobItems.map(function (it) {
+        return it.sourceFileId;
+      })
+    );
+  }
   appendCatalogFileRowsBatch_(fileRows);
 
   var queued = enqueueImportDriveJobsChain_(
@@ -715,6 +874,22 @@ function importDriveSelection(input) {
   kickCatalogJobsProcessing_();
   bumpCatalogRev_();
 
+  var uiFiles = fileRows.map(function (row) {
+    return {
+      id: row.catalogId,
+      folderId: row.folderId,
+      name: row.displayName || '',
+      mimeType: row.mimeType || '',
+      sizeBytes: 0,
+      modifiedAt: '',
+      approved: false,
+      status: 'pending',
+      editors: [],
+      commenters: [],
+      readers: []
+    };
+  });
+
   return {
     ok: true,
     queued: true,
@@ -725,7 +900,13 @@ function importDriveSelection(input) {
     jobParts: queued.jobParts,
     folderCount: folderCount,
     mode: mode,
-    displayName: queued.fileCount + ' файл(ов)'
+    displayName: queued.fileCount + ' файл(ов)',
+    skippedShortcuts: skippedShortcuts,
+    skippedShortcutNames: skippedShortcutNames,
+    created: {
+      folders: uiFolders,
+      files: uiFiles
+    }
   };
 }
 
@@ -832,7 +1013,8 @@ function appendImportDriveFolderToJob_(
   var now = new Date();
   var driveToVirtual = {};
   var folderCount = 0;
-  var treeRows = [];
+  var treeBatch = [];
+  var uiFolders = [];
 
   walk.folders.forEach(function (node) {
     var virtualId = Utilities.getUuid();
@@ -844,11 +1026,30 @@ function appendImportDriveFolderToJob_(
     if (!parentVirtualId) {
       throw catalogError_('IMPORT_WALK_FAILED', 'Parent virtual folder missing during import.');
     }
-    treeRows.push([virtualId, parentVirtualId, node.name, now, false, '', '', '']);
+    treeBatch.push({
+      folderId: virtualId,
+      parentFolderId: parentVirtualId,
+      name: String(node.name || ''),
+      folderCreatedAt: now,
+      isSystem: false
+    });
+    uiFolders.push({
+      id: virtualId,
+      parentFolderId: parentVirtualId,
+      name: node.name,
+      sizeBytes: 0,
+      fileCount: 0,
+      modifiedAt: '',
+      isSystem: false,
+      pendingImport: true,
+      editors: [],
+      commenters: [],
+      readers: []
+    });
     folderCount++;
   });
-  if (treeRows.length) {
-    treeSheet.getRange(treeSheet.getLastRow() + 1, 1, treeRows.length, 8).setValues(treeRows);
+  if (treeBatch.length) {
+    appendTreeFolderRowsBatch_(treeBatch);
   }
 
   var rootVirtualId = driveToVirtual[sourceFolderId];
@@ -884,7 +1085,49 @@ function appendImportDriveFolderToJob_(
     fileRows.push(built.row);
   });
 
-  return { folderCount: folderCount, items: items, fileRows: fileRows };
+  // Число файлов в UI у папок (для столбца размера) — с накоплением к предкам.
+  var fileCountByFolder = {};
+  fileRows.forEach(function (row) {
+    var fid = String(row.folderId || '');
+    fileCountByFolder[fid] = (fileCountByFolder[fid] || 0) + 1;
+  });
+  var parentById = {};
+  uiFolders.forEach(function (f) {
+    parentById[String(f.id)] = String(f.parentFolderId || '');
+  });
+  Object.keys(fileCountByFolder).forEach(function (fid) {
+    var n = fileCountByFolder[fid];
+    var cur = fid;
+    var guard = 0;
+    while (cur && guard < 64) {
+      guard++;
+      var folder = null;
+      for (var ui = 0; ui < uiFolders.length; ui++) {
+        if (String(uiFolders[ui].id) === cur) {
+          folder = uiFolders[ui];
+          break;
+        }
+      }
+      if (!folder) {
+        break;
+      }
+      folder.fileCount = (folder.fileCount || 0) + n;
+      cur = parentById[cur];
+      if (cur === String(targetFolderId)) {
+        break;
+      }
+    }
+  });
+
+  return {
+    folderCount: folderCount,
+    items: items,
+    fileRows: fileRows,
+    uiFolders: uiFolders,
+    rootFolderId: rootVirtualId,
+    skippedShortcuts: walk.skippedShortcuts || 0,
+    skippedShortcutNames: walk.skippedShortcutNames || []
+  };
 }
 
 /**
@@ -909,10 +1152,10 @@ function buildPendingImportFileItem_(sourceFileId, parentFolderId, displayName) 
     item: {
       catalogId: catalogId,
       sourceFileId: sourceFileId,
-      parentFolderId: parentFolderId,
-      displayName: name,
+      // displayName/parentFolderId не кладём в Jobs payload — лимит ячейки 50k
       aclDone: false,
       copyDone: false,
+      metaDone: true,
       error: ''
     },
     row: {

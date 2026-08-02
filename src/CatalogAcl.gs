@@ -152,9 +152,16 @@ function getEffectiveAclDisplayFromEngine_(engine, objectType, objectId) {
 function getEffectiveAclMapFromEngine_(engine, objectType, objectId, memo) {
   memo = memo || {};
   var key = objectType + ':' + objectId;
-  if (memo[key]) {
-    return cloneAclPrincipalMap_(memo[key]);
+  var existing = memo[key];
+  if (existing === '__VISITING__') {
+    // Цикл parent_folder_id в Tree — не крутимся бесконечно.
+    return {};
   }
+  if (existing) {
+    return cloneAclPrincipalMap_(existing);
+  }
+
+  memo[key] = '__VISITING__';
 
   var parent = getAclParentObject_(engine, objectType, objectId);
   var rows = engine.aclByObject[key] || [];

@@ -169,6 +169,13 @@ function importDriveFiles(input) {
   fileRows.forEach(function (row) {
     row.importChainId = chainIdFiles;
   });
+  if (mode === 'move') {
+    assertImportMoveAllOwnedByController_(
+      items.map(function (it) {
+        return it.sourceFileId;
+      })
+    );
+  }
   appendCatalogFileRowsBatch_(fileRows);
 
   var queuedFiles = enqueueImportDriveJobsChain_(
@@ -298,15 +305,10 @@ function importDriveFolder(input) {
     );
   }
 
-  var treeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Tree');
-  if (!treeSheet) {
-    throw catalogError_('SCHEMA_MISMATCH', 'Sheet missing: Tree');
-  }
-
   var now = new Date();
   var driveToVirtual = {};
   var folderCount = 0;
-  var treeRows = [];
+  var treeBatch = [];
 
   walk.folders.forEach(function (node) {
     var virtualId = Utilities.getUuid();
@@ -318,11 +320,17 @@ function importDriveFolder(input) {
     if (!parentVirtualId) {
       throw catalogError_('IMPORT_WALK_FAILED', 'Parent virtual folder missing during import.');
     }
-    treeRows.push([virtualId, parentVirtualId, node.name, now, false, '', '', '']);
+    treeBatch.push({
+      folderId: virtualId,
+      parentFolderId: parentVirtualId,
+      name: String(node.name || ''),
+      folderCreatedAt: now,
+      isSystem: false
+    });
     folderCount++;
   });
-  if (treeRows.length) {
-    treeSheet.getRange(treeSheet.getLastRow() + 1, 1, treeRows.length, 8).setValues(treeRows);
+  if (treeBatch.length) {
+    appendTreeFolderRowsBatch_(treeBatch);
   }
 
   var rootVirtualId = driveToVirtual[sourceFolderId];
@@ -360,6 +368,13 @@ function importDriveFolder(input) {
   fileRows.forEach(function (row) {
     row.importChainId = chainIdFolder;
   });
+  if (mode === 'move') {
+    assertImportMoveAllOwnedByController_(
+      items.map(function (it) {
+        return it.sourceFileId;
+      })
+    );
+  }
   appendCatalogFileRowsBatch_(fileRows);
 
   var queuedFolder = enqueueImportDriveJobsChain_(
@@ -391,7 +406,8 @@ function importDriveFolder(input) {
 }
 
 /**
- * При mode=move: свой файл → move, чужой → copy (§9.12).
+ * При mode=move: только move своих файлов. Чужие — отказ до старта (§9.12).
+ * <!-- OLD: При mode=move: свой файл → move, чужой → copy (§9.12). -->
  *
  * @param {'copy'|'move'} requestedMode
  * @param {GoogleAppsScript.Drive.File} driveFile
@@ -402,7 +418,121 @@ function resolveDriveImportPlaceMode_(requestedMode, driveFile, controllerEmail)
   if (requestedMode !== 'move') {
     return 'copy';
   }
-  return isDriveFileOwnedByEmail_(driveFile, controllerEmail) ? 'move' : 'copy';
+  if (!isDriveFileOwnedByEmail_(driveFile, controllerEmail)) {
+    throw catalogError_(
+      'MOVE_FOREIGN_OWNER',
+      'Файл «' +
+        (driveFile.getName() || '') +
+        '» принадлежит другому владельцу. Для перемещения все файлы должны быть вашими.'
+    );
+  }
+  return 'move';
+}
+
+/**
+ * Batch-проверка: все source file id принадлежат Управляющему.
+ * Иначе MOVE_FOREIGN_OWNER (импорт move не стартует).
+ *
+ * @param {string[]} sourceFileIds
+ * @param {string=} controllerEmailOpt
+ * @returns {{ ok: true, checked: number }}
+ */
+function assertImportMoveAllOwnedByController_(sourceFileIds, controllerEmailOpt) {
+  var controllerEmail =
+    String(controllerEmailOpt || '').trim() ||
+    PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) ||
+    '';
+  if (!controllerEmail) {
+    throw catalogError_('AUTH_REQUIRED', 'CONTROLLER_EMAIL не задан.');
+  }
+  var ids = [];
+  var seen = {};
+  (sourceFileIds || []).forEach(function (id) {
+    id = String(id || '').trim();
+    if (!id || seen[id]) {
+      return;
+    }
+    seen[id] = true;
+    ids.push(id);
+  });
+  if (!ids.length) {
+    return { ok: true, checked: 0 };
+  }
+
+  var check = checkImportMoveOwnership_(ids, controllerEmail);
+  if (check.foreignOwnerCount > 0) {
+    var sample = (check.foreignOwnerSample || []).slice(0, 5).join(', ');
+    throw catalogError_(
+      'MOVE_FOREIGN_OWNER',
+      'Перемещение невозможно: ' +
+        check.foreignOwnerCount +
+        ' файл(ов) другого владельца' +
+        (sample ? ' (' + sample + ')' : '') +
+        '. Выберите «Копировать» или уберите чужие файлы.'
+    );
+  }
+  return { ok: true, checked: ids.length };
+}
+
+/**
+ * @param {string[]} sourceFileIds
+ * @param {string} controllerEmail
+ * @returns {{
+ *   foreignOwnerCount: number,
+ *   foreignOwnerSample: string[],
+ *   checked: number
+ * }}
+ */
+function checkImportMoveOwnership_(sourceFileIds, controllerEmail) {
+  var controllerLc = String(controllerEmail || '').toLowerCase();
+  var ids = [];
+  var seen = {};
+  (sourceFileIds || []).forEach(function (id) {
+    id = String(id || '').trim();
+    if (!id || seen[id]) {
+      return;
+    }
+    seen[id] = true;
+    ids.push(id);
+  });
+  var foreignSample = [];
+  var foreignCount = 0;
+  if (!ids.length || !controllerLc) {
+    return {
+      foreignOwnerCount: 0,
+      foreignOwnerSample: [],
+      checked: ids.length
+    };
+  }
+
+  // DriveApp.getOwner — без UrlFetch.
+  for (var i = 0; i < ids.length; i++) {
+    var fileId = ids[i];
+    var ownerEmail = '';
+    var displayName = fileId;
+    try {
+      var f = DriveApp.getFileById(fileId);
+      displayName = f.getName() || fileId;
+      var owner = f.getOwner();
+      if (owner) {
+        ownerEmail = String(owner.getEmail() || '').toLowerCase();
+      }
+    } catch (eOwn) {
+      ownerEmail = '';
+    }
+    if (!ownerEmail || ownerEmail !== controllerLc) {
+      foreignCount += 1;
+      if (foreignSample.length < 8) {
+        foreignSample.push(displayName);
+      }
+    }
+  }
+
+  return {
+    foreignOwnerCount: foreignCount,
+    foreignOwnerSample: foreignSample,
+    checked: ids.length
+  };
 }
 
 /**
@@ -446,7 +576,58 @@ function resolveDriveImportKind_(urlOrId) {
 }
 
 /**
+ * Исходный владелец объекта на Drive → редактор в каталоге.
+ * CONTROLLER_EMAIL / владелец каталога не пишем (технический фон §4).
+ *
+ * @param {GoogleAppsScript.Drive.File|GoogleAppsScript.Drive.Folder} driveObj
+ * @param {Object.<string, string>} levelsByEmail
+ * @param {Object.<string, string>} namesByEmail
+ * @param {Object.<string, string>} emailByKey
+ */
+function rememberDriveSourceOwnerAsEditor_(driveObj, levelsByEmail, namesByEmail, emailByKey) {
+  if (!driveObj) {
+    return;
+  }
+  var owner;
+  try {
+    owner = driveObj.getOwner();
+  } catch (eOwn) {
+    return;
+  }
+  if (!owner) {
+    return;
+  }
+  var email = '';
+  try {
+    email = String(owner.getEmail() || '').trim();
+  } catch (eMail) {
+    return;
+  }
+  if (!email) {
+    return;
+  }
+  var key = email.toLowerCase();
+  var controller = '';
+  try {
+    controller = String(
+      PropertiesService.getDocumentProperties().getProperty(PROP_CONTROLLER_EMAIL_) || ''
+    )
+      .trim()
+      .toLowerCase();
+  } catch (eCtrl) {
+    controller = '';
+  }
+  if (controller && key === controller) {
+    return;
+  }
+  emailByKey[key] = email;
+  namesByEmail[key] = resolveDriveUserDisplayName_(owner) || email;
+  levelsByEmail[key] = maxPermissionLevel_(levelsByEmail[key], 'editor');
+}
+
+/**
  * Depth-first walk: folders (root first) + files. Shortcuts skipped.
+ * Сначала DriveApp; если подпапок не видно (часто Shared) — добор через Drive API.
  *
  * @param {GoogleAppsScript.Drive.Folder} rootFolder
  * @param {number} maxFiles
@@ -454,13 +635,41 @@ function resolveDriveImportKind_(urlOrId) {
  *   folders: Array<{ driveFolderId: string, parentDriveFolderId: (string|null), name: string }>,
  *   files: Array<{ file: GoogleAppsScript.Drive.File, parentDriveFolderId: string }>,
  *   fileCount: number,
- *   skippedShortcuts: number
+ *   skippedShortcuts: number,
+ *   skippedShortcutNames: string[]
  * }}
  */
 function walkDriveFolderForImport_(rootFolder, maxFiles) {
+  var viaApp = walkDriveFolderForImportViaDriveApp_(rootFolder, maxFiles);
+  if (viaApp.folders.length > 1 || viaApp.fileCount >= maxFiles) {
+    return viaApp;
+  }
+  // Только корень: проверим API — в Shared/сложных ACL DriveApp.getFolders() бывает пуст.
+  try {
+    var viaApi = walkDriveFolderForImportViaDriveApi_(
+      rootFolder.getId(),
+      rootFolder.getName(),
+      maxFiles
+    );
+    if (viaApi.folders.length > viaApp.folders.length || viaApi.fileCount > viaApp.fileCount) {
+      return viaApi;
+    }
+  } catch (eApi) {
+    // квота / ACL — оставляем DriveApp
+  }
+  return viaApp;
+}
+
+/**
+ * @param {GoogleAppsScript.Drive.Folder} rootFolder
+ * @param {number} maxFiles
+ * @returns {Object}
+ */
+function walkDriveFolderForImportViaDriveApp_(rootFolder, maxFiles) {
   var folders = [];
   var files = [];
   var skippedShortcuts = 0;
+  var skippedShortcutNames = [];
   var queue = [{ folder: rootFolder, parentDriveFolderId: null }];
 
   while (queue.length) {
@@ -484,6 +693,13 @@ function walkDriveFolderForImport_(rootFolder, maxFiles) {
       }
       if (mime === 'application/vnd.google-apps.shortcut') {
         skippedShortcuts++;
+        if (skippedShortcutNames.length < 12) {
+          try {
+            skippedShortcutNames.push(String(file.getName() || file.getId()));
+          } catch (eName) {
+            skippedShortcutNames.push(String(file.getId()));
+          }
+        }
         continue;
       }
       files.push({
@@ -495,7 +711,8 @@ function walkDriveFolderForImport_(rootFolder, maxFiles) {
           folders: folders,
           files: files,
           fileCount: files.length,
-          skippedShortcuts: skippedShortcuts
+          skippedShortcuts: skippedShortcuts,
+          skippedShortcutNames: skippedShortcutNames
         };
       }
     }
@@ -513,7 +730,125 @@ function walkDriveFolderForImport_(rootFolder, maxFiles) {
     folders: folders,
     files: files,
     fileCount: files.length,
-    skippedShortcuts: skippedShortcuts
+    skippedShortcuts: skippedShortcuts,
+    skippedShortcutNames: skippedShortcutNames
+  };
+}
+
+/**
+ * Обход через Drive API v3 (supportsAllDrives) — надёжнее для Shared.
+ *
+ * @param {string} rootFolderId
+ * @param {string} rootName
+ * @param {number} maxFiles
+ * @returns {Object}
+ */
+function walkDriveFolderForImportViaDriveApi_(rootFolderId, rootName, maxFiles) {
+  var token = ScriptApp.getOAuthToken();
+  var folders = [];
+  var files = [];
+  var skippedShortcuts = 0;
+  var skippedShortcutNames = [];
+  var queue = [
+    {
+      driveFolderId: String(rootFolderId),
+      parentDriveFolderId: null,
+      name: String(rootName || rootFolderId)
+    }
+  ];
+  var queued = {};
+  queued[String(rootFolderId)] = true;
+
+  while (queue.length) {
+    var node = queue.shift();
+    folders.push({
+      driveFolderId: node.driveFolderId,
+      parentDriveFolderId: node.parentDriveFolderId,
+      name: node.name
+    });
+
+    var pageToken = '';
+    do {
+      var url =
+        'https://www.googleapis.com/drive/v3/files?q=' +
+        encodeURIComponent(
+          "'" + node.driveFolderId + "' in parents and trashed=false"
+        ) +
+        '&fields=' +
+        encodeURIComponent(
+          'nextPageToken,files(id,name,mimeType,shortcutDetails)'
+        ) +
+        '&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true' +
+        (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+      var body = driveImportFetchJson_(url, token);
+      var list = body.files || [];
+      for (var i = 0; i < list.length; i++) {
+        var f = list[i];
+        var mime = String(f.mimeType || '');
+        if (mime === 'application/vnd.google-apps.folder') {
+          var childId = String(f.id || '');
+          if (childId && !queued[childId]) {
+            queued[childId] = true;
+            queue.push({
+              driveFolderId: childId,
+              parentDriveFolderId: node.driveFolderId,
+              name: String(f.name || childId)
+            });
+          }
+          continue;
+        }
+        if (mime === 'application/vnd.google-apps.shortcut') {
+          var targetMime =
+            (f.shortcutDetails && f.shortcutDetails.targetMimeType) || '';
+          var targetId =
+            (f.shortcutDetails && f.shortcutDetails.targetId) || '';
+          if (targetMime === 'application/vnd.google-apps.folder' && targetId) {
+            var tId = String(targetId);
+            if (!queued[tId]) {
+              queued[tId] = true;
+              queue.push({
+                driveFolderId: tId,
+                parentDriveFolderId: node.driveFolderId,
+                name: String(f.name || tId)
+              });
+            }
+          } else {
+            skippedShortcuts++;
+            if (skippedShortcutNames.length < 12) {
+              skippedShortcutNames.push(String(f.name || f.id || ''));
+            }
+          }
+          continue;
+        }
+        try {
+          files.push({
+            file: DriveApp.getFileById(String(f.id)),
+            parentDriveFolderId: node.driveFolderId
+          });
+        } catch (eFile) {
+          skippedShortcuts++;
+          continue;
+        }
+        if (files.length > maxFiles) {
+          return {
+            folders: folders,
+            files: files,
+            fileCount: files.length,
+            skippedShortcuts: skippedShortcuts,
+            skippedShortcutNames: skippedShortcutNames
+          };
+        }
+      }
+      pageToken = body.nextPageToken ? String(body.nextPageToken) : '';
+    } while (pageToken);
+  }
+
+  return {
+    folders: folders,
+    files: files,
+    fileCount: files.length,
+    skippedShortcuts: skippedShortcuts,
+    skippedShortcutNames: skippedShortcutNames
   };
 }
 
@@ -566,6 +901,8 @@ function applyDriveFolderAclToCatalogFolder_(driveFolder, catalogFolderId, added
     }
   }
 
+  // Владелец на Drive ≠ CONTROLLER: в каталоге → редактор (§9.4).
+  rememberDriveSourceOwnerAsEditor_(driveFolder, levelsByEmail, namesByEmail, emailByKey);
   remember(driveFolder.getEditors(), 'editor');
   try {
     remember(driveFolder.getCommenters(), 'commenter');
@@ -819,7 +1156,7 @@ function appendCatalogFileRowsBatch_(rows) {
       catalog_id: row.catalogId,
       folder_id: row.folderId,
       file_id: row.fileId,
-      display_name: row.displayName,
+      display_name: String(row.displayName == null ? '' : row.displayName),
       size_bytes: row.sizeBytes,
       drive_modified_at: row.driveModifiedAt,
       approved: row.approved === true,
@@ -845,6 +1182,7 @@ function appendCatalogFileRowsBatch_(rows) {
   });
 
   var startRow = sheet.getLastRow() + 1;
+  prepareSheetPlainTextColumns_(sheet, startRow, lines.length, headers, ['display_name']);
   sheet.getRange(startRow, 1, lines.length, headers.length).setValues(lines);
   SpreadsheetApp.flush();
 }
@@ -892,7 +1230,7 @@ function appendTreeFolderRowsBatch_(rows) {
     var byHeader = {
       folder_id: row.folderId,
       parent_folder_id: row.parentFolderId,
-      name: row.name,
+      name: String(row.name == null ? '' : row.name),
       folder_created_at: row.folderCreatedAt,
       is_system: row.isSystem === true,
       acl_editors: row.aclEditors || '',
@@ -910,6 +1248,7 @@ function appendTreeFolderRowsBatch_(rows) {
   });
 
   var startRow = sheet.getLastRow() + 1;
+  prepareSheetPlainTextColumns_(sheet, startRow, lines.length, headers, ['name']);
   sheet.getRange(startRow, 1, lines.length, headers.length).setValues(lines);
   SpreadsheetApp.flush();
 }

@@ -6,6 +6,10 @@ var PROP_CONTROLLER_EMAIL_ = 'CONTROLLER_EMAIL';
 var PROP_SETUP_AT_ = 'SETUP_AT';
 /** Счётчик версии каталога для клиентского poll (§2.7) — см. также CatalogRev.gs */
 var PROP_CATALOG_REV_ = 'CATALOG_REV';
+/** Пауза воркера Jobs на время загрузки UI (DocumentProperties) */
+var PROP_CATALOG_JOBS_PAUSED_ = 'CATALOG_JOBS_PAUSED';
+/** Сообщение долгой операции для UI (прерывание импорта и т.п.). */
+var PROP_CATALOG_OP_STATUS_ = 'CATALOG_OP_STATUS';
 
 /**
  * §15.1, §15.3 — инициализирован ли каталог (листы + обязательные DocumentProperties).

@@ -9,15 +9,16 @@
  * @param {Object} engine
  * @param {Object.<string, string>[]} treeRows
  * @param {Object.<string, string>[]} fileRows
+ * @param {{ skipWrite?: boolean }=} options skipWrite — только в память строк (быстрый snapshot), без setValues на лист
  * @returns {{ aclCopied: number, cacheFilled: number }}
  */
-function ensureExplicitAclAndCache_(engine, treeRows, fileRows) {
+function ensureExplicitAclAndCache_(engine, treeRows, fileRows, options) {
   engine = engine || createAclEngine_();
   treeRows = treeRows || readSheetRecords_('Tree');
   fileRows = fileRows || readSheetRecords_('Files');
 
   var aclCopied = materializeOrphanExplicitAcls_(engine);
-  var cacheFilled = fillEmptyAclCacheColumns_(engine, treeRows, fileRows);
+  var cacheFilled = fillEmptyAclCacheColumns_(engine, treeRows, fileRows, options);
   return { aclCopied: aclCopied, cacheFilled: cacheFilled };
 }
 
@@ -59,9 +60,12 @@ function aclRowsToEntries_(aclRows) {
  * @param {Object} engine
  * @param {Object.<string, string>[]} treeRows
  * @param {Object.<string, string>[]} fileRows
+ * @param {{ skipWrite?: boolean }=} options
  * @returns {number}
  */
-function fillEmptyAclCacheColumns_(engine, treeRows, fileRows) {
+function fillEmptyAclCacheColumns_(engine, treeRows, fileRows, options) {
+  options = options || {};
+  var skipWrite = !!options.skipWrite;
   var memo = {};
   var treeUpdates = [];
   (treeRows || []).forEach(function (row) {
@@ -120,8 +124,10 @@ function fillEmptyAclCacheColumns_(engine, treeRows, fileRows) {
     row.acl_readers = fileUpdates[fileUpdates.length - 1].aclReaders;
   });
 
-  writeTreeAclCacheBatch_(treeUpdates);
-  writeFilesAclCacheBatch_(fileUpdates);
+  if (!skipWrite) {
+    writeTreeAclCacheBatch_(treeUpdates);
+    writeFilesAclCacheBatch_(fileUpdates);
+  }
   return treeUpdates.length + fileUpdates.length;
 }
 

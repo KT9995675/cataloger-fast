@@ -144,30 +144,61 @@ function moveCatalogItems(input) {
   if (fileShortcutsToDelete.length) {
     deleteCatalogFileShortcutRows_(fileShortcutsToDelete);
   }
+
+  var aclMoved = moved.filter(function (m) {
+    return (
+      mirrorsToDelete.indexOf(m.id) < 0 && fileShortcutsToDelete.indexOf(m.id) < 0
+    );
+  });
+
+  // Только ярлыки / no-op — без Jobs.
+  if (!fileUpdates.length && !folderUpdates.length) {
+    if (mirrorsToDelete.length || fileShortcutsToDelete.length) {
+      bumpCatalogRev_();
+    }
+    return {
+      ok: true,
+      queued: false,
+      moved: moved,
+      deletedMirrors: mirrorsToDelete,
+      deletedFileShortcuts: fileShortcutsToDelete
+    };
+  }
+
+  // §14.7 (2026-08-02): location + лёгкий кэш ACL sync; дельты не сбрасываем.
+  // Jobs не нужны для обычного F6/F8 (убрали тяжёлый applyTargetFolderAclAfterMove_).
   applyFileFolderUpdates_(fileUpdates, folderUpdates);
-  if (foldersMovedToTrash.length || filesMovedToTrash.length) {
-    var trashCascadeTargets = filesMovedToTrash.slice();
-    foldersMovedToTrash.forEach(function (fid) {
-      trashCascadeTargets.push(fid);
-      collectFolderSubtreeObjects_(engine, fid).forEach(function (obj) {
-        if (obj.objectType === 'folder') {
-          trashCascadeTargets.push(obj.objectId);
-        }
-        if (obj.objectType === 'file') {
-          filesMovedToTrash.push(obj.objectId);
-        }
-      });
+
+  var trashCascadeTargets = [];
+  foldersMovedToTrash.forEach(function (fid) {
+    trashCascadeTargets.push(fid);
+    collectFolderSubtreeObjects_(engine, fid).forEach(function (obj) {
+      if (obj.objectType === 'folder') {
+        trashCascadeTargets.push(obj.objectId);
+      }
+      if (obj.objectType === 'file') {
+        filesMovedToTrash.push(obj.objectId);
+      }
     });
+  });
+
+  if (trashCascadeTargets.length) {
     deleteMirrorsPointingToFolders_(trashCascadeTargets);
+  }
+  if (filesMovedToTrash.length) {
     deleteFileShortcutsPointingToCatalogIds_(filesMovedToTrash);
   }
-  applyTargetFolderAclAfterMove_(engine, targetFolderId, moved.filter(function (m) {
-    return mirrorsToDelete.indexOf(m.id) < 0 && fileShortcutsToDelete.indexOf(m.id) < 0;
-  }));
+
+  // Дельты ACL не трогаем. Кэш acl_* не переписываем здесь:
+  // N× rewrite Tree/Files блокировал таблицу → «Загрузка» на F5; optimistic
+  // раньше затирал права целью. Столбцы прав остаются как были; эффективные
+  // при открытии/Доступ = новая мать ⊕ дельты (§14.7).
   bumpCatalogRev_();
 
   return {
     ok: true,
+    queued: false,
+    fileCount: fileUpdates.length + folderUpdates.length,
     moved: moved,
     deletedMirrors: mirrorsToDelete,
     deletedFileShortcuts: fileShortcutsToDelete
@@ -175,21 +206,16 @@ function moveCatalogItems(input) {
 }
 
 /**
- * §4.4a / §14.7 — после move: сброс отклонений у перемещённых; кэш = эффективные целевой папки.
- * У корня нет ACL → entries пустые → права очищаются.
+ * §14.7 — опц. лёгкий кэш после move (батч). Сейчас move его не вызывает.
  *
  * @param {Object} engine
- * @param {string} targetFolderId
  * @param {Array<{ kind: 'folder'|'file', id: string }>} movedItems
  */
-function applyTargetFolderAclAfterMove_(engine, targetFolderId, movedItems) {
+function refreshAclCacheAfterMoveKeepDeltas_(engine, movedItems) {
   if (!movedItems || !movedItems.length) {
     return;
   }
 
-  var entries = effectiveAclMapToEntries_(
-    getEffectiveAclMapFromEngine_(engine, 'folder', targetFolderId)
-  );
   var targetKeys = {};
   var targets = [];
 
@@ -212,13 +238,64 @@ function applyTargetFolderAclAfterMove_(engine, targetFolderId, movedItems) {
     });
   });
 
-  if (!targets.length) {
-    return;
-  }
+  var treeUpdates = [];
+  var fileUpdatesAcl = [];
+  targets.forEach(function (obj) {
+    var entries = effectiveAclMapToEntries_(
+      getEffectiveAclMapFromEngine_(engine, obj.objectType, obj.objectId)
+    );
+    var approved = false;
+    if (obj.objectType === 'file') {
+      var file = engine.filesByCatalogId[obj.objectId];
+      approved = file && parseBoolean_(file.approved);
+    }
+    var labels = aclRowsToCacheLabels_(
+      engine,
+      (entries || []).map(function (e) {
+        return {
+          principal_type: e.principalType,
+          principal_id: e.principalId,
+          permission_level: e.permissionLevel
+        };
+      }),
+      approved
+    );
+    var payload = {
+      aclEditors: formatAclCacheField_(labels.editors),
+      aclCommenters: formatAclCacheField_(labels.commenters),
+      aclReaders: formatAclCacheField_(labels.readers)
+    };
+    if (obj.objectType === 'folder') {
+      treeUpdates.push({
+        folderId: obj.objectId,
+        aclEditors: payload.aclEditors,
+        aclCommenters: payload.aclCommenters,
+        aclReaders: payload.aclReaders
+      });
+    } else {
+      fileUpdatesAcl.push({
+        catalogId: obj.objectId,
+        aclEditors: payload.aclEditors,
+        aclCommenters: payload.aclCommenters,
+        aclReaders: payload.aclReaders
+      });
+    }
+  });
 
-  clearAclRowsForObjects_(targets, engine);
-  syncAclCacheForObjects_(targets, entries, engine);
+  writeTreeAclCacheBatch_(treeUpdates);
+  writeFilesAclCacheBatch_(fileUpdatesAcl);
 }
+
+/**
+ * @deprecated §14.7 2026-08-02 — сброс под цель убран; оставлен для старых Jobs move_catalog в очереди.
+ * @param {Object} engine
+ * @param {string} targetFolderId
+ * @param {Array<{ kind: 'folder'|'file', id: string }>} movedItems
+ */
+function applyTargetFolderAclAfterMove_(engine, targetFolderId, movedItems) {
+  refreshAclCacheAfterMoveKeepDeltas_(engine, movedItems);
+}
+/* OLD: applyTargetFolderAclAfterMove_ — clearAclRowsForObjects_ + sync кэша = эффективные целевой папки. */
 
 /**
  * Эффективные ACL объекта → entries для кэша / UI.

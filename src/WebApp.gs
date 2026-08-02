@@ -16,6 +16,14 @@
  */
 function getWebAppBootstrap() {
   var email = Session.getActiveUser().getEmail() || '';
+  // Пауза + снять триггеры (без Sheets — иначе ждём DocumentLock зомби-Jobs).
+  try {
+    setCatalogJobsPaused_(true);
+    removeCatalogJobsTriggers_();
+    clearCatalogOpStatus_();
+  } catch (eUnlock) {
+    // ignore
+  }
   try {
     ensureCatalogSchemaUpToDate_();
   } catch (e) {

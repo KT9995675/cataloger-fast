@@ -1136,8 +1136,10 @@ function collectDriveRepairIssues_(fileRows, issues) {
       }
 
       var driveSize = 0;
+      var driveMimeForSize = '';
       try {
-        driveSize = Number(file.getSize()) || 0;
+        driveMimeForSize = String(file.getMimeType() || '');
+        driveSize = resolveDriveFileSizeBytes_(file, driveMimeForSize);
       } catch (eSize) {
         driveSize = 0;
       }
@@ -1150,9 +1152,20 @@ function collectDriveRepairIssues_(fileRows, issues) {
             'file',
             catalogId,
             name,
-            'каталог=' + catSize + ', Drive=' + driveSize,
+            'каталог=' +
+              catSize +
+              ', Drive=' +
+              driveSize +
+              (catSize <= 1 && isGoogleNativeMimeType_(driveMimeForSize)
+                ? ' (возможен stub getSize)'
+                : ''),
             'Обновить size_bytes в каталоге с Drive',
-            { catalogId: catalogId, fileId: fileId, sizeBytes: driveSize }
+            {
+              catalogId: catalogId,
+              fileId: fileId,
+              sizeBytes: driveSize,
+              mimeType: driveMimeForSize
+            }
           )
         );
       }
@@ -1353,7 +1366,10 @@ function applyRepairFixForIssue_(issue) {
     var sizeBytes = p.sizeBytes;
     if (sizeBytes == null && p.fileId) {
       try {
-        sizeBytes = DriveApp.getFileById(String(p.fileId)).getSize();
+        var df = DriveApp.getFileById(String(p.fileId));
+        var mime =
+          String(p.mimeType || '') || getDriveFileMimeType_(df) || '';
+        sizeBytes = resolveDriveFileSizeBytes_(df, mime);
       } catch (eSz) {
         return false;
       }

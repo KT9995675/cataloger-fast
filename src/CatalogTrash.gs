@@ -30,25 +30,8 @@ function emptyCatalogTrash() {
     throw catalogError_('FOLDER_NOT_FOUND', 'Папка корзины не найдена.');
   }
 
-  var trashFolderIds = collectTrashSubtreeFolderIds_(engine);
-  var items = [];
-
-  Object.keys(engine.filesByCatalogId).forEach(function (catalogId) {
-    var file = engine.filesByCatalogId[catalogId];
-    var folderId = String(file.folder_id || '');
-    if (!trashFolderIds[folderId]) {
-      return;
-    }
-    items.push({
-      catalogId: catalogId,
-      driveFileId: String(file.file_id || '').trim(),
-      done: false
-    });
-  });
-
-  var folderIdsToDelete = Object.keys(trashFolderIds).filter(function (id) {
-    return id !== TRASH_FOLDER_ID_EMPTY_;
-  });
+  var items = collectEmptyTrashFileItemsFromSheet_();
+  var folderIdsToDelete = collectEmptyTrashFolderIdsFromSheet_();
 
   if (!items.length && !folderIdsToDelete.length) {
     return {
@@ -66,6 +49,7 @@ function emptyCatalogTrash() {
     driveErrors: 0
   };
 
+  setCatalogJobsPaused_(false);
   var jobId = enqueueCatalogJob_('empty_trash', payload, userEmail, '');
   kickCatalogJobsProcessing_();
 
@@ -155,27 +139,77 @@ function collectTrashSubtreeFolderIds_(engine) {
  * @param {string} driveFileId
  */
 function moveDriveFileToTrash_(driveFileId) {
-  var token = ScriptApp.getOAuthToken();
-  var url =
-    'https://www.googleapis.com/drive/v3/files/' +
-    encodeURIComponent(driveFileId) +
-    '?supportsAllDrives=true';
-  var response = UrlFetchApp.fetch(url, {
-    method: 'patch',
-    contentType: 'application/json',
-    payload: JSON.stringify({ trashed: true }),
-    headers: { Authorization: 'Bearer ' + token },
-    muteHttpExceptions: true
-  });
-  var code = response.getResponseCode();
-  if (code === 200 || code === 404) {
-    return;
+  var result = moveDriveFilesToTrashBatch_([driveFileId]);
+  if (result.errors > 0) {
+    throw catalogError_(
+      'DRIVE_TRASH_FAILED',
+      'Не удалось переместить файл в корзину Drive'
+    );
   }
-  throw catalogError_(
-    'DRIVE_TRASH_FAILED',
-    'Не удалось переместить файл в корзину Drive (' + code + ')'
-  );
 }
+
+/**
+ * Пакетный перенос в корзину Drive (`trashed: true`) через DriveApp.
+ * Без UrlFetch — иначе дневная квота urlfetch валит clear/empty_trash (B1).
+ *
+ * @param {string[]} driveFileIds
+ * @returns {{
+ *   ok: true,
+ *   count: number,
+ *   errors: number,
+ *   okIds: string[],
+ *   failedIds: string[]
+ * }}
+ */
+function moveDriveFilesToTrashBatch_(driveFileIds) {
+  var ids = [];
+  var seen = {};
+  (driveFileIds || []).forEach(function (id) {
+    id = String(id || '').trim();
+    if (!id || seen[id]) {
+      return;
+    }
+    seen[id] = true;
+    ids.push(id);
+  });
+  if (!ids.length) {
+    return { ok: true, count: 0, errors: 0, okIds: [], failedIds: [] };
+  }
+
+  var errors = 0;
+  var okIds = [];
+  var failedIds = [];
+  for (var i = 0; i < ids.length; i++) {
+    var fileId = ids[i];
+    try {
+      DriveApp.getFileById(fileId).setTrashed(true);
+      okIds.push(fileId);
+    } catch (eTrash) {
+      var msg = String((eTrash && eTrash.message) || eTrash || '');
+      // Уже в корзине / нет файла — успех (как HTTP 404 раньше).
+      if (
+        /not found|could be found|не найден|trashed|корзин|does not exist/i.test(
+          msg
+        )
+      ) {
+        okIds.push(fileId);
+      } else {
+        errors += 1;
+        failedIds.push(fileId);
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    count: ids.length,
+    errors: errors,
+    okIds: okIds,
+    failedIds: failedIds
+  };
+}
+
+/* OLD: UrlFetchApp.fetchAll patch trashed:true — дневная квота urlfetch валила clear/empty_trash. */
 
 /* <!-- OLD: permanentlyDeleteDriveFile_ — Drive API DELETE (безвозвратно); заменено на moveDriveFileToTrash_ --> */
 

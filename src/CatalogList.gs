@@ -60,85 +60,380 @@ function listFolderContents(folderId) {
  * }}
  */
 function getCatalogSnapshot() {
+  try {
+    return buildCatalogSnapshotPayload_();
+  } catch (e) {
+    var msg = (e && e.message) || String(e);
+    var code = (e && e.name) || 'SNAPSHOT_FAILED';
+    if (code === 'Error') {
+      code = 'SNAPSHOT_FAILED';
+    }
+    throw catalogError_(code, 'Снимок каталога: ' + msg);
+  }
+}
+
+/**
+ * Только Tree (+ пустые files) — маленький ответ для старта UI.
+ * @returns {Object}
+ */
+function getCatalogTreeSnapshot() {
+  try {
+    var built = buildCatalogSnapshotPayload_({ skipFiles: true });
+    return {
+      virtualRootFolderId: built.virtualRootFolderId,
+      folders: built.folders,
+      files: [],
+      catalogRev: built.catalogRev,
+      fileTotal: built.fileTotal != null ? built.fileTotal : 0,
+      partial: true,
+      build: 'r10'
+    };
+  } catch (e) {
+    var msg = (e && e.message) || String(e);
+    throw catalogError_('SNAPSHOT_FAILED', 'Снимок Tree: ' + msg);
+  }
+}
+
+/**
+ * Старт передачи Files через CacheService (короткий ответ).
+ * Клиент затем забирает чанки fetchCatalogFilesChunk.
+ *
+ * @returns {{
+ *   ok: true,
+ *   transferId: string,
+ *   chunks: number,
+ *   bytes: number,
+ *   fileTotal: number,
+ *   catalogRev: number,
+ *   build: string
+ * }}
+ */
+function beginCatalogFilesTransfer() {
   assertCatalogReadyLight_();
-  ensureCatalogSchemaUpToDate_();
-
-  var treeRows = readSheetRecords_('Tree');
   var fileRows = readSheetRecords_('Files');
-  var aclRows = readSheetRecords_('ACL');
-  var groupMemberRows = readSheetRecords_('GroupMembers');
+  var files = [];
+  for (var i = 0; i < fileRows.length; i++) {
+    files.push(buildCatalogFileListItemMinimal_(fileRows[i]));
+  }
+  var json = JSON.stringify(files);
+  var transferId = Utilities.getUuid().replace(/-/g, '');
+  var chunkSize = 90000;
+  var chunks = Math.ceil(json.length / chunkSize) || 1;
+  var cache = CacheService.getDocumentCache();
+  for (var c = 0; c < chunks; c++) {
+    var part = json.substring(c * chunkSize, (c + 1) * chunkSize);
+    cache.put('cf:' + transferId + ':' + c, part, 600);
+  }
+  cache.put('cf:' + transferId + ':n', String(chunks), 600);
+  return {
+    ok: true,
+    transferId: transferId,
+    chunks: chunks,
+    bytes: json.length,
+    fileTotal: files.length,
+    catalogRev: getCatalogRev_(),
+    build: 'r10'
+  };
+}
+
+/**
+ * @param {string} transferId
+ * @param {number} index
+ * @returns {{ ok: boolean, transferId: string, index: number, text: string, build: string }}
+ */
+function fetchCatalogFilesChunk(transferId, index) {
+  transferId = String(transferId || '').trim();
+  index = Math.max(0, Number(index) || 0);
+  var cache = CacheService.getDocumentCache();
+  var text = cache.get('cf:' + transferId + ':' + index);
+  return {
+    ok: text != null && text !== '',
+    transferId: transferId,
+    index: index,
+    text: text || '',
+    build: 'r10'
+  };
+}
+
+/**
+ * Страница файлов (legacy / запасной путь). Компактные поля без ACL.
+ *
+ * @param {{ offset?: number, limit?: number }|number=} input
+ * @param {number=} limitMaybe
+ * @returns {{ files: Array, offset: number, nextOffset: number, done: boolean, fileTotal: number }}
+ */
+function getCatalogFilesSnapshotPage(input, limitMaybe) {
+  try {
+    var offset = 0;
+    var limit = 15;
+    if (input && typeof input === 'object') {
+      offset = Math.max(0, Number(input.offset) || 0);
+      limit = Number(input.limit) || 15;
+    } else {
+      offset = Math.max(0, Number(input) || 0);
+      limit = Number(limitMaybe) || 15;
+    }
+    limit = Math.min(25, Math.max(5, limit));
+
+    assertCatalogReadyLight_();
+    var fileRows = readSheetRecords_('Files');
+    var fileTotal = fileRows.length;
+    var sliceRows = fileRows.slice(offset, offset + limit);
+    var files = sliceRows.map(function (row) {
+      return buildCatalogFileListItemMinimal_(row);
+    });
+    var nextOffset = offset + files.length;
+    // Строка надёжнее объекта для google.script.run при пограничном размере.
+    return JSON.stringify({
+      files: files,
+      offset: offset,
+      nextOffset: nextOffset,
+      done: nextOffset >= fileTotal,
+      fileTotal: fileTotal,
+      catalogRev: getCatalogRev_(),
+      build: 'r10'
+    });
+  } catch (e) {
+    var msg = (e && e.message) || String(e);
+    throw catalogError_('SNAPSHOT_FAILED', 'Снимок Files: ' + msg);
+  }
+}
+
+/**
+ * Минимальный файл для порционной загрузки (без ACL-строк).
+ * @param {Object} row
+ * @returns {Object}
+ */
+function buildCatalogFileListItemMinimal_(row) {
+  var item = {
+    id: row.catalog_id,
+    folderId: String(row.folder_id || ''),
+    name: row.display_name,
+    sizeBytes: parseNumber_(row.size_bytes)
+  };
+  var mime = String(row.mime_type || '').trim();
+  if (mime) {
+    item.mimeType = mime;
+  }
+  var modifiedAt = formatCatalogDate_(row.drive_modified_at);
+  if (modifiedAt) {
+    item.modifiedAt = modifiedAt;
+  }
+  if (parseBoolean_(row.approved)) {
+    item.approved = true;
+  }
+  var status = String(row.status || 'ready').toLowerCase() || 'ready';
+  if (status !== 'ready') {
+    item.status = status;
+  }
+  var shortcutOf = String(row.shortcut_of_catalog_id || '').trim();
+  var shortcutOfDrive = String(row.shortcut_of_drive_file_id || '').trim();
+  if (shortcutOf || shortcutOfDrive) {
+    item.isShortcut = true;
+  }
+  if (shortcutOfDrive) {
+    item.isExternalShortcut = true;
+    item.shortcutOfDriveFileId = shortcutOfDrive;
+  }
+  if (shortcutOf) {
+    item.shortcutOfCatalogId = shortcutOf;
+  }
+  return item;
+}
+
+/**
+ * @param {{
+ *   skipFiles?: boolean,
+ *   skipFolders?: boolean,
+ *   filesOffset?: number,
+ *   filesLimit?: number
+ * }=} options
+ * @returns {{
+ *   virtualRootFolderId: string,
+ *   folders: Array,
+ *   files: Array,
+ *   catalogRev: number,
+ *   fileTotal?: number
+ * }}
+ */
+function buildCatalogSnapshotPayload_(options) {
+  options = options || {};
+  assertCatalogReadyLight_();
+
+  var treeRows = options.skipFolders ? [] : readSheetRecords_('Tree');
+  var needFileRows =
+    !options.skipFolders || !options.skipFiles || options.filesOffset != null;
+  var fileRows = needFileRows ? readSheetRecords_('Files') : [];
   var userRows = readSheetRecords_('Users');
-  var groupRows = readSheetRecords_('Groups');
+  var displayNameByEmail = {};
+  (userRows || []).forEach(function (u) {
+    var email = String(u.email || '').trim().toLowerCase();
+    if (!email) {
+      return;
+    }
+    var name = String(u.display_name || '').trim();
+    displayNameByEmail[email] = name || String(u.email || '').trim();
+  });
 
-  var engine = buildAclEngineFromRows_(
-    treeRows,
-    fileRows,
-    aclRows,
-    groupMemberRows,
-    userRows,
-    groupRows
-  );
-  ensureExplicitAclAndCache_(engine, treeRows, fileRows);
+  var filesByCatalogId = {};
+  (fileRows || []).forEach(function (row) {
+    filesByCatalogId[String(row.catalog_id || '')] = row;
+  });
+  var treeById = {};
+  (treeRows || []).forEach(function (row) {
+    treeById[String(row.folder_id || '')] = row;
+  });
 
-  backfillMissingMimeTypes_(fileRows);
-  var folderStats = buildFolderStatsIndex_(treeRows, fileRows);
-  var folderSizes = folderStats.sizes;
-  var folderFileCounts = folderStats.fileCounts;
-
-  function approvedByNameFor_(email) {
-    return resolveUserLabelFromEngine_(engine, email);
+  var folderSizes = {};
+  var folderFileCounts = {};
+  if (!options.skipFolders) {
+    var folderStats = buildFolderStatsIndex_(treeRows, fileRows);
+    folderSizes = folderStats.sizes;
+    folderFileCounts = folderStats.fileCounts;
   }
 
-  var folders = treeRows.map(function (row) {
-    var mirrorOf = String(row.mirror_of_folder_id || '').trim();
-    var mirrorOfDrive = String(row.mirror_of_drive_folder_id || '').trim();
-    var isExternalMirror = !!mirrorOfDrive;
-    var isMirror = !!mirrorOf || isExternalMirror;
-    var displayId = mirrorOf ? mirrorOf : row.folder_id;
-    var aclRow = mirrorOf
-      ? treeRows.filter(function (r) {
-          return String(r.folder_id) === mirrorOf;
-        })[0] || row
-      : row;
-    var editors = isExternalMirror ? [] : parseAclCacheField_(aclRow.acl_editors);
-    var commenters = isExternalMirror ? [] : parseAclCacheField_(aclRow.acl_commenters);
-    var readers = isExternalMirror ? [] : parseAclCacheField_(aclRow.acl_readers);
-    if (mirrorOf && !isExternalMirror) {
-      var targetDisp = getEffectiveAclDisplayFromEngine_(engine, 'folder', mirrorOf);
-      editors = targetDisp.editors || editors;
-      commenters = targetDisp.commenters || commenters;
-      readers = targetDisp.readers || readers;
-    }
-    return {
-      id: row.folder_id,
-      parentFolderId: row.parent_folder_id ? String(row.parent_folder_id) : null,
-      name: row.name,
-      sizeBytes: isExternalMirror ? 0 : folderSizes[displayId] || folderSizes[row.folder_id] || 0,
-      fileCount: isExternalMirror
-        ? 0
-        : folderFileCounts[displayId] || folderFileCounts[row.folder_id] || 0,
-      modifiedAt: formatCatalogDate_(row.folder_created_at),
-      isSystem: parseBoolean_(row.is_system),
-      isMirror: isMirror,
-      isExternalMirror: isExternalMirror,
-      mirrorOfFolderId: mirrorOf,
-      mirrorOfDriveFolderId: mirrorOfDrive,
-      editors: editors,
-      commenters: commenters,
-      readers: readers
-    };
-  });
+  function approvedByNameFor_(email) {
+    var key = String(email || '')
+      .trim()
+      .toLowerCase();
+    return displayNameByEmail[key] || String(email || '').trim();
+  }
 
-  var files = fileRows.map(function (row) {
-    return buildCatalogFileListItem_(row, engine, approvedByNameFor_);
-  });
+  var folders = [];
+  if (!options.skipFolders) {
+    folders = treeRows.map(function (row) {
+      var mirrorOf = String(row.mirror_of_folder_id || '').trim();
+      var mirrorOfDrive = String(row.mirror_of_drive_folder_id || '').trim();
+      var isExternalMirror = !!mirrorOfDrive;
+      var isMirror = !!mirrorOf || isExternalMirror;
+      var displayId = mirrorOf ? mirrorOf : row.folder_id;
+      var aclRow = mirrorOf && treeById[mirrorOf] ? treeById[mirrorOf] : row;
+      var item = {
+        id: row.folder_id,
+        parentFolderId: row.parent_folder_id ? String(row.parent_folder_id) : null,
+        name: row.name,
+        sizeBytes: isExternalMirror ? 0 : folderSizes[displayId] || folderSizes[row.folder_id] || 0,
+        fileCount: isExternalMirror
+          ? 0
+          : folderFileCounts[displayId] || folderFileCounts[row.folder_id] || 0,
+        modifiedAt: formatCatalogDate_(row.folder_created_at),
+        isSystem: parseBoolean_(row.is_system),
+        isMirror: isMirror,
+        isExternalMirror: isExternalMirror
+      };
+      if (mirrorOf) {
+        item.mirrorOfFolderId = mirrorOf;
+      }
+      if (mirrorOfDrive) {
+        item.mirrorOfDriveFolderId = mirrorOfDrive;
+      }
+      if (!isExternalMirror) {
+        var fe = String(aclRow.acl_editors || '').trim();
+        var fc = String(aclRow.acl_commenters || '').trim();
+        var fr = String(aclRow.acl_readers || '').trim();
+        if (fe) {
+          item.editors = fe;
+        }
+        if (fc) {
+          item.commenters = fc;
+        }
+        if (fr) {
+          item.readers = fr;
+        }
+      }
+      return item;
+    });
+  }
+
+  var files = [];
+  var fileTotal = fileRows.length;
+  if (!options.skipFiles || options.filesOffset != null) {
+    var offset = Math.max(0, Number(options.filesOffset) || 0);
+    var limit =
+      options.filesLimit != null
+        ? Math.min(150, Math.max(1, Number(options.filesLimit) || 80))
+        : fileRows.length;
+    var sliceRows =
+      options.filesOffset != null || options.filesLimit != null
+        ? fileRows.slice(offset, offset + limit)
+        : fileRows;
+    files = sliceRows.map(function (row) {
+      return buildCatalogFileListItemFromCache_(row, filesByCatalogId, approvedByNameFor_);
+    });
+  }
 
   return {
     virtualRootFolderId: getVirtualRootFolderId_(),
     folders: folders,
     files: files,
-    catalogRev: getCatalogRev_()
+    catalogRev: getCatalogRev_(),
+    fileTotal: fileTotal
   };
+}
+
+/**
+ * Мгновенный зонд: пауза Jobs + снять триггеры воркера (без abort по Sheets —
+ * abort ждёт lock и сам вешает «Загрузка»). Abort — в resumeCatalogJobsAfterUiLoad.
+ * @returns {{ ok: true, build: string, catalogRev: number, jobsPaused: true, removedTriggers: number }}
+ */
+function getCatalogLoadProbe() {
+  assertCatalogReadyLight_();
+  setCatalogJobsPaused_(true);
+  var removedTriggers = 0;
+  try {
+    removedTriggers = removeCatalogJobsTriggers_();
+  } catch (eTrig) {
+    removedTriggers = -1;
+  }
+  try {
+    clearCatalogOpStatus_();
+  } catch (eSt) {
+    // ignore
+  }
+  return {
+    ok: true,
+    build: 'r11',
+    catalogRev: getCatalogRev_(),
+    jobsPaused: true,
+    treeRows: -1,
+    fileRows: -1,
+    aclRows: -1,
+    jobsRows: -1,
+    abortedJobs: 0,
+    removedTriggers: removedTriggers
+  };
+}
+
+/**
+ * Снять паузу Jobs после загрузки UI. Активные pending/running — abort (лёгкий).
+ */
+function resumeCatalogJobsAfterUiLoad() {
+  var aborted = 0;
+  try {
+    aborted = abortActiveJobStatusesLight_();
+  } catch (eAbort) {
+    aborted = -1;
+  }
+  setCatalogJobsPaused_(false);
+  // Триггер только если после abort ещё что-то живо (не должно).
+  if (hasActiveCatalogJobs_()) {
+    ensureCatalogJobsTrigger_();
+    kickCatalogJobsProcessing_();
+  }
+  return { ok: true, busy: hasActiveCatalogJobs_(), abortedJobs: aborted };
+}
+
+/**
+ * Явно снять паузу Jobs (импорт / ручной kick), без abort очереди.
+ * @returns {{ ok: true, wasPaused: boolean }}
+ */
+function unpauseCatalogJobs() {
+  var was = isCatalogJobsPaused_();
+  setCatalogJobsPaused_(false);
+  if (hasActiveCatalogJobs_()) {
+    ensureCatalogJobsTrigger_();
+  }
+  return { ok: true, wasPaused: was };
 }
 
 /**
@@ -257,65 +552,104 @@ function assertCatalogReadyLight_() {
  * @returns {Object}
  */
 function buildCatalogFileListItem_(row, engine, approvedByNameFor_) {
+  var filesByCatalogId =
+    engine && engine.filesByCatalogId ? engine.filesByCatalogId : {};
+  return buildCatalogFileListItemFromCache_(row, filesByCatalogId, approvedByNameFor_);
+}
+
+/**
+ * Файл для UI только из кэша acl_* (без пересчёта effective ACL).
+ *
+ * @param {Object} row
+ * @param {Object.<string, Object>} filesByCatalogId
+ * @param {function(string): string} approvedByNameFor_
+ * @returns {Object}
+ */
+function buildCatalogFileListItemFromCache_(row, filesByCatalogId, approvedByNameFor_) {
   var shortcutOf = String(row.shortcut_of_catalog_id || '').trim();
   var shortcutOfDrive = String(row.shortcut_of_drive_file_id || '').trim();
   var isExternalShortcut = !!shortcutOfDrive;
   var isShortcut = !!shortcutOf || isExternalShortcut;
 
   var display = row;
-  var editors = parseAclCacheField_(row.acl_editors);
-  var commenters = parseAclCacheField_(row.acl_commenters);
-  var readers = parseAclCacheField_(row.acl_readers);
+  var editorsStr = String(row.acl_editors || '').trim();
+  var commentersStr = String(row.acl_commenters || '').trim();
+  var readersStr = String(row.acl_readers || '').trim();
   var approvedBy = row.approved_by || '';
   var approved = parseBoolean_(row.approved);
 
   if (isExternalShortcut) {
-    editors = [];
-    commenters = [];
-    readers = [];
+    editorsStr = '';
+    commentersStr = '';
+    readersStr = '';
     approved = false;
     approvedBy = '';
-  } else if (shortcutOf && engine && engine.filesByCatalogId) {
+  } else if (shortcutOf && filesByCatalogId) {
     var targetId = shortcutOf;
     try {
-      targetId = resolveFileShortcutTargetCatalogId_(engine.filesByCatalogId, String(row.catalog_id));
+      targetId = resolveFileShortcutTargetCatalogId_(filesByCatalogId, String(row.catalog_id));
     } catch (eResolve) {
       targetId = shortcutOf;
     }
-    var target = engine.filesByCatalogId[targetId];
+    var target = filesByCatalogId[targetId];
     if (target) {
       display = target;
       approvedBy = target.approved_by || '';
       approved = parseBoolean_(target.approved);
-      var targetAcl = getEffectiveAclDisplayFromEngine_(engine, 'file', targetId);
-      editors = targetAcl.editors || [];
-      commenters = targetAcl.commenters || [];
-      readers = targetAcl.readers || [];
+      editorsStr = String(target.acl_editors || '').trim();
+      commentersStr = String(target.acl_commenters || '').trim();
+      readersStr = String(target.acl_readers || '').trim();
     }
   }
 
-  return {
+  var status = String(display.status || row.status || 'ready').toLowerCase() || 'ready';
+  var item = {
     id: row.catalog_id,
     folderId: String(row.folder_id || ''),
     name: row.display_name,
-    mimeType: display.mime_type || row.mime_type || '',
-    sizeBytes: parseNumber_(display.size_bytes != null ? display.size_bytes : row.size_bytes),
-    modifiedAt: formatCatalogDate_(display.drive_modified_at || row.drive_modified_at),
-    approved: approved,
-    approvedBy: approvedBy,
-    approvedByName: approvedBy ? approvedByNameFor_(approvedBy) : '',
-    status: String(display.status || row.status || 'ready').toLowerCase() || 'ready',
-    isShortcut: isShortcut,
-    isExternalShortcut: isExternalShortcut,
-    shortcutOfCatalogId: shortcutOf,
-    shortcutOfDriveFileId: shortcutOfDrive,
-    openUrl: isExternalShortcut
-      ? buildCatalogFileOpenUrl_(shortcutOfDrive, row.mime_type || '', '')
-      : '',
-    editors: editors,
-    commenters: commenters,
-    readers: readers
+    sizeBytes: parseNumber_(display.size_bytes != null ? display.size_bytes : row.size_bytes)
   };
+  var mime = display.mime_type || row.mime_type || '';
+  if (mime) {
+    item.mimeType = mime;
+  }
+  var modifiedAt = formatCatalogDate_(display.drive_modified_at || row.drive_modified_at);
+  if (modifiedAt) {
+    item.modifiedAt = modifiedAt;
+  }
+  if (approved) {
+    item.approved = true;
+  }
+  if (approvedBy) {
+    item.approvedBy = approvedBy;
+    item.approvedByName = approvedByNameFor_(approvedBy);
+  }
+  if (status && status !== 'ready') {
+    item.status = status;
+  }
+  if (isShortcut) {
+    item.isShortcut = true;
+  }
+  if (isExternalShortcut) {
+    item.isExternalShortcut = true;
+  }
+  if (shortcutOf) {
+    item.shortcutOfCatalogId = shortcutOf;
+  }
+  if (shortcutOfDrive) {
+    item.shortcutOfDriveFileId = shortcutOfDrive;
+    item.openUrl = buildCatalogFileOpenUrl_(shortcutOfDrive, row.mime_type || '', '');
+  }
+  if (editorsStr) {
+    item.editors = editorsStr;
+  }
+  if (commentersStr) {
+    item.commenters = commentersStr;
+  }
+  if (readersStr) {
+    item.readers = readersStr;
+  }
+  return item;
 }
 
 /**
@@ -473,11 +807,85 @@ function readSheetRecords_(sheetName) {
   for (var i = 1; i < values.length; i++) {
     var record = {};
     for (var c = 0; c < headers.length; c++) {
-      record[headers[c]] = values[i][c];
+      var key = headers[c];
+      record[key] = coerceSheetCellForHeader_(key, values[i][c]);
     }
     rows.push(record);
   }
   return rows;
+}
+
+/**
+ * Дата в текстовом имени (Sheets из «02.05») → строка. Остальные Date не трогаем.
+ *
+ * @param {string} header
+ * @param {*} value
+ * @returns {*}
+ */
+function coerceSheetCellForHeader_(header, value) {
+  if (!(value instanceof Date) || isNaN(value.getTime())) {
+    return value;
+  }
+  var h = String(header || '').toLowerCase();
+  if (h === 'display_name' || h === 'name') {
+    return formatAccidentalSheetDateAsName_(value);
+  }
+  return value;
+}
+
+/**
+ * Восстановление имени вроде «02.05» после автодаты Sheets (иначе в UI — ISO).
+ *
+ * @param {Date} d
+ * @returns {string}
+ */
+var cachedSpreadsheetTz_ = '';
+function getSpreadsheetTimeZoneCached_() {
+  if (cachedSpreadsheetTz_) {
+    return cachedSpreadsheetTz_;
+  }
+  try {
+    cachedSpreadsheetTz_ =
+      SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone() || '';
+  } catch (eTz) {
+    cachedSpreadsheetTz_ = '';
+  }
+  if (!cachedSpreadsheetTz_) {
+    cachedSpreadsheetTz_ = Session.getScriptTimeZone() || 'Etc/GMT';
+  }
+  return cachedSpreadsheetTz_;
+}
+
+function formatAccidentalSheetDateAsName_(d) {
+  var tz = getSpreadsheetTimeZoneCached_();
+  var hm = Utilities.formatDate(d, tz, 'HH:mm');
+  if (hm === '00:00') {
+    return Utilities.formatDate(d, tz, 'dd.MM');
+  }
+  return Utilities.formatDate(d, tz, 'dd.MM.yyyy HH:mm');
+}
+
+/**
+ * Перед setValues: колонки имён как Plain text (@), иначе «02.05» → Date.
+ * Сигнатура: getRange(row, column, numRows, numColumns).
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {number} startRow
+ * @param {number} numRows
+ * @param {string[]} headers
+ * @param {string[]} textHeaders
+ */
+function prepareSheetPlainTextColumns_(sheet, startRow, numRows, headers, textHeaders) {
+  if (!sheet || numRows < 1 || !headers || !textHeaders) {
+    return;
+  }
+  for (var i = 0; i < textHeaders.length; i++) {
+    var col = headers.indexOf(textHeaders[i]);
+    if (col < 0) {
+      continue;
+    }
+    sheet.getRange(startRow, col + 1, numRows, 1).setNumberFormat('@');
+  }
 }
 
 /**
@@ -522,10 +930,18 @@ function buildFolderStatsIndex_(treeRows, fileRows) {
 
   var memoBytes = {};
   var memoCounts = {};
+  var visiting = {};
   function statsOf(folderId) {
     if (memoBytes[folderId] !== undefined) {
       return;
     }
+    if (visiting[folderId]) {
+      // Цикл в Tree.parent_folder_id — считаем 0, чтобы не зависнуть на snapshot.
+      memoBytes[folderId] = 0;
+      memoCounts[folderId] = 0;
+      return;
+    }
+    visiting[folderId] = true;
     var totalBytes = directFileSize[folderId] || 0;
     var totalCount = directFileCount[folderId] || 0;
     var children = childrenByParent[folderId] || [];
@@ -536,6 +952,7 @@ function buildFolderStatsIndex_(treeRows, fileRows) {
     }
     memoBytes[folderId] = totalBytes;
     memoCounts[folderId] = totalCount;
+    delete visiting[folderId];
   }
 
   treeRows.forEach(function (row) {

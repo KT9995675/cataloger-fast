@@ -35,8 +35,18 @@ function openCatalogFile(catalogId) {
     throw catalogError_('FILE_NOT_FOUND', 'File not found: ' + catalogId);
   }
 
+  var clickedFolderId = String(file.folder_id || '');
+
   var driveShortcutId = String(file.shortcut_of_drive_file_id || '').trim();
   if (driveShortcutId) {
+    if (clickedFolderId === TRASH_FOLDER_ID_ || clickedFolderId === '__TRASH__') {
+      return {
+        ok: false,
+        code: 'IN_TRASH',
+        message: 'Файл в корзине и не может быть открыт.',
+        editors: []
+      };
+    }
     return openExternalFileShortcut_(catalogId, file, driveShortcutId);
   }
 
@@ -47,6 +57,21 @@ function openCatalogFile(catalogId) {
     if (!file) {
       throw catalogError_('FILE_NOT_FOUND', 'Файл-цель ярлыка не найден.');
     }
+  }
+
+  var folderId = String(file.folder_id || '');
+  if (
+    folderId === TRASH_FOLDER_ID_ ||
+    folderId === '__TRASH__' ||
+    clickedFolderId === TRASH_FOLDER_ID_ ||
+    clickedFolderId === '__TRASH__'
+  ) {
+    return {
+      ok: false,
+      code: 'IN_TRASH',
+      message: 'Файл в корзине и не может быть открыт.',
+      editors: []
+    };
   }
 
   var driveFileId = String(file.file_id || '').trim();
@@ -103,7 +128,8 @@ function openCatalogFile(catalogId) {
     } catch (e2) {
       modifiedAt = new Date();
     }
-    updateFileDriveMeta_(catalogId, modifiedAt, mimeType);
+    var sizeBytes = resolveDriveFileSizeBytes_(driveFile, mimeType);
+    updateFileDriveMeta_(catalogId, modifiedAt, mimeType, sizeBytes);
   } catch (e) {
     if (mimeType) {
       updateFileDriveMeta_(catalogId, new Date(), mimeType);
@@ -313,8 +339,9 @@ function grantTemporaryDriveAccess_(driveFile, email, permission) {
  * @param {string} catalogId
  * @param {Date} modifiedAt
  * @param {string=} mimeType
+ * @param {number=} sizeBytes
  */
-function updateFileDriveMeta_(catalogId, modifiedAt, mimeType) {
+function updateFileDriveMeta_(catalogId, modifiedAt, mimeType, sizeBytes) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Files');
   if (!sheet) {
     return;
@@ -331,6 +358,7 @@ function updateFileDriveMeta_(catalogId, modifiedAt, mimeType) {
   var catalogCol = headers.indexOf('catalog_id');
   var modifiedCol = headers.indexOf('drive_modified_at');
   var mimeCol = headers.indexOf('mime_type');
+  var sizeCol = headers.indexOf('size_bytes');
   if (catalogCol < 0 || modifiedCol < 0) {
     return;
   }
@@ -344,10 +372,22 @@ function updateFileDriveMeta_(catalogId, modifiedAt, mimeType) {
           sheet.getRange(i + 1, mimeCol + 1).setValue(mimeType);
         }
       }
+      if (sizeCol >= 0 && sizeBytes != null && Number(sizeBytes) > 0) {
+        var curSize = Number(values[i][sizeCol]) || 0;
+        var nextSize = Number(sizeBytes) || 0;
+        // Обновляем при stub/пустом кэше или заметном drift.
+        if (
+          curSize !== nextSize &&
+          (curSize <= 1 || Math.abs(curSize - nextSize) > 1)
+        ) {
+          sheet.getRange(i + 1, sizeCol + 1).setValue(nextSize);
+        }
+      }
       return;
     }
   }
 }
+
 
 /** @deprecated use updateFileDriveMeta_ */
 function updateFileDriveModifiedAt_(catalogId, modifiedAt) {

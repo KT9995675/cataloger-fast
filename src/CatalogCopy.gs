@@ -62,6 +62,7 @@ function copyCatalogItems(input) {
   var catalogRootFolder = DriveApp.getFolderById(getCatalogRootFolderId_());
   var fileCount = countCopyFileTargets_(engine, normalizedItems);
 
+  // §0.4a — всегда Jobs (даже 1 файл).
   if (fileCount > COPY_SYNC_MAX_FILES_) {
     return enqueueCopyCatalogJob_(engine, targetFolderId, normalizedItems, userEmail);
   }
@@ -69,8 +70,8 @@ function copyCatalogItems(input) {
   return copyCatalogItemsSync_(engine, targetFolderId, normalizedItems, catalogRootFolder);
 }
 
-/** @const {number} Больше этого числа файлов → Jobs. */
-var COPY_SYNC_MAX_FILES_ = 1;
+/** @const {number} §0.4a: 0 = всегда Jobs (sync-путь запасной). */
+var COPY_SYNC_MAX_FILES_ = 0;
 
 /**
  * @param {Object} engine
@@ -172,19 +173,41 @@ function beginCopyWriteContext_() {
  * @param {Object} engine
  */
 function commitCopyWriteContext_(ctx, engine) {
+  // ACL-кэш вписываем в те же строки Tree/Files — один setValues на лист,
+  // без N× syncAclCacheForObjects_ (иначе F5 «висит» на Копирование…).
+  var aclByKey = {};
+  (ctx.aclCacheList || []).forEach(function (item) {
+    if (!item) {
+      return;
+    }
+    var key = String(item.objectType) + ':' + String(item.objectId);
+    aclByKey[key] = item;
+    if (engine && engine.aclByObject) {
+      engine.aclByObject[key] = [];
+    }
+  });
+
+  (ctx.treeRows || []).forEach(function (row) {
+    var a = aclByKey['folder:' + String(row.folderId || '')];
+    if (!a) {
+      return;
+    }
+    row.aclEditors = a.aclEditors || '';
+    row.aclCommenters = a.aclCommenters || '';
+    row.aclReaders = a.aclReaders || '';
+  });
+  (ctx.fileRows || []).forEach(function (row) {
+    var a = aclByKey['file:' + String(row.catalogId || '')];
+    if (!a) {
+      return;
+    }
+    row.aclEditors = a.aclEditors || '';
+    row.aclCommenters = a.aclCommenters || '';
+    row.aclReaders = a.aclReaders || '';
+  });
+
   appendTreeFolderRowsBatch_(ctx.treeRows);
   appendCatalogFileRowsBatch_(ctx.fileRows);
-  // §4.4a — копируемые объекты без отклонений; только кэш эффективных ярлыков.
-  (ctx.aclCacheList || []).forEach(function (item) {
-    if (engine && engine.aclByObject) {
-      engine.aclByObject[item.objectType + ':' + item.objectId] = [];
-    }
-    syncAclCacheForObjects_(
-      [{ objectType: item.objectType, objectId: item.objectId }],
-      item.entries || [],
-      engine
-    );
-  });
 }
 
 /**
@@ -213,10 +236,19 @@ function buildCopyAclEntriesFromParent_(engine, parentFolderId) {
  */
 function queueCopyAcl_(ctx, engine, parentFolderId, targetType, targetId) {
   var entries = buildCopyAclEntriesFromParent_(engine, parentFolderId);
+  var approved = false;
+  if (targetType === 'file') {
+    var file = engine.filesByCatalogId[targetId];
+    approved = !!(file && parseBoolean_(file.approved));
+  }
+  var acl = uiAclFromCopyEntries_(engine, entries, approved);
   ctx.aclCacheList.push({
     objectType: targetType,
     objectId: targetId,
-    entries: entries
+    entries: entries,
+    aclEditors: formatAclCacheField_(acl.editors),
+    aclCommenters: formatAclCacheField_(acl.commenters),
+    aclReaders: formatAclCacheField_(acl.readers)
   });
   return entries;
 }
@@ -345,23 +377,59 @@ function enqueueCopyCatalogJob_(engine, targetFolderId, items, userEmail) {
 
   commitCopyWriteContext_(ctx, engine);
 
-  var jobId = enqueueCatalogJob_(
-    'copy_catalog',
-    {
-      targetFolderId: targetFolderId,
-      items: workItems
-    },
-    userEmail,
-    ''
-  );
+  var total = workItems.length;
+  if (!total) {
+    bumpCatalogRev_();
+    return {
+      ok: true,
+      queued: false,
+      jobId: '',
+      fileCount: 0,
+      copied: copied,
+      created: created
+    };
+  }
+
+  var chainId = Utilities.getUuid();
+  var parts = Math.ceil(total / COPY_CATALOG_JOB_MAX_FILES_);
+  var firstJobId = '';
+  for (var p = 0; p < parts; p++) {
+    var start = p * COPY_CATALOG_JOB_MAX_FILES_;
+    var chunk = workItems.slice(start, start + COPY_CATALOG_JOB_MAX_FILES_).map(function (it) {
+      return {
+        catalogId: it.catalogId,
+        sourceFileId: it.sourceDriveFileId || it.sourceFileId || '',
+        done: false
+      };
+    });
+    var jobId = enqueueCatalogJob_(
+      'copy_catalog',
+      {
+        targetFolderId: targetFolderId,
+        chainId: chainId,
+        chainIndex: p,
+        chainParts: parts,
+        chainTotalFiles: total,
+        chainDoneBefore: start,
+        items: chunk
+      },
+      userEmail,
+      ''
+    );
+    if (!firstJobId) {
+      firstJobId = jobId;
+    }
+  }
   kickCatalogJobsProcessing_();
   bumpCatalogRev_();
 
   return {
     ok: true,
     queued: true,
-    jobId: jobId,
-    fileCount: workItems.length,
+    jobId: firstJobId,
+    chainId: chainId,
+    fileCount: total,
+    jobParts: parts,
     copied: copied,
     created: created
   };
@@ -387,7 +455,13 @@ function prepareCopyFileReady_(engine, ctx, sourceCatalogId, targetFolderId, cat
   var displayName = String(source.display_name || driveCopy.getName());
   var mimeType = getDriveFileMimeType_(driveCopy) || source.mime_type || '';
   var approved = parseBoolean_(source.approved);
-  var sizeBytes = driveCopy.getSize();
+  var sizeBytes = resolveDriveFileSizeBytes_(driveCopy, mimeType);
+  if (!sizeBytes) {
+    sizeBytes = normalizeCatalogSizeBytes_(
+      parseNumber_(source.size_bytes) || 0,
+      mimeType
+    );
+  }
   var modifiedAt = driveCopy.getLastUpdated();
 
   ctx.fileRows.push({
@@ -454,13 +528,18 @@ function prepareCopyFilePending_(engine, ctx, sourceCatalogId, targetFolderId) {
   var displayName = String(source.display_name || '');
   var mimeType = String(source.mime_type || '');
   var approved = parseBoolean_(source.approved);
+  // Pending: кэш источника; stub 1 у Google не размножаем (воркер resolve после makeCopy).
+  var sizeBytes = normalizeCatalogSizeBytes_(
+    parseNumber_(source.size_bytes) || 0,
+    mimeType
+  );
 
   ctx.fileRows.push({
     catalogId: newCatalogId,
     folderId: targetFolderId,
     fileId: '',
     displayName: displayName,
-    sizeBytes: 0,
+    sizeBytes: sizeBytes,
     driveModifiedAt: '',
     approved: approved,
     approvedBy: source.approved_by || '',
@@ -489,19 +568,21 @@ function prepareCopyFilePending_(engine, ctx, sourceCatalogId, targetFolderId) {
       folderId: targetFolderId,
       name: displayName,
       mimeType: mimeType,
-      sizeBytes: 0,
+      sizeBytes: sizeBytes,
       modifiedAt: '',
       approved: approved,
       approvedBy: source.approved_by || '',
       approvedByName: '',
       editors: acl.editors,
       commenters: acl.commenters,
-      readers: acl.readers
+      readers: acl.readers,
+      status: 'pending'
     },
     workItem: {
       catalogId: newCatalogId,
       sourceDriveFileId: sourceDriveFileId,
       displayName: displayName,
+      sourceSizeBytes: sizeBytes,
       done: false
     }
   };
@@ -591,6 +672,22 @@ function prepareCopyFolderPending_(engine, ctx, sourceFolderId, targetParentFold
     var filePlan = prepareCopyFilePending_(engine, ctx, obj.objectId, targetFolderId);
     files.push(filePlan.uiItem);
     workItems.push(filePlan.workItem);
+  });
+
+  var fileCountByFolder = {};
+  files.forEach(function (f) {
+    var fid = String(f.folderId || '');
+    fileCountByFolder[fid] = (fileCountByFolder[fid] || 0) + 1;
+  });
+  (mapped.folders || []).forEach(function (folder) {
+    folder.fileCount = fileCountByFolder[String(folder.id)] || 0;
+    var sum = 0;
+    files.forEach(function (f) {
+      if (String(f.folderId) === String(folder.id)) {
+        sum += Number(f.sizeBytes) || 0;
+      }
+    });
+    folder.sizeBytes = sum;
   });
 
   return {
